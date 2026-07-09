@@ -112,6 +112,11 @@ pub fn load() -> Config {
 mod tests {
     use super::*;
 
+    use std::sync::Mutex;
+
+    /// Serialises tests that mutate process-wide env vars so they don't race.
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
     #[test]
     fn test_default_config() {
         let cfg = Config::default();
@@ -123,6 +128,7 @@ mod tests {
 
     #[test]
     fn test_load_returns_defaults_without_env_or_file() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         std::env::remove_var("RENOS_CORE_URL");
         let cfg = load();
         assert_eq!(cfg.core_url, "http://localhost:8444");
@@ -130,6 +136,7 @@ mod tests {
 
     #[test]
     fn test_env_override() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let key = "RENOS_CORE_URL";
         let test_url = "http://core.test:8444";
         std::env::set_var(key, test_url);

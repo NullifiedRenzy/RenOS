@@ -1,4 +1,4 @@
-import type { LoginResponse, ListDevicesResponse, DeviceDetailResponse, ApiErrorBody } from "@/lib/types";
+import type { LoginResponse, ListDevicesResponse, DeviceDetailResponse, CommandResponse, ListCommandsResponse, ApiErrorBody } from "@/lib/types";
 
 const API_BASE = "/api/v1";
 
@@ -89,6 +89,14 @@ class ApiClient {
 
   async getDevice(id: string): Promise<DeviceDetailResponse> {
     return this.request<DeviceDetailResponse>("GET", `/devices/${id}`);
+  }
+
+  async requestCommand(deviceId: string, command: string): Promise<CommandResponse> {
+    return this.request<CommandResponse>("POST", `/devices/${deviceId}/commands`, { command });
+  }
+
+  async listCommands(deviceId: string): Promise<ListCommandsResponse> {
+    return this.request<ListCommandsResponse>("GET", `/devices/${deviceId}/commands`);
   }
 }
 

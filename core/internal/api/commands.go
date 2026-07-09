@@ -78,6 +78,10 @@ func listCommandsHandler(commands *db.CommandRepository) http.HandlerFunc {
 			return
 		}
 
+		if list == nil {
+			list = []*db.Command{}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"commands": list,
@@ -124,6 +128,10 @@ func pendingCommandsHandler(commands *db.CommandRepository, devices *db.DeviceRe
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch pending commands")
 			return
+		}
+
+		if list == nil {
+			list = []*db.Command{}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

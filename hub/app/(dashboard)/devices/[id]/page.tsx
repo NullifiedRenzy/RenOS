@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useDevice } from "@/hooks/use-devices";
 import { HealthScore } from "@/components/devices/health-score";
 import { DeviceMetrics } from "@/components/devices/device-metrics";
+import { SafeCommands } from "@/components/devices/safe-commands";
+import { CommandHistory } from "@/components/devices/command-history";
 import { EmptyState } from "@/components/devices/empty-state";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
@@ -96,6 +98,10 @@ export default function DeviceDetailPage() {
             )}
           </div>
 
+          {device.status === "online" && (
+            <SafeCommands deviceId={device.id} />
+          )}
+
           <div className="card">
             <h2 className="text-headline-4 text-[var(--color-text-primary)] mb-4">Details</h2>
             <dl className="grid grid-cols-2 gap-y-3 gap-x-4">
@@ -116,6 +122,8 @@ export default function DeviceDetailPage() {
               ))}
             </dl>
           </div>
+
+          <CommandHistory deviceId={device.id} />
         </div>
 
         <div className="space-y-4">

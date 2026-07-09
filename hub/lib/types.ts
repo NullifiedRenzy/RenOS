@@ -48,6 +48,30 @@ export interface DeviceDetailResponse {
   device: Device;
 }
 
+export interface Command {
+  id: string;
+  device_id: string;
+  user_id: string;
+  command: string;
+  status: "pending" | "running" | "completed" | "failed" | "rejected";
+  exit_code: number | null;
+  output: string | null;
+  error: string | null;
+  requested_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommandResponse {
+  command: Command;
+}
+
+export interface ListCommandsResponse {
+  commands: Command[];
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;
