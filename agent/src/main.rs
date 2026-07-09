@@ -1,3 +1,4 @@
+mod commands;
 mod config;
 mod enroll;
 mod grpc_client;
@@ -99,31 +100,63 @@ async fn main() {
             let (identity, _key) = identity::load_or_generate();
             tracing::info!("device identity: {} (enrolled: {})", identity.device_id, identity.is_enrolled);
 
-            if identity.is_enrolled {
-                let device_secret = load_device_secret()
-                    .expect("device is enrolled but no device-secret.txt found — re-enroll the agent");
+			if identity.is_enrolled {
+				let device_secret = load_device_secret()
+					.expect("device is enrolled but no device-secret.txt found — re-enroll the agent");
 
-                let mut client = grpc_client::Client::new(&cfg);
-                client.set_device_id(identity.device_id.clone());
-                client.set_device_secret(device_secret);
+				let device_id = identity.device_id.clone();
+				let api_url = cfg.api_url.clone();
 
-                match client.connect_to_core().await {
-                    Ok(_) => tracing::info!("connected to Core"),
-                    Err(e) => tracing::warn!("failed to connect to Core: {}", e),
-                }
+				let mut client = grpc_client::Client::new(&cfg);
+				client.set_device_id(identity.device_id.clone());
+				client.set_device_secret(device_secret.clone());
 
-                let hb_interval = std::time::Duration::from_secs(cfg.heartbeat_interval_secs);
-                tokio::spawn(async move {
-                    let mut interval = tokio::time::interval(hb_interval);
-                    loop {
-                        interval.tick().await;
-                        let health_data = health::collect();
-                        if let Err(e) = client.send_heartbeat(&health_data).await {
-                            tracing::warn!("heartbeat failed: {}", e);
-                        }
-                    }
-                });
-            } else {
+				match client.connect_to_core().await {
+					Ok(_) => tracing::info!("connected to Core"),
+					Err(e) => tracing::warn!("failed to connect to Core: {}", e),
+				}
+
+				let hb_interval = std::time::Duration::from_secs(cfg.heartbeat_interval_secs);
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(hb_interval);
+					loop {
+						interval.tick().await;
+						let health_data = health::collect();
+						if let Err(e) = client.send_heartbeat(&health_data).await {
+							tracing::warn!("heartbeat failed: {}", e);
+						}
+					}
+				});
+
+				let cmd_api_url = api_url.clone();
+				let cmd_device_id = device_id.clone();
+				let cmd_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+					loop {
+						interval.tick().await;
+						match commands::poll(&cmd_api_url, &cmd_device_id, &cmd_device_secret).await {
+							Ok(pending) => {
+								for cmd in &pending {
+									tracing::info!("executing command: {}", cmd.command);
+									let (exit_code, stdout, stderr) = commands::execute(&cmd.command);
+									tracing::info!("command {} completed (exit={})", cmd.id, exit_code);
+									if !stderr.is_empty() {
+										tracing::warn!("command {} stderr: {}", cmd.id, stderr);
+									}
+									if let Err(e) = commands::submit_result(
+										&cmd_api_url, &cmd_device_id, &cmd_device_secret,
+										&cmd.id, exit_code, &stdout, &stderr,
+									).await {
+										tracing::warn!("failed to submit result for {}: {}", cmd.id, e);
+									}
+								}
+							}
+							Err(e) => tracing::warn!("command poll failed: {}", e),
+						}
+					}
+				});
+			} else {
                 tracing::warn!("device not enrolled — run `renos-agent enroll --token <token>` first");
             }
 

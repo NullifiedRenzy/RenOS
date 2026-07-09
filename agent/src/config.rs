@@ -123,6 +123,7 @@ mod tests {
 
     #[test]
     fn test_load_returns_defaults_without_env_or_file() {
+        std::env::remove_var("RENOS_CORE_URL");
         let cfg = load();
         assert_eq!(cfg.core_url, "http://localhost:8444");
     }

@@ -14,16 +14,17 @@ import (
 )
 
 type Dependencies struct {
-	Pool    *pgxpool.Pool
-	NC      *nats.Conn
-	RDB     *redis.Client
-	Cfg     *config.Config
-	CA      *ca.CA
-	Users   *db.UserRepository
-	Devices *db.DeviceRepository
-	Audits  *db.AuditRepository
-	AdminID string
-	Hub     *ws.Hub
+	Pool     *pgxpool.Pool
+	NC       *nats.Conn
+	RDB      *redis.Client
+	Cfg      *config.Config
+	CA       *ca.CA
+	Users    *db.UserRepository
+	Devices  *db.DeviceRepository
+	Commands *db.CommandRepository
+	Audits   *db.AuditRepository
+	AdminID  string
+	Hub      *ws.Hub
 }
 
 func NewRouter(deps *Dependencies) *chi.Mux {
@@ -47,6 +48,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/devices/enroll", enrollHandler(deps.CA, deps.Devices, deps.Audits, deps.Cfg, deps.AdminID))
 		r.Post("/devices/connect", connectHandler(deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/devices/heartbeat", heartbeatHandler(deps.Devices, deps.Audits, deps.Hub))
+		r.Post("/commands/pending", pendingCommandsHandler(deps.Commands, deps.Devices))
+		r.Post("/commands/{cmdId}/result", submitResultHandler(deps.Commands, deps.Devices, deps.Audits, deps.Hub))
 
 		// Admin-facing — requires JWT auth
 		r.Route("/devices", func(r chi.Router) {
@@ -54,6 +57,11 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Get("/", listDevicesHandler(deps.Devices))
 			r.Get("/{id}", getDeviceHandler(deps.Devices))
 			r.Post("/enroll-token", generateEnrollTokenHandler(deps.Cfg))
+			r.Route("/{id}/commands", func(r chi.Router) {
+				r.Post("/", requestCommandHandler(deps.Commands, deps.Devices, deps.Audits, deps.Hub))
+				r.Get("/", listCommandsHandler(deps.Commands))
+				r.Get("/{cmdId}", getCommandHandler(deps.Commands))
+			})
 		})
 	})
 

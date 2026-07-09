@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/renos-project/renos/core/internal/auth"
+	"github.com/renos-project/renos/core/internal/db"
 )
 
 type contextKey string
@@ -86,4 +87,49 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+type deviceAuthRequest struct {
+	DeviceID     string `json:"device_id"`
+	DeviceSecret string `json:"device_secret"`
+}
+
+func verifyDeviceSecret(devices *db.DeviceRepository, req deviceAuthRequest) (*db.Device, *apiError) {
+	if req.DeviceID == "" || req.DeviceSecret == "" {
+		return nil, errMissingFields
+	}
+	device, err := devices.FindByID(context.Background(), req.DeviceID)
+	if err != nil {
+		return nil, errDeviceNotFound
+	}
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(device.Metadata), &metadata); err != nil {
+		return nil, errInternal
+	}
+	hash, ok := metadata["device_secret_hash"].(string)
+	if !ok || hash == "" {
+		return nil, errNotEnrolled
+	}
+	if !auth.VerifyPassword(hash, req.DeviceSecret) {
+		return nil, errInvalidSecret
+	}
+	return device, nil
+}
+
+var (
+	errMissingFields  = &apiError{status: http.StatusBadRequest, code: "INVALID_REQUEST", message: "device_id and device_secret required"}
+	errDeviceNotFound = &apiError{status: http.StatusUnauthorized, code: "UNAUTHORIZED", message: "Device not found"}
+	errNotEnrolled   = &apiError{status: http.StatusUnauthorized, code: "UNAUTHORIZED", message: "Device not enrolled"}
+	errInvalidSecret = &apiError{status: http.StatusUnauthorized, code: "UNAUTHORIZED", message: "Invalid device secret"}
+	errInternal      = &apiError{status: http.StatusInternalServerError, code: "INTERNAL_ERROR", message: "Internal error"}
+)
+
+type apiError struct {
+	status  int
+	code    string
+	message string
+}
+
+func (e *apiError) Error() string {
+	return e.message
 }
