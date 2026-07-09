@@ -7,6 +7,7 @@ import { HealthScore } from "@/components/devices/health-score";
 import { DeviceMetrics } from "@/components/devices/device-metrics";
 import { SafeCommands } from "@/components/devices/safe-commands";
 import { CommandHistory } from "@/components/devices/command-history";
+import { DeviceContainers } from "@/components/devices/device-containers";
 import { EmptyState } from "@/components/devices/empty-state";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
@@ -97,6 +98,8 @@ export default function DeviceDetailPage() {
               </p>
             )}
           </div>
+
+          <DeviceContainers deviceId={device.id} />
 
           {device.status === "online" && (
             <SafeCommands deviceId={device.id} />

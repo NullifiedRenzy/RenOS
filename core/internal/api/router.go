@@ -14,17 +14,19 @@ import (
 )
 
 type Dependencies struct {
-	Pool     *pgxpool.Pool
-	NC       *nats.Conn
-	RDB      *redis.Client
-	Cfg      *config.Config
-	CA       *ca.CA
-	Users    *db.UserRepository
-	Devices  *db.DeviceRepository
-	Commands *db.CommandRepository
-	Audits   *db.AuditRepository
-	AdminID  string
-	Hub      *ws.Hub
+	Pool             *pgxpool.Pool
+	NC               *nats.Conn
+	RDB              *redis.Client
+	Cfg              *config.Config
+	CA               *ca.CA
+	Users            *db.UserRepository
+	Devices          *db.DeviceRepository
+	Commands         *db.CommandRepository
+	Containers       *db.ContainerRepository
+	ContainerActions *db.ContainerActionRepository
+	Audits           *db.AuditRepository
+	AdminID          string
+	Hub              *ws.Hub
 }
 
 func NewRouter(deps *Dependencies) *chi.Mux {
@@ -50,6 +52,9 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/devices/heartbeat", heartbeatHandler(deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/commands/pending", pendingCommandsHandler(deps.Commands, deps.Devices))
 		r.Post("/commands/{cmdId}/result", submitResultHandler(deps.Commands, deps.Devices, deps.Audits, deps.Hub))
+		r.Post("/devices/{id}/containers", syncContainersHandler(deps.Containers, deps.Devices))
+		r.Post("/container-actions/pending", pendingContainerActionsHandler(deps.ContainerActions, deps.Devices))
+		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 
 		// Admin-facing — requires JWT auth
 		r.Route("/devices", func(r chi.Router) {
@@ -62,6 +67,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 				r.Get("/", listCommandsHandler(deps.Commands))
 				r.Get("/{cmdId}", getCommandHandler(deps.Commands))
 			})
+			r.Get("/{id}/containers", listContainersHandler(deps.Containers))
+			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		})
 	})
 

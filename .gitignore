@@ -50,6 +50,9 @@ Desktop.ini
 proto/agent/v1/*.rs
 proto/agent/v1/*.pb.go
 
+# Local data
+data/
+
 # Misc
 *.tar.gz
 *.rpk

@@ -72,6 +72,44 @@ export interface ListCommandsResponse {
   commands: Command[];
 }
 
+export interface Container {
+  id: string;
+  device_id: string;
+  container_id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  ports: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListContainersResponse {
+  containers: Container[];
+}
+
+export interface ContainerAction {
+  id: string;
+  device_id: string;
+  user_id: string;
+  container_id: string;
+  action: "start" | "stop" | "restart";
+  status: "pending" | "running" | "completed" | "failed";
+  exit_code: number | null;
+  output: string | null;
+  error: string | null;
+  requested_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContainerActionResponse {
+  container_action: ContainerAction;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

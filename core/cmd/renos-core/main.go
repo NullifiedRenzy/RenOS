@@ -94,6 +94,8 @@ func main() {
 	users := db.NewUserRepository(pool)
 	devices := db.NewDeviceRepository(pool)
 	commands := db.NewCommandRepository(pool)
+	containers := db.NewContainerRepository(pool)
+	containerActions := db.NewContainerActionRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -113,10 +115,12 @@ func main() {
 		RDB:      rdb,
 		Cfg:      cfg,
 		CA:       caInstance,
-		Users:    users,
-		Devices:  devices,
-		Commands: commands,
-		Audits:   audits,
+		Users:      users,
+		Devices:    devices,
+		Commands:   commands,
+		Containers: containers,
+		ContainerActions: containerActions,
+		Audits:     audits,
 		AdminID:  adminID,
 		Hub:      eventHub,
 	}

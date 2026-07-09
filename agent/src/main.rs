@@ -1,5 +1,7 @@
 mod commands;
 mod config;
+mod docker;
+mod docker_actions;
 mod enroll;
 mod grpc_client;
 mod health;
@@ -88,10 +90,13 @@ async fn main() {
             println!("renos-agent v{}", env!("CARGO_PKG_VERSION"));
             println!("build: {}", env!("CARGO_PKG_NAME"));
             println!("target: {}-{}", std::env::consts::ARCH, std::env::consts::OS);
+            println!("data dir: {}", platform::resolve_data_dir());
         }
         Command::Run => {
             let cfg = config::load();
+            let data_dir = platform::resolve_data_dir();
             tracing::info!("starting RenOS Agent v{}", env!("CARGO_PKG_VERSION"));
+            tracing::info!("data dir: {data_dir} (set RENOS_DATA_DIR to override)");
 
             if let Err(e) = platform::ensure_dirs() {
                 tracing::warn!("failed to create platform directories: {}", e);
@@ -156,6 +161,68 @@ async fn main() {
 						}
 					}
 				});
+
+			let docker_api_url = api_url.clone();
+			let docker_device_id = device_id.clone();
+			let docker_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+				loop {
+					interval.tick().await;
+
+					if !docker::is_installed() {
+						tracing::info!("docker not installed on this device");
+						continue;
+					}
+
+					match docker::list_containers() {
+						Ok(containers) => {
+							tracing::info!("reporting {} Docker container(s)", containers.len());
+							if let Err(e) = docker::submit_containers(
+								&docker_api_url, &docker_device_id, &docker_device_secret,
+								&containers,
+							).await {
+								tracing::warn!("failed to submit containers: {}", e);
+							}
+						}
+						Err(e) => tracing::warn!("failed to list Docker containers: {}", e),
+					}
+				}
+			});
+
+			let act_api_url = api_url.clone();
+			let act_device_id = device_id.clone();
+			let act_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+				loop {
+					interval.tick().await;
+
+					if !docker::is_installed() {
+						continue;
+					}
+
+					match docker_actions::poll(&act_api_url, &act_device_id, &act_device_secret).await {
+						Ok(pending) => {
+							for act in &pending {
+								tracing::info!("executing docker {} on container {}", act.action, act.container_id);
+								let (exit_code, stdout, stderr) = docker_actions::execute_action(&act.action, &act.container_id);
+								tracing::info!("docker action {} completed (exit={})", act.id, exit_code);
+								if !stderr.is_empty() {
+									tracing::warn!("docker action {} stderr: {}", act.id, stderr);
+								}
+								if let Err(e) = docker_actions::submit_result(
+									&act_api_url, &act_device_id, &act_device_secret,
+									&act.id, exit_code, &stdout, &stderr,
+								).await {
+									tracing::warn!("failed to submit docker action result for {}: {}", act.id, e);
+								}
+							}
+						}
+						Err(e) => tracing::warn!("docker actions poll failed: {}", e),
+					}
+				}
+			});
 			} else {
                 tracing::warn!("device not enrolled — run `renos-agent enroll --token <token>` first");
             }
