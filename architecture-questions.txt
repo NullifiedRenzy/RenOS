@@ -1,0 +1,49 @@
+RenOS — Architectural Design Questions
+========================================
+
+Please answer these 6 questions so I can proceed with the full specification.
+
+---
+
+1. Core language strategy
+
+   Go (fast, simple, great networking) for Core and Rust (memory-safe, system-level) for Agent?
+   Or one language for both?
+
+   Answer:
+
+2. Deployment model
+
+   Docker Compose on existing server/NAS (easier adoption)?
+   Or bare-metal installer from day one?
+
+   Answer:
+
+3. AI model strategy
+
+   Local only (ollama + Llama/Mistral)?
+   Cloud-optional (OpenAI/Anthropic as configurable backend)?
+   Both?
+
+   Answer:
+
+4. Plugin API surface
+
+   Wasm plugins only (sandboxed but limited)?
+   Or also containers (Docker/gRPC sidecar) for heavy extensions?
+
+   Answer:
+
+5. Mobile v1 strategy
+
+   Thin PWA (fast to ship)?
+   Or native app (more capable, more effort)?
+
+   Answer:
+
+6. Target audience for v1
+
+   Hobbyists / homelab enthusiasts (lower polish bar, CLI-heavy OK)?
+   Or broader prosumer audience (polished UI, strict UX standards)?
+
+   Answer:

@@ -1,0 +1,1688 @@
+================================================================================
+                   RenOS ARCHITECTURE SPECIFICATION
+                    Version 1.0 — Architectural Draft
+================================================================================
+
+                        CONFIDENTIAL — INTERNAL DRAFT
+              Prepared by the RenOS Architecture Team
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+    Chapter 1:  Vision
+    Chapter 2:  Overall System Architecture
+    Chapter 3:  Component Responsibilities
+    Chapter 4:  Communication
+    Chapter 5:  Security
+    Chapter 6:  Database Design
+    Chapter 7:  Plugin System
+    Chapter 8:  Automation Engine (RenFlow)
+    Chapter 9:  AI Architecture (RenAI)
+    Chapter 10: Roadmap
+
+================================================================================
+CHAPTER 1 — VISION
+================================================================================
+
+1.1 Mission
+-----------
+Make every device feel like one intelligent system. Users interact with their
+entire hardware ecosystem — desktops, servers, Pis, NAS, VMs, containers —
+as a single unified platform, controlled by natural language or a polished UI.
+
+1.2 Vision
+----------
+RenOS becomes the standard open-source control plane for the home and small-
+business device mesh. Long-term, it evolves into a full Linux distribution
+where RenOS is the operating system itself — not something you install on top.
+
+1.3 Philosophy
+--------------
+    • AI-first but not AI-dependent. Every action works without AI; AI makes
+      it faster and more natural.
+    • Local-first by default, cloud optional. Users own their data.
+    • Modular to the core. The platform is a kernel of services; everything
+      else is a plugin.
+    • Secure by default, not as an afterthought.
+    • Beautiful inside and out. The API, the CLI, the UI, and the docs all
+      meet the same bar.
+
+1.4 Long-Term Goals
+-------------------
+    1. Connect any device — from a Raspberry Pi Zero to a 128-core server.
+    2. Provide a single interface (chat, web, CLI) for the entire device mesh.
+    3. Automate everything — updates, backups, deployments, monitoring.
+    4. Host a plugin ecosystem with a marketplace.
+    5. Evolve into a purpose-built Linux distribution (RenOS Linux) where the
+       Core is the init system and the Agent is the device daemon.
+
+1.5 Core Principles
+-------------------
+    • AI First        — natural language as the primary interaction mode.
+    • Local First     — works offline; cloud is additive, not required.
+    • Modular         — every feature is a plugin or service; core stays lean.
+    • Secure by Default — mTLS, RBAC, audit, encryption, zero trust.
+    • Beautiful       — prosumer-grade UI across desktop, tablet, phone.
+
+================================================================================
+CHAPTER 2 — OVERALL SYSTEM ARCHITECTURE
+================================================================================
+
+2.1 High-Level Diagram
+----------------------
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                         Users                               │
+    │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+    │  │ Web UI   │  │  PWA     │  │  CLI     │  │ API      │   │
+    │  │ (Browser)│  │ (Phone)  │  │ (Terminal)│  │ (3rd-P)  │   │
+    │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   │
+    └───────┼──────────────┼─────────────┼──────────────┼────────┘
+            │              │             │              │
+            │         HTTPS/WSS     gRPC-web      HTTPS │
+            │              │             │              │
+            ▼              ▼             ▼              ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                     RENCORE (Go)                                │
+    │                                                                 │
+    │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌─────────────┐  │
+    │  │ API Gw    │  │ Auth Svc  │  │ Device Reg│  │ Cmd Bus     │  │
+    │  │ (Traefik/ │  │ (OAuth2/  │  │ (Registry │  │ (NATS)      │  │
+    │  │  Caddy)   │  │  OIDC)    │  │  + Status)│  │             │  │
+    │  └───────────┘  └───────────┘  └───────────┘  └──────┬──────┘  │
+    │                                                      │          │
+    │  ┌───────────┐  ┌───────────┐  ┌───────────┐         │          │
+    │  │ RenAI     │  │ RenFlow   │  │ Plugin    │         │          │
+    │  │ (AI Orch) │  │ (Auto     │  │ Manager   │         │          │
+    │  │           │  │  Engine)  │  │           │         │          │
+    │  └───────────┘  └───────────┘  └───────────┘         │          │
+    │                                                      │          │
+    │  ┌───────────┐  ┌───────────┐  ┌───────────┐         │          │
+    │  │ Audit Log │  │ Notif Svc │  │ File Store│         │          │
+    │  │ (Immut)   │  │ (WebSocket│  │ (MinIO)   │         │          │
+    │  └───────────┘  │  + Push)  │  └───────────┘         │          │
+    │                 └───────────┘                        │          │
+    └──────────────────────────────────────────────────────┼──────────┘
+                                                           │
+                                                   gRPC/mTLS│
+                    ┌──────────────────────────────────────┼──────────┐
+                    │                                      │          │
+                    ▼                                      ▼          │
+            ┌──────────────┐                     ┌──────────────┐     │
+            │   RENAGENT   │      ...            │   RENAGENT   │     │
+            │   (Rust)     │                     │   (Rust)     │     │
+            │              │                     │              │     │
+            │  ┌────────┐  │                     │  ┌────────┐  │     │
+            │  │ gRPC   │  │                     │  │ gRPC   │  │     │
+            │  │ Stream │  │                     │  │ Stream │  │     │
+            │  ├────────┤  │                     │  ├────────┤  │     │
+            │  │ Cmd    │  │                     │  │ Cmd    │  │     │
+            │  │ Exec   │  │                     │  │ Exec   │  │     │
+            │  ├────────┤  │                     │  ├────────┤  │     │
+            │  │ Health │  │                     │  │ Health │  │     │
+            │  │ Report │  │                     │  │ Report │  │     │
+            │  ├────────┤  │                     │  ├────────┤  │     │
+            │  │ Tunnel │  │                     │  │ Tunnel │  │     │
+            │  └────────┘  │                     │  └────────┘  │     │
+            └──────────────┘                     └──────────────┘     │
+                    │                                      │          │
+                    ▼                                      ▼          │
+            ┌──────────────┐                     ┌──────────────┐     │
+            │ Host OS      │                     │ Host OS      │     │
+            │ (Linux/Win/  │                     │ (Linux/Win/  │     │
+            │  macOS/BSD)  │                     │  macOS/BSD)  │     │
+            └──────────────┘                     └──────────────┘     │
+                    │                                      │          │
+                    ▼                                      ▼          │
+            ┌──────────────┐                     ┌──────────────┐     │
+            │ Managed Svc  │                     │ Managed Svc  │     │
+            │ (Docker,     │                     │ (Docker,     │     │
+            │  systemd)    │                     │  systemd)    │     │
+            └──────────────┘                     └──────────────┘     │
+                    │                                      │          │
+                    ▼                                      ▼          │
+            ┌──────────────┐                     ┌──────────────┐     │
+            │ VMs / LXCs   │                     │ VMs / LXCs   │     │
+            └──────────────┘                     └──────────────┘     │
+                                                                     │
+            ┌─────────────────────────────────────────────────────────┘
+            │
+            ▼
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                       DATA LAYER                                 │
+    │                                                                  │
+    │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐    │
+    │  │PostgreSQL│  │  Redis   │  │  MinIO   │  │  NATS        │    │
+    │  │(Primary) │  │(Cache/   │  │(Blob/File│  │(Event Bus)   │    │
+    │  │          │  │ Session) │  │  Store)  │  │              │    │
+    │  └──────────┘  └──────────┘  └──────────┘  └──────────────┘    │
+    └──────────────────────────────────────────────────────────────────┘
+
+2.2 Component Map
+-----------------
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ RENCORE (Go Monolith — decomposable into microservices)        │
+    │                                                                 │
+    │  ┌──────────────┬──────────────┬──────────────┬──────────────┐  │
+    │  │ API Gateway  │ Auth Service │Device Registry│ Command Bus  │  │
+    │  │ (gRPC/HTTP/  │ (OAuth2/OIDC │ (State+Meta)  │ (NATS-based) │  │
+    │  │  WS)         │ + RBAC + 2FA)│               │              │  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ RenAI        │ RenFlow      │ Plugin Mgr   │ Audit Log    │  │
+    │  │ (AI Orch.)   │ (Automation) │ (Wasm+Cont.) │ (Immutable)  │  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ Notif Svc    │ File Store   │ Scheduler    │ Config Svc   │  │
+    │  │ (WS/Push)    │ (MinIO)      │ (Cron/Event) │ (Dynamic)    │  │
+    │  └──────────────┴──────────────┴──────────────┴──────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ RENAGENT (Rust — single binary, no runtime deps)              │
+    │                                                                 │
+    │  ┌──────────────┬──────────────┬──────────────┬──────────────┐  │
+    │  │ gRPC Stream  │ Cmd Executor │ Health Rprt  │ Tunnel Mgr   │  │
+    │  │ (Bidi mTLS)  │ (Sandboxed)  │ (Metrics)    │ (Reverse Prx)│  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ Local Cache  │ Enrollment   │ Sys Info     │ Container Mgr│  │
+    │  │ (SQLite)     │ (mTLS Setup) │ (HW+OS)      │ (Docker/Pod) │  │
+    │  └──────────────┴──────────────┴──────────────┴──────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ RENHUB (Web UI — React/Svelte/Solid PWA)                      │
+    │                                                                 │
+    │  ┌──────────────┬──────────────┬──────────────┬──────────────┐  │
+    │  │ Dashboard    │ Device View  │ AI Chat      │ Flow Editor  │  │
+    │  │ (Overview)   │ (Metrics+Logs)│ (Cmd Palette)│ (RenFlow UX) │  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ Plugin Panels│ Settings     │ File Browser │ Terminal     │  │
+    │  │ (Dynamic)    │ (Config)     │ (Remote FS)  │ (Web SSH)    │  │
+    │  └──────────────┴──────────────┴──────────────┴──────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ RENFLOW (Automation Engine — embedded in RenCore)              │
+    │                                                                 │
+    │  ┌──────────────┬──────────────┬──────────────┬──────────────┐  │
+    │  │ Trigger Mgr  │ Condition    │ Action Exec  │ Workflow DAG │  │
+    │  │ (Cron/Event/ │   Engine     │ (Cmd Bus)    │   Runner     │  │
+    │  │  Webhook/AI) │  (Expr Eval) │              │              │  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ Variable     │ Retry/Error  │ Template Mgr │ Scheduler    │  │
+    │  │ Store        │   Handler    │ (Import/Exp) │ (Distributed)│  │
+    │  └──────────────┴──────────────┴──────────────┴──────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ RENAI (AI Orchestration Layer — embedded in RenCore)           │
+    │                                                                 │
+    │  ┌──────────────┬──────────────┬──────────────┬──────────────┐  │
+    │  │ Provider Mgr │ Intent       │ Action       │ Permission   │  │
+    │  │ (Ollama/     │  Parser      │  Planner     │   Gate       │  │
+    │  │  OpenAI/etc) │ (NLU)        │ (Tool Calls) │ (Confirm/Deny)│  │
+    │  ├──────────────┼──────────────┼──────────────┼──────────────┤  │
+    │  │ Result       │ History      │ Skill Store  │ Context Mgr  │  │
+    │  │ Verifier     │ (Conversation)│ (Tool Defs) │ (Session)    │  │
+    │  └──────────────┴──────────────┴──────────────┴──────────────┘  │
+    └─────────────────────────────────────────────────────────────────┘
+
+2.3 Architectural Decisions
+---------------------------
+
+    2.3.1 Modular Monolith First
+    ----------------------------
+    All RenCore services run in a single Go process for v0.1-v1.0. They
+    communicate via internal Go interfaces (not HTTP/gRPC loopback). If a
+    service needs to scale independently, it is split into its own process
+    behind NATS. This avoids distributed systems complexity until profiling
+    proves it necessary.
+
+    Trade-off: We sacrifice independent scalability for v1 in exchange for
+    simpler deployment, debugging, and development velocity.
+
+    2.3.2 Why Go for Core
+    ---------------------
+    Go's goroutines, standard library (net/http, crypto/tls), fast compile
+    times, and single-binary output make it ideal for a networked control
+    plane. Go's static linking keeps the Docker image small.
+
+    2.3.3 Why Rust for Agent
+    ------------------------
+    The Agent runs on resource-constrained devices (Pi Zero, old laptops)
+    and may eventually need direct system calls (cgroups, namespaces,
+    eBPF). Rust provides C-level performance with memory safety, no GC
+    overhead, and a tiny binary (~5MB stripped).
+
+    2.3.4 Why PostgreSQL + Redis + MinIO + NATS
+    -------------------------------------------
+    PostgreSQL — relational data with JSONB for flexible metadata. Single
+    database for all entities. Well-understood, battle-tested, excellent
+    tooling.
+
+    Redis — ephemeral session cache, rate limiter counters, pub/sub for
+    real-time UI updates, job queue broker.
+
+    MinIO — S3-compatible blob storage for backups, ISOs, logs, file
+    transfers. Self-hosted; no cloud dependency.
+
+    NATS — internal event bus for service decoupling, command dispatch to
+    agents, plugin communication. Lightweight, fast, built-in auth.
+
+================================================================================
+CHAPTER 3 — COMPONENT RESPONSIBILITIES
+================================================================================
+
+3.1 RenCore
+-----------
+    Purpose: Central orchestration brain. Runs as a Docker container (or
+             set of containers when decomposed).
+
+    Responsibilities:
+        • Expose REST/gRPC/WebSocket API for RenHub, CLI, and third-party
+          clients.
+        • Authenticate and authorize every request.
+        • Manage device registry (state, metadata, online/offline tracking).
+        • Dispatch commands to agents via reliable, queued message bus.
+        • Host RenAI and RenFlow engines.
+        • Manage plugin lifecycle and sandbox.
+        • Store and serve audit logs.
+        • Manage file/blob storage.
+        • Send notifications to UI and mobile.
+
+    Dependencies: PostgreSQL, Redis, NATS, MinIO, Ollama (optional)
+
+    Failure Handling:
+        • Stateless services restart transparently (Kubernetes/Docker
+          restart policy).
+        • Commands destined for offline agents are queued in NATS with
+          TTL. Delivered on reconnect.
+        • Database connection loss returns 503; retry with exponential
+          backoff.
+        • Core crash does NOT affect agents — they continue running,
+          cache commands in local SQLite, replay on reconnect.
+
+    Future Expansion:
+        • Scale-out: split auth, API, AI, and automation into separate
+          processes fronted by a load balancer.
+        • Multi-region: federated cores that share device registry.
+
+3.2 RenAgent
+------------
+    Purpose: Lightweight daemon running on every managed device.
+
+    Responsibilities:
+        • Maintain persistent gRPC bidirectional stream to RenCore.
+        • Report device health (CPU, RAM, disk, network, uptime, processes)
+          at configurable intervals.
+        • Execute received commands within a sandbox (cgroup/namespace if
+          available, otherwise subprocess with limited privileges).
+        • Stream command stdout/stderr back to Core in real-time.
+        • Provide reverse tunnel for web services running on the device
+          (e.g., access a router admin page via RenOS).
+        • Cache commands when offline; replay upon reconnection.
+        • Perform self-update (download new binary, verify signature,
+          restart).
+
+    Dependencies: None (single binary). Optional: Docker socket if
+                  container management is enabled.
+
+    Failure Handling:
+        • gRPC disconnection: exponential backoff retry with jitter.
+        • Command timeout: kill child process, return error.
+        • Disk full: stop caching, alert Core.
+        • Agent crash: OS restart policy (systemd/busybox).
+
+    Future Expansion:
+        • Act as a mesh node (v2): relay commands to other agents.
+        • Embed eBPF probes for kernel-level monitoring.
+        • Local AI inference for offline intent parsing.
+
+3.3 RenHub (Web UI)
+-------------------
+    Purpose: Primary user interface (PWA).
+
+    Responsibilities:
+        • Render dashboards, device views, logs, file browser.
+        • Provide AI chat interface (RenAI integration).
+        • Provide visual workflow editor (RenFlow).
+        • Manage settings, users, plugins, permissions.
+        • Provide real-time updates via WebSocket.
+        • Offline-capable via service worker cache.
+
+    Dependencies: RenCore API.
+
+    Failure Handling:
+        • WebSocket disconnect: queue UI actions, reconnect, replay.
+        • API failure: show cached data, stale indicator.
+        • Complete offline: show cached dashboards, alert user.
+
+    Future Expansion:
+        • Native desktop app (Electron/Tauri wrapper).
+        • Native mobile apps.
+
+3.4 RenFlow (Automation Engine)
+--------------------------------
+    Purpose: Trigger-action workflow engine.
+
+    Responsibilities:
+        • Manage workflow definitions (DAG of triggers → conditions →
+          actions → error handlers).
+        • Evaluate triggers (cron, device event, webhook, AI intent).
+        • Evaluate conditions (expressions over device state, variables).
+        • Execute actions with retry, timeout, and rollback support.
+        • Maintain variable store (scoped to workflow, user, global).
+        • Schedule recurring workflows.
+        • Log every execution step.
+
+    Dependencies: NATS (for event triggers), PostgreSQL (definitions,
+                  execution logs), Redis (runtime state).
+
+    Failure Handling:
+        • Action failure: configurable retry (count, backoff), then
+          escalation (notify, run error handler).
+        • Workflow timeout: kill, log partial state.
+        • Partial success: mark completed nodes committed; retry from
+          failed node (idempotency keys required).
+
+    Future Expansion:
+        • Parallel branch execution.
+        • Sub-workflow calls (reusable templates).
+        • Long-running workflows with human-in-the-loop approval steps.
+
+3.5 RenAI (AI Orchestration)
+----------------------------
+    Purpose: Bridge between natural language and system actions.
+
+    Responsibilities:
+        • Receive natural language input from user.
+        • Parse intent using configured AI provider.
+        • Map intent to available actions (built-in + plugin-provided).
+        • Request user confirmation for destructive operations.
+        • Call the action via RenFlow or direct Command Bus.
+        • Verify the action result.
+        • Report outcome to user in natural language.
+        • Maintain conversation context (short-term memory).
+
+    Dependencies: AI provider (Ollama, OpenAI, Anthropic), NATS (action
+                  dispatch), PostgreSQL (history).
+
+    Failure Handling:
+        • Provider unreachable: fallback to secondary provider, or return
+          error "AI backend offline, please try again later."
+        • Ambiguous intent: ask clarifying question.
+        • Unauthorized action: "You don't have permission to do that."
+        • Action fails: "I tried to X but it failed because Y."
+
+    Future Expansion:
+        • Multi-step planning (break complex request into sub-actions).
+        • Proactive suggestions ("Your disk is 90% full. Clean up old
+          backups?")
+        • Voice interface.
+        • On-device AI agent for offline command parsing.
+
+3.6 Plugin Manager
+------------------
+    Purpose: Load, sandbox, and manage third-party extensions.
+
+    Responsibilities:
+        • Register plugins (Wasm binary or container sidecar).
+        • Verify plugin signature.
+        • Assign resource limits (CPU, RAM, network).
+        • Expose capability-based permission model.
+        • Route plugin lifecycle events (install, enable, disable,
+          uninstall, update).
+        • Serve plugin-defined UI panels to RenHub.
+        • Monitor plugin health (heartbeat).
+
+    Dependencies: Wasm runtime (wazero or wasmtime), Container runtime
+                  (Docker or Podman), NATS (plugin communication).
+
+    Failure Handling:
+        • Plugin crash: restart with backoff, alert admin after N
+          consecutive crashes.
+        • Plugin OOM: kill, log, disable.
+        • Malicious plugin: signature verification failure blocks install.
+
+    Future Expansion:
+        • Plugin marketplace with ratings and reviews.
+        • Plugin dependency resolution.
+        • Plugin sandbox with virtual filesystem.
+
+3.7 Database
+------------
+    Purpose: Persistent storage for all RenOS state.
+
+    Responsibilities:
+        • Store all entity data (users, devices, etc.).
+        • Provide migrations (versioned, repeatable).
+        • Enforce referential integrity.
+        • Support full-text search where needed.
+
+    Dependencies: PostgreSQL.
+
+    Future Expansion:
+        • Read replicas for dashboard queries.
+        • TimescaleDB extension for time-series metrics.
+
+3.8 API Layer
+-------------
+    Purpose: Unified ingress for all clients.
+
+    Responsibilities:
+        • Terminate TLS.
+        • Route to appropriate internal service.
+        • Handle rate limiting, request validation, CORS.
+        • Upgrade HTTP to WebSocket.
+        • Serve gRPC-web for browser clients.
+
+    Dependencies: Reverse proxy (Caddy or Traefik).
+
+    Failure Handling:
+        • Rate limit exceeded: 429 with Retry-After header.
+        • Backend timeout: 504.
+        • Invalid request: 400 with structured error.
+
+3.9 Authentication Service
+--------------------------
+    Purpose: Identity and access management.
+
+    Responsibilities:
+        • Issue and verify JWTs.
+        • Manage user accounts, roles, permissions.
+        • Handle OAuth2/OIDC flows.
+        • Enforce 2FA (TOTP).
+        • Issue device certificates (internal CA).
+        • Manage API keys for programmatic access.
+        • Session management.
+
+    Dependencies: PostgreSQL, Redis (sessions).
+
+    Failure Handling:
+        • Auth provider down: cached sessions still valid for N minutes.
+        • Token expired: 401, client re-authenticates.
+        • Brute force: temporary IP lockout.
+
+3.10 Notification Service
+-------------------------
+    Purpose: Deliver real-time alerts and events to users.
+
+    Responsibilities:
+        • Push WebSocket messages to RenHub.
+        • Send push notifications (future native apps).
+        • Deliver webhooks to external services.
+        • Aggregate and batch notifications.
+
+    Dependencies: Redis (pub/sub), NATS.
+
+================================================================================
+CHAPTER 4 — COMMUNICATION
+================================================================================
+
+4.1 Communication Matrix
+-------------------------
+
+    ┌─────────────────┬──────────────┬──────────────────┬──────────────────┐
+    │ From → To       │ Protocol     │ Purpose           │ Auth             │
+    ├─────────────────┼──────────────┼──────────────────┼──────────────────┤
+    │ RenHub → RenCore│ HTTPS/REST   │ CRUD API          │ JWT (Bearer)     │
+    │ RenHub → RenCore│ WSS          │ Real-time events  │ JWT (handshake)  │
+    │ RenHub → RenCore│ gRPC-web     │ High-perf queries │ JWT (metadata)   │
+    │ CLI → RenCore   │ HTTPS/REST   │ All CLI commands  │ JWT or API Key   │
+    │ RenCore → Agent │ gRPC (bidi)  │ Commands + health │ mTLS (cert)      │
+    │ Agent → RenCore │ gRPC (bidi)  │ Status + logs     │ mTLS (cert)      │
+    │ Core Internal   │ Go interface │ v0.1-v1.0 calls   │ In-process       │
+    │ Core Internal   │ NATS         │ v2+ cross-service │ NATS creds       │
+    │ Plugin → Core   │ NATS         │ Plugin API calls  │ Plugin token     │
+    │ Core → Plugin   │ NATS         │ Events + commands │ Plugin token     │
+    │ Agent ↔ Agent   │ libp2p/WebRTC│ v2+ mesh comms    │ mTLS (mesh cert) │
+    └─────────────────┴──────────────┴──────────────────┴──────────────────┘
+
+4.2 REST API Conventions
+-------------------------
+    Base URL: https://<renos-host>/api/v1
+
+    • Standard CRUD: GET/POST/PUT/PATCH/DELETE
+    • Pagination: ?page=1&per_page=50 (response includes total, next, prev)
+    • Filtering: ?field=value (multiple values: ?status=online,offline)
+    • Sorting: ?sort=name:asc,created:desc
+    • Errors: consistent JSON envelope:
+        { "error": { "code": "DEVICE_NOT_FOUND", "message": "...", "details": {} } }
+    • Versioning: URL-prefixed (/api/v1). Breaking changes increment version.
+
+4.3 WebSocket Protocol
+----------------------
+    Endpoint: wss://<renos-host>/api/v1/ws
+
+    Messages are JSON with envelope:
+    {
+      "type": "event|command|ack",
+      "id": "uuid",
+      "channel": "devices:status|logs:device-01|notifications",
+      "data": { ... },
+      "timestamp": "ISO8601"
+    }
+
+    Client subscribes to channels; server pushes events.
+    Client can send commands (e.g., "subscribe logs:device-01").
+
+4.4 gRPC Agent Protocol
+------------------------
+    Proto package: renos.agent.v1
+
+    Service AgentService {
+        // Bidirectional stream — single connection per agent.
+        rpc Connect(stream AgentMessage) returns (stream CoreMessage);
+
+        // One-shot for enrollment (not streaming).
+        rpc Enroll(EnrollRequest) returns (EnrollResponse);
+    }
+
+    AgentMessage types:
+        • HEALTH_REPORT  — CPU, RAM, disk, network, uptime
+        • COMMAND_RESULT — stdout, stderr, exit code, duration
+        • LOG_LINE       — real-time log output
+        • TUNNEL_OPEN    — reverse tunnel request
+        • TUNNEL_CLOSE   — tunnel teardown
+
+    CoreMessage types:
+        • COMMAND_EXEC   — execute a command
+        • COMMAND_CANCEL — kill running command
+        • TUNNEL_DATA   — tunnel payload
+        • AGENT_UPDATE   — self-update instruction
+        • PING           — keepalive
+
+4.5 Event Bus (NATS)
+--------------------
+    All internal events flow through NATS subjects:
+
+    • renos.device.>             — device events (online, offline, health)
+    • renos.command.>            — command dispatch (to agent, to plugin)
+    • renos.workflow.>           — RenFlow events (trigger, complete, fail)
+    • renos.plugin.>             — plugin lifecycle and communication
+    • renos.notification.>       — notifications
+    • renos.audit.>              — audit log entries
+
+    Subject hierarchy allows wildcard subscriptions.
+    NATS JetStream enabled for durable queuing of commands to offline agents.
+
+4.6 Authentication Flow
+-----------------------
+    4.6.1 User Login
+        RenHub → POST /api/v1/auth/login { username, password, totp? }
+        RenCore validates credentials, checks 2FA
+        RenCore → RenHub: 200 { access_token, refresh_token, user, expires }
+
+    4.6.2 API Key Usage
+        CLI → GET /api/v1/devices (Header: Authorization: Bearer <api_key>)
+        RenCore validates API key against RBAC
+        RenCore → CLI: 200 [ ... devices ]
+
+    4.6.3 Device Enrollment (detailed in 4.7)
+
+4.7 Device Registration
+-----------------------
+    Step 1: User generates one-time enrollment token via RenHub
+            POST /api/v1/devices/enroll-token
+            → { token: "RENOS-ENROLL-XXXX-YYYY", expires: "ISO8601" }
+
+    Step 2: User runs on target device:
+            renos enroll --token "RENOS-ENROLL-XXXX-YYYY" --core "https://renos.local:8443"
+
+    Step 3: Agent generates Ed25519 keypair
+            Agent sends CSR to RenCore via gRPC Enroll()
+            CSR contains: token, device public key, hostname, OS info
+
+    Step 4: RenCore validates token (exists, not expired, not revoked)
+            RenCore CA signs device certificate (valid 1 year)
+            RenCore stores device fingerprint in database
+            RenCore → Agent: signed certificate, CA cert, NATS credentials
+
+    Step 5: Agent stores certificate to disk (encrypted)
+            Agent initiates mTLS gRPC stream using new cert
+            RenCore marks device "online" in registry
+
+    Step 6: RenHub receives WebSocket event: device.online
+
+================================================================================
+CHAPTER 5 — SECURITY
+================================================================================
+
+5.1 Security Principles
+-----------------------
+    1. Zero Trust — no device, user, or service is implicitly trusted.
+    2. Least Privilege — every identity gets the minimum access needed.
+    3. Defense in Depth — multiple layers: network → TLS → auth → RBAC →
+       audit → sandbox.
+    4. No Secrets in the Clear — all secrets encrypted at rest and in
+       transit.
+    5. Immutable Audit — logs are append-only, signed, and cannot be
+       modified or deleted by any user.
+
+5.2 Authentication
+------------------
+    5.2.1 User Authentication
+        • Primary: username/password with bcrypt (cost 12)
+        • 2FA: TOTP (required for admin role, optional for others)
+        • SSO: LDAP / OIDC (Azure AD, Google, GitHub) — optional at deploy
+               time
+        • Session: JWT access tokens (15m TTL) + refresh tokens (7d TTL,
+          rotation)
+        • Rate limit: 5 login attempts per IP per minute
+
+    5.2.2 API Key Authentication
+        • Scoped keys for automation/CI
+        • Key prefixes identify type: renos_sk_ (secret), renos_pk_ (public)
+        • Hashed at rest (SHA-256), only prefix shown in UI
+        • Revokable individually
+
+    5.2.3 Device Authentication
+        • X.509 certificates issued by RenCore's internal CA
+        • Ed25519 keypair (small fast keys, high security)
+        • Certificate valid 1 year, auto-renewed by agent (30d before
+          expiry)
+        • Revocation: CRL published by Core; agents check on reconnect
+
+5.3 Authorization (RBAC)
+-------------------------
+    Built-in roles (hierarchical):
+
+    Role        | Permissions
+    ────────────┼────────────────────────────────────────────────────
+    admin       | Full access to everything
+    operator    | Execute commands, view all devices, view audit logs
+    developer   | Deploy apps, manage plugins, manage workflows
+    viewer      | Read-only: dashboards, device status, logs
+    custom      | User-defined role with granular permission set
+
+    Permissions are structured as:
+        <resource>:<action>[:<scope>]
+
+    Examples:
+        devices:read:desktop-01
+        devices:exec:*
+        plugins:install
+        workflows:create
+        audit:read
+        users:manage
+
+    Resources: devices, users, plugins, workflows, audit, settings, secrets
+
+    Actions:   create, read, update, delete, exec, install, manage
+
+5.4 Encryption
+--------------
+    • In transit: TLS 1.3 minimum. mTLS for agent and service-to-service.
+    • At rest: Database encrypted at filesystem level (LUKS or dm-crypt
+      recommendation). Application-level encryption for secrets column.
+    • Secrets: Encrypted with AES-256-GCM using a master key stored
+      in environment variable or Vault. Key derivation per secret.
+
+5.5 Secrets Management
+----------------------
+    • Option A (default for v1): Master encryption key in environment
+      variable. All secrets encrypted in PostgreSQL. RenCore handles
+      encryption/decryption in-memory.
+    • Option B (recommended for v1.0+): HashiCorp Vault sidecar. RenCore
+      requests secret decryption via Vault API.
+
+    Secrets stored: API keys, cloud credentials, SSH keys, database
+    passwords for managed services.
+
+5.6 Audit Logging
+-----------------
+    Every action that changes state is logged:
+
+    • User login/logout (including failures)
+    • Command execution (who, what device, what command, result)
+    • Device enrollment/deregistration
+    • Permission changes
+    • Plugin install/remove
+    • Workflow create/modify/delete/run
+    • Secret access (only that it was accessed, not the secret itself)
+    • Settings changes
+
+    Log entry structure:
+    {
+      "id": "uuid",
+      "timestamp": "ISO8601",
+      "actor": { "type": "user|device|system|plugin", "id": "..." },
+      "action": "devices.exec",
+      "target": { "type": "device", "id": "desktop-01" },
+      "details": { "command": "sudo apt update", "result": "success" },
+      "signature": "base64-ed25519-signature",
+      "previous_hash": "sha256-of-previous-entry"
+    }
+
+    The chain of hashes forms a hash chain. Tampering with any entry
+    breaks all subsequent hashes. Periodic verification job alerts if
+    chain is broken.
+
+5.7 Zero Trust Architecture
+----------------------------
+    • Every request authenticated, regardless of source.
+    • No "internal network" bypass.
+    • Microservices verify caller identity (JWT for users, cert for agents,
+      token for plugins).
+    • TLS everywhere: no plaintext internal traffic even in v1 modular
+      monolith (loopback TLS is cheap and enforces discipline for when
+      services split).
+
+5.8 Recovery Strategy
+---------------------
+    • Lost admin password: boot RenCore in recovery mode (set env
+      RENOS_RECOVERY=true, use one-time recovery URL printed to logs).
+    • Compromised device cert: revoke from UI → agent forced to
+      re-enroll.
+    • Full database loss: restore from encrypted MinIO backups.
+      Automated backups run daily with 30-day retention.
+    • CA compromise: regenerate CA, re-enroll all devices.
+
+================================================================================
+CHAPTER 6 — DATABASE DESIGN
+================================================================================
+
+6.1 Entity-Relationship Overview
+---------------------------------
+
+    ┌──────────┐     ┌──────────────┐     ┌──────────────┐
+    │  users   │1──N│  devices      │     │  sessions    │
+    │          │     │              │     │              │
+    │ id       │     │ id           │     │ id           │
+    │ email    │     │ user_id ─────┘     │ user_id      │
+    │ password │     │ hostname      ───┐ │ token_hash   │
+    │ role     │     │ os            │  │ │ expires_at   │
+    │ totp_sec │     │ arch          │  │ └──────────────┘
+    │ ssh_keys │     │ agent_version│  │
+    │ settings │     │ cert_fpr     │  │ ┌────────────────┐
+    └──────────┘     │ enrolled_at  │  │ │   api_keys     │
+                     │ last_seen    │  │ │                │
+                     │ status       │  │ │ id             │
+                     │ labels{}     │  │ │ user_id        │
+                     │ capabilities│  │ │ key_prefix     │
+                     │ metadata{}  │  │ │ key_hash       │
+                     └──────────────┘  │ │ scope          │
+                                       │ │ expires_at     │
+                     ┌──────────────┐  │ └────────────────┘
+                     │ device_tags  │  │
+                     │              │  │ ┌────────────────┐
+                     │ device_id ───┘  │ │   plugins      │
+                     │ tag            │  │                │
+                     │ value          │  │ id             │
+                     └──────────────┘  │ │ name           │
+                                       │ │ type (wasm/    │
+                     ┌──────────────┐  │ │      container)│
+                     │   audits     │  │ │ version        │
+                     │              │  │ │ description    │
+                     │ id           │  │ │ permissions{}  │
+                     │ timestamp    │  │ │ status         │
+                     │ actor_type   │  │ │ config{}       │
+                     │ actor_id     │  │ │ signature      │
+                     │ action       │  │ └────────────────┘
+                     │ target_type  │  │
+                     │ target_id    │  │ ┌──────────────────┐
+                     │ details{}    │  │ │  notifications  │
+                     │ signature    │  │ │                 │
+                     │ prev_hash    │  │ │ id              │
+                     └──────────────┘  │ │ user_id         │
+                                       │ │ type            │
+                     ┌──────────────┐  │ │ title           │
+                     │  workflows  │  │ │ body            │
+                     │             │  │ │ read            │
+                     │ id          │  │ │ created_at      │
+                     │ name        │  │ └──────────────────┘
+                     │ description │  │
+                     │ triggers[]  │  │ ┌────────────────┐
+                     │ conditions[]│  │ │   secrets      │
+                     │ actions[]   │  │ │                │
+                     │ variables{} │  │ │ id             │
+                     │ error_handl │  │ │ name           │
+                     │ enabled     │  │ │ encrypted_val  │
+                     │ created_by  │  │ │ scope          │
+                     │ version     │  │ │ updated_at     │
+                     └──────────────┘  │ └────────────────┘
+                                       │
+                     ┌──────────────┐  │ ┌────────────────┐
+                     │  exec_logs  │  │ │  settings      │
+                     │             │  │ │                │
+                     │ id          │  │ │ key            │
+                     │ workflow_id │  │ │ value{}        │
+                     │ device_id   │  │ │ scope (global/ │
+                     │ command     │  │ │       user)    │
+                     │ status      │  │ └────────────────┘
+                     │ exit_code   │  │
+                     │ stdout_url  │  │ ┌────────────────┐
+                     │ stderr_url  │  │ │  ai_conversat  │
+                     │ started_at  │  │ │               │
+                     │ finished_at │  │ │ id            │
+                     └──────────────┘  │ │ user_id       │
+                                       │ │ provider      │
+                                       │ │ messages[]    │
+                                       │ │ created_at    │
+                                       └────────────────┘
+
+6.2 Schema Details (Key Tables)
+--------------------------------
+
+    6.2.1 users
+        CREATE TABLE users (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            email       TEXT UNIQUE NOT NULL,
+            password    TEXT NOT NULL,           -- bcrypt hash
+            display_name TEXT NOT NULL,
+            role        TEXT NOT NULL DEFAULT 'viewer',
+                        -- admin | operator | developer | viewer
+            totp_secret TEXT,                    -- encrypted, NULL if not set
+            totp_enabled BOOLEAN DEFAULT FALSE,
+            ssh_keys    JSONB DEFAULT '[]',
+            settings    JSONB DEFAULT '{}',
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            deleted_at  TIMESTAMPTZ              -- soft delete
+        );
+
+    6.2.2 devices
+        CREATE TABLE devices (
+            id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            hostname       TEXT NOT NULL,
+            os             TEXT NOT NULL,
+            arch           TEXT NOT NULL,
+            agent_version  TEXT NOT NULL,
+            cert_fingerprint TEXT UNIQUE,
+            enrolled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_seen      TIMESTAMPTZ,
+            status         TEXT NOT NULL DEFAULT 'offline',
+                        -- offline | online | degraded | decommissioned
+            labels         JSONB DEFAULT '{}',
+            capabilities   JSONB DEFAULT '[]',
+            metadata       JSONB DEFAULT '{}',
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX idx_devices_user ON devices(user_id);
+        CREATE INDEX idx_devices_status ON devices(status);
+        CREATE INDEX idx_devices_last_seen ON devices(last_seen);
+
+    6.2.3 device_tags
+        CREATE TABLE device_tags (
+            device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+            tag       TEXT NOT NULL,
+            value     TEXT NOT NULL,
+            PRIMARY KEY (device_id, tag)
+        );
+
+    6.2.4 audits
+        CREATE TABLE audits (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            actor_type  TEXT NOT NULL,     -- user | device | system | plugin
+            actor_id    TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            target_type TEXT,
+            target_id   TEXT,
+            details     JSONB DEFAULT '{}',
+            signature   TEXT NOT NULL,
+            prev_hash   TEXT NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX idx_audits_timestamp ON audits(timestamp DESC);
+        CREATE INDEX idx_audits_actor ON audits(actor_type, actor_id);
+        CREATE INDEX idx_audits_action ON audits(action);
+
+    6.2.5 workflows
+        CREATE TABLE workflows (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name          TEXT NOT NULL,
+            description   TEXT,
+            triggers      JSONB NOT NULL,     -- [{ type: cron|event|webhook|ai, config: {} }]
+            conditions    JSONB DEFAULT '[]', -- [{ field, operator, value }]
+            actions       JSONB NOT NULL,     -- [{ type: command|api|workflow|plugin, config: {} }]
+            variables     JSONB DEFAULT '{}', -- { name: { type, default } }
+            error_handler JSONB DEFAULT NULL,
+            enabled       BOOLEAN DEFAULT TRUE,
+            created_by    UUID REFERENCES users(id),
+            version       INT NOT NULL DEFAULT 1,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+    6.2.6 exec_logs
+        CREATE TABLE exec_logs (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            workflow_id UUID REFERENCES workflows(id),
+            device_id   UUID REFERENCES devices(id),
+            command     TEXT NOT NULL,
+            status      TEXT NOT NULL,   -- pending | running | success | failed | cancelled
+            exit_code   INT,
+            stdout_url  TEXT,
+            stderr_url  TEXT,
+            started_at  TIMESTAMPTZ,
+            finished_at TIMESTAMPTZ,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+    6.2.7 plugins
+        CREATE TABLE plugins (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name             TEXT UNIQUE NOT NULL,
+            type             TEXT NOT NULL,            -- wasm | container
+            version          TEXT NOT NULL,
+            description      TEXT,
+            author           TEXT,
+            permissions      JSONB NOT NULL,           -- ["devices:read", "devices:exec:desktop-01"]
+            config_schema    JSONB,                    -- JSON Schema for plugin config
+            status           TEXT NOT NULL DEFAULT 'inactive',
+                         -- inactive | active | error | blocked
+            blob_hash        TEXT,
+            signature        TEXT,                     -- signed by plugin author
+            installed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+    6.2.8 secrets
+        CREATE TABLE secrets (
+            id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name           TEXT NOT NULL,
+            encrypted_value BYTEA NOT NULL,
+            scope          TEXT NOT NULL DEFAULT 'global',
+                                       -- global | user:<id> | device:<id>
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(name, scope)
+        );
+
+    6.2.9 ai_conversations
+        CREATE TABLE ai_conversations (
+            id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            provider   TEXT NOT NULL,
+            messages   JSONB NOT NULL,      -- [{ role, content, tool_calls, timestamp }]
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+    6.2.10 notifications
+        CREATE TABLE notifications (
+            id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            type       TEXT NOT NULL,     -- info | warning | error | success
+            title      TEXT NOT NULL,
+            body       TEXT,
+            read       BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX idx_notif_user_read ON notifications(user_id, read);
+
+    6.2.11 api_keys
+        CREATE TABLE api_keys (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            key_prefix  TEXT NOT NULL,     -- first 8 chars of key for identification
+            key_hash    TEXT UNIQUE NOT NULL,  -- SHA-256 of full key
+            name        TEXT NOT NULL,
+            scope       JSONB DEFAULT '["devices:read"]',
+            expires_at  TIMESTAMPTZ,
+            last_used_at TIMESTAMPTZ,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+    6.2.12 sessions
+        CREATE TABLE sessions (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash  TEXT UNIQUE NOT NULL,  -- SHA-256 of refresh token
+            device_info TEXT,
+            ip_address  INET,
+            expires_at  TIMESTAMPTZ NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX idx_sessions_user ON sessions(user_id);
+        CREATE INDEX idx_sessions_expires ON sessions(expires_at);
+
+6.3 Migration Strategy
+----------------------
+    • golang-migrate (or goose) for versioned SQL migrations.
+    • Migrations run automatically on RenCore startup.
+    • Backward-compatible only: no column drops for 3 versions.
+    • Rollback: `migrate down 1` to revert last migration.
+    • Schema version tracked in a `schema_migrations` table.
+
+6.4 Data Retention
+------------------
+    • Audit logs: permanent (immutable by design).
+    • Execution logs: 90 days (stdout/stderr blobs: 30 days).
+    • Notifications: 30 days.
+    • AI conversations: 90 days (user-configurable).
+    • Sessions: deleted on expiry (cleanup job runs hourly).
+    • Soft-deleted users: purged after 30 days.
+
+================================================================================
+CHAPTER 7 — PLUGIN SYSTEM
+================================================================================
+
+7.1 Plugin Types
+----------------
+    +-------------+----------------+-------------------------------------+
+    | Type        | Runtime        | Use Case                            |
+    +-------------+----------------+-------------------------------------+
+    | Wasm plugin | wasmtime/wazero| Stateless extensions: parsers,       |
+    |             |                | formatters, triggers, validators,    |
+    |             |                | simple automations.                  |
+    +-------------+----------------+-------------------------------------+
+    | Container   | Docker/Podman  | Stateful services: monitoring stack, |
+    | plugin      |                | media server manager, backup engine, |
+    |             |                | VM orchestrator, AI skill.           |
+    +-------------+----------------+-------------------------------------+
+
+7.2 Plugin Lifecycle
+--------------------
+    ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐
+    │         │   │         │   │         │   │          │   │          │
+    │ Pending │──►│Verified │──►│ Active  │──►│Disabled  │──►│Uninstalled│
+    │         │   │         │   │         │   │          │   │          │
+    └─────────┘   └─────────┘   └─────────┘   └──────────┘   └──────────┘
+        │              │             │              │
+        │ (sig fail)   │             │              │
+        ▼              ▼             ▼              ▼
+    ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌──────────┐
+    │Rejected │   │ Blocked │   │ Error   │   │  (data   │
+    │         │   │         │   │         │   │  purged) │
+    └─────────┘   └─────────┘   └─────────┘   └──────────┘
+
+    States:
+    • Pending: uploaded, not yet verified.
+    • Verified: signature checks pass.
+    • Active: running and accepting requests.
+    • Disabled: stopped but not uninstalled.
+    • Error: crashed repeatedly, auto-disabled.
+    • Blocked: signature invalid or permission escalation detected.
+    • Uninstalled: removed from database; data cleaned up.
+
+7.3 Plugin Manifest
+-------------------
+    Every plugin includes a manifest (plugin.yaml or embedded in Wasm):
+
+    ```yaml
+    name: minecraft-manager
+    version: 1.0.0
+    type: container          # wasm | container
+    description: Manage Minecraft servers
+    author: RenOS Community
+    icon: https://...
+
+    permissions:
+      - devices:exec:mc-*    # can execute on devices matching label mc-*
+      - secrets:read:mc-*    # can read secrets prefixed mc-
+      - notifications:write  # can send notifications
+
+    container:
+      image: ghcr.io/renos-plugins/minecraft-manager:1.0.0
+      ports:                 # optional ports to expose
+        - internal: 25565
+          protocol: tcp
+      volumes:
+        - path: /data
+          size: 10Gi
+
+    wasm:
+      entrypoint: plugin.wasm
+      max_memory: 64MB
+      exports:
+        - handle_event
+        - handle_command
+        - render_panel
+
+    config_schema:           # JSON Schema for user-configurable settings
+      type: object
+      properties:
+        max_players:
+          type: integer
+          default: 20
+        motd:
+          type: string
+
+    lifecycle:
+      on_install: []         # hooks executed at each lifecycle stage
+      on_uninstall: []
+      on_update: []
+    ```
+
+7.4 Plugin Communication
+-------------------------
+    All plugins communicate with RenCore via NATS, regardless of type.
+
+    Wasm plugins: Plugin Manager invokes exported functions. If the plugin
+    needs to call Core APIs, the Plugin Manager proxies requests over NATS
+    on the plugin's behalf.
+
+    Container plugins: The container connects to NATS directly using
+    credentials injected at startup.
+
+    Subject convention:
+        renos.plugin.<plugin_id>.request
+        renos.plugin.<plugin_id>.response
+        renos.plugin.<plugin_id>.event
+
+    Plugin API (gRPC over NATS):
+        • CallDeviceAction(device_id, action, params) → Result
+        • ReadSecret(name, scope) → Secret (audit logged)
+        • SendNotification(user_id, title, body) → void
+        • RegisterTrigger(trigger_def) → trigger_id
+        • EmitEvent(event_type, data) → void
+        • GetDeviceStatus(device_id) → DeviceStatus
+        • WriteAuditLog(action, details) → void
+
+7.5 Plugin Permissions
+-----------------------
+    Permissions are declared in the manifest. At install time, the user
+    reviews and must approve them. Permissions can be narrowed after
+    install.
+
+    Permission enforcement:
+    1. Plugin Manager checks every API call against declared permissions.
+    2. Any violation is logged to audit and blocks the call.
+    3. Repeated violations auto-disable the plugin.
+
+7.6 Plugin Updates
+-------------------
+    • New manifest uploaded; version must be higher than current.
+    • Permissions diff presented to user for approval.
+    • On approval: Wasm binary replaced and runtime restarted, or container
+      image pulled and container recreated.
+    • Database migrations owned by plugin (if any) run automatically.
+
+7.7 Plugin Marketplace (Future)
+-------------------------------
+    • Central registry at marketplace.renos.io
+    • Plugins published as signed OCI artifacts.
+    • RenCore can browse, install from marketplace with one command.
+    • Rating and review system.
+    • Automated security scanning of submitted plugins.
+
+================================================================================
+CHAPTER 8 — AUTOMATION ENGINE (RenFlow)
+================================================================================
+
+8.1 Design Philosophy
+---------------------
+    RenFlow treats automation as a directed acyclic graph (DAG) of nodes.
+    Each node is a step: trigger, condition, action, or control flow.
+    This scales from "if this then that" to multi-branch enterprise
+    workflows.
+
+8.2 Workflow Structure
+-----------------------
+    {
+      "id": "uuid",
+      "name": "Backup NAS to Cloud",
+      "description": "Weekly encrypted backup",
+      "triggers": [
+        { "type": "cron", "config": { "expression": "0 3 * * 0" } },
+        { "type": "manual", "config": {} }
+      ],
+      "nodes": [
+        {
+          "id": "check-disk",
+          "type": "condition",
+          "config": {
+            "expression": "device('nas-01').disk_usage_percent < 90"
+          },
+          "next_on_true": "run-backup",
+          "next_on_false": "send-alert"
+        },
+        {
+          "id": "run-backup",
+          "type": "action",
+          "config": {
+            "action_type": "command",
+            "device": "nas-01",
+            "command": "restic backup /data --tag weekly",
+            "timeout": 3600
+          },
+          "retry": { "count": 2, "backoff": "exponential" },
+          "next_on_success": "verify-backup",
+          "next_on_failure": "send-alert"
+        },
+        {
+          "id": "verify-backup",
+          "type": "action",
+          "config": {
+            "action_type": "command",
+            "device": "nas-01",
+            "command": "restic check",
+            "timeout": 300
+          },
+          "next_on_success": "notify-success",
+          "next_on_failure": "send-alert"
+        },
+        {
+          "id": "send-alert",
+          "type": "action",
+          "config": {
+            "action_type": "notify",
+            "title": "Backup failed",
+            "body": "NAS backup workflow failed at step {{ node.name }}",
+            "severity": "error"
+          }
+        },
+        {
+          "id": "notify-success",
+          "type": "action",
+          "config": {
+            "action_type": "notify",
+            "title": "Backup complete",
+            "body": "Weekly backup completed successfully.",
+            "severity": "success"
+          }
+        }
+      ],
+      "variables": {
+        "backup_date": { "type": "string", "value": "{{ now() | date '2006-01-02' }}" }
+      },
+      "error_handler": {
+        "type": "notify",
+        "config": { "severity": "critical", "title": "Workflow crashed" }
+      }
+    }
+
+8.3 Trigger Types
+-----------------
+    +----------+----------------------------------------------------------+
+    | Type     | Description                                              |
+    +----------+----------------------------------------------------------+
+    | cron     | Schedule: cron expression + timezone                     |
+    | event    | Device or system event: device.online, device.disk_full  |
+    | webhook  | External HTTP POST to a unique URL                       |
+    | manual   | User clicks "Run" in UI                                  |
+    | ai       | User says a phrase matching a pattern via RenAI          |
+    | schedule | One-shot at a future datetime                            |
+    +----------+----------------------------------------------------------+
+
+8.4 Condition Expressions
+-------------------------
+    Expressions use a simple DSL (evaluated safely — no eval()):
+
+    • device("<id>").<metric> <operator> <value>
+        device("desktop-01").cpu_percent > 80
+        device("server-01").memory_available_gb < 4
+
+    • env("<name>") <operator> <value>
+        env("backup_target") == "s3"
+
+    • {{ variable }} <operator> <value>
+        {{ backup_date }} != ""
+
+    • last_run("<workflow_id>").<field>
+        last_run("backup-workflow").status == "success"
+
+    Operators: ==, !=, >, <, >=, <=, contains, matches (regex),
+               in (list), between (range)
+
+    Compound: and, or, not, parentheses
+
+8.5 Action Types
+-----------------
+    +-----------+--------------------------------------------------------+
+    | Type      | Description                                              |
+    +-----------+--------------------------------------------------------+
+    | command   | Execute command on device (with timeout, env vars)       |
+    | notify    | Send notification to user(s)                             |
+    | api       | Make HTTP request to external service                    |
+    | workflow  | Call another workflow (sub-workflow with data passing)   |
+    | plugin    | Call a plugin action                                     |
+    | wait      | Pause for duration or until condition is met             |
+    | condition | Branch based on expression (if/else)                     |
+    | loop      | Iterate over list (for-each with variable binding)       |
+    | set       | Set a variable value                                     |
+    | script    | Execute a short script (Lua embedded in RenCore)         |
+    +-----------+--------------------------------------------------------+
+
+8.6 Execution Engine
+---------------------
+    • Workflow runner picks up triggered workflows from NATS queue.
+    • Each node execution is tracked in PostgreSQL (exec_logs).
+    • Runner supports:
+        - Parallel node execution (fan-out)
+        - Sequential execution
+        - Conditional branching
+        - Retry with configurable backoff
+        - Timeout cancellation
+        - Idempotency (re-running a failed workflow doesn't duplicate
+          side effects if actions declare idempotency keys)
+    • Workflow execution is async — user gets real-time updates via
+      WebSocket.
+
+8.7 Variable System
+-------------------
+    Variables can be:
+    • Workflow-scoped: exist only during execution.
+    • User-scoped: persist across workflows for a user.
+    • Global: available to all workflows.
+
+    Variable interpolation: {{ variable_name }}, with pipe filters:
+    {{ date | format "2006-01-02" }}, {{ string | upper }}
+
+    Filter library: date, upper, lower, trim, split, join, default, json
+
+8.8 Error Handling
+------------------
+    Per-node:
+    • retry.count — how many times to retry
+    • retry.backoff — linear | exponential | fixed
+    • next_on_failure — node to jump to on persistent failure
+
+    Workflow-level:
+    • error_handler — node that runs if any unhandled error occurs
+
+    Errors are logged to audit and visible in workflow execution history.
+
+================================================================================
+CHAPTER 9 — AI ARCHITECTURE (RenAI)
+================================================================================
+
+9.1 Design Principle
+--------------------
+    RenAI does NOT control systems directly. It is an orchestration layer
+    that converts natural language into safe, permission-checked,
+    auditable actions. The AI is a translator and planner, never an
+    executor.
+
+    Flow: User Request → Intent → Plan → Permission Check → Execute →
+          Verify → Report
+
+9.2 Architecture
+----------------
+
+    ┌──────────┐     ┌─────────────────────────────────────────────────┐
+    │  User    │     │                  RenAI                          │
+    │ Input    │────►│                                                 │
+    │(Chat/CLI)│     │  ┌─────────┐  ┌─────────┐  ┌───────────────┐  │
+    └──────────┘     │  │Prov Mgr │  │ Intent  │  │  Permission   │  │
+                     │  │(Ollama/ │  │ Parser  │  │    Gate       │  │
+                     │  │ OpenAI/ │  │ (NLU →  │  │ (Check RBAC)  │  │
+                     │  │ Anthrop)│  │  Action)│  │               │  │
+                     │  └────┬────┘  └────┬────┘  └───────┬───────┘  │
+                     │       │            │               │           │
+                     │       ▼            ▼               ▼           │
+                     │  ┌─────────┐  ┌─────────┐  ┌───────────────┐  │
+                     │  │ Context │  │ Action  │  │  Result       │  │
+                     │  │ Manager │  │ Planner │  │  Verifier     │  │
+                     │  │ (Hist)  │  │ (Multi- │  │  (Check OK?)  │  │
+                     │  │         │  │  Step)  │  │               │  │
+                     │  └─────────┘  └────┬────┘  └───────┬───────┘  │
+                     │                    │               │           │
+                     └────────────────────┼───────────────┼───────────┘
+                                          │               │
+                                          ▼               ▼
+                                   ┌────────────┐  ┌────────────┐
+                                   │  RenFlow   │  │  NATS      │
+                                   │  (Workflow)│  │  (Direct)  │
+                                   └────────────┘  └────────────┘
+                                          │               │
+                                          ▼               ▼
+                                   ┌──────────────────────────┐
+                                   │     RenCore Services     │
+                                   │  (Command Bus, Devices,  │
+                                   │   Plugins, etc.)         │
+                                   └──────────────────────────┘
+
+9.3 Provider Abstraction
+-------------------------
+    RenAI defines a uniform interface for all AI providers:
+
+    interface AIProvider {
+        Chat(messages, tools, options) → Response
+        StreamChat(messages, tools, options) → Stream<Response>
+        Embed(text) → Vector (future)
+    }
+
+    Implementations:
+    • OllamaProvider — local, works offline, supports any model
+    • OpenAIProvider — GPT-4o, GPT-4, GPT-3.5
+    • AnthropicProvider — Claude 3 Opus/Sonnet/Haiku
+    • GenericOpenAIProvider — any OpenAI-compatible API (vLLM, TGI, etc.)
+
+    Configuration:
+    ```yaml
+    ai:
+      default_provider: ollama
+      providers:
+        ollama:
+          type: ollama
+          model: llama3.1:70b
+          base_url: http://ollama:11434
+        openai:
+          type: openai
+          api_key: "${RENOS_OPENAI_KEY}"
+          model: gpt-4o
+        anthropic:
+          type: anthropic
+          api_key: "${RENOS_ANTHROPIC_KEY}"
+          model: claude-3-opus-20240229
+    ```
+
+9.4 Intent Parsing
+------------------
+    User input is sent to the AI provider with a system prompt that
+    defines available tools (actions). The AI returns structured tool
+    calls.
+
+    System prompt includes:
+    • Available devices (name, OS, status)
+    • Available actions (tool definitions in OpenAI format)
+    • Permissions context (what the user can do)
+    • Constraints (never run destructive commands without confirmation)
+
+    Tool definition example (OpenAI format):
+    ```json
+    {
+      "type": "function",
+      "function": {
+        "name": "execute_command",
+        "description": "Run a shell command on a device",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "device": { "type": "string", "description": "Device hostname or ID" },
+            "command": { "type": "string", "description": "Command to execute" },
+            "timeout": { "type": "integer", "description": "Timeout in seconds" }
+          },
+          "required": ["device", "command"]
+        }
+      }
+    }
+    ```
+
+9.5 Permission Gate
+-------------------
+    Before any tool call is executed, RenAI checks:
+    1. Does the user's role have permission for this action on this target?
+    2. If yes, execute.
+    3. If no, return error to user: "You don't have permission to do that."
+
+    Destructive actions (reboot, delete, format, shutdown, install):
+    • Always require explicit user confirmation unless overridden by
+      setting.
+    • RenAI returns: "I can reboot desktop-01. Shall I proceed?"
+
+9.6 Multi-Step Planning (Future)
+---------------------------------
+    For complex requests ("Set up a Minecraft server with 4GB RAM, back it
+    up daily, and alert me if CPU exceeds 80%"), RenAI will:
+
+    1. Parse the intent
+    2. Break into sub-actions (install server, configure RAM, create backup
+       workflow, create alert workflow)
+    3. Present the plan to the user for approval
+    4. Execute each step sequentially
+    5. Report overall success/failure
+
+9.7 Skills (Extensible Capabilities)
+-------------------------------------
+    Skills are packages that extend RenAI's knowledge. A skill defines:
+
+    • New tool definitions (what the AI can do)
+    • Example prompts (few-shot learning examples)
+    • Validation rules
+
+    Skills can be:
+    • Built-in (core RenOS capabilities)
+    • Plugin-provided (a monitoring plugin adds "check_health" skill)
+    • User-defined (custom prompts and tools)
+
+    Skills will be loaded into the system prompt dynamically.
+
+9.8 Offline Behavior
+--------------------
+    When no AI provider is reachable (no local Ollama, no cloud):
+    • RenAI returns a clear message: "AI backend is not available.
+      Please check your AI provider configuration."
+    • The rest of RenOS continues working normally.
+    • Users can still use UI and CLI directly.
+
+================================================================================
+CHAPTER 10 — ROADMAP
+================================================================================
+
+10.1 Release Cadence
+--------------------
+    • Minor versions every 4-6 weeks.
+    • Major versions every 6-12 months.
+    • LTS releases every 2 years (starting at v1.0).
+
+10.2 Version Plan
+-----------------
+
+    v0.1 — "Foundation" (Months 1-3)
+    ─────────────────────────────────
+    Goal: Core + one agent on same machine, basic dashboard.
+    Deliverables:
+        • RenCore modular monolith with API Gateway, Auth, Device Registry
+        • RenAgent single binary (Linux amd64 + arm64)
+        • mTLS device enrollment flow
+        • Basic web UI: device list, status, health metrics
+        • Manual command execution (type command in UI → agent runs it)
+        • Real-time WebSocket event stream
+        • PostgreSQL schema (users, devices, sessions, audit)
+        • Docker Compose deployment
+
+    v0.2 — "Multi-Device & AI" (Months 4-6)
+    ────────────────────────────────────────
+    Goal: Multiple agents, AI chat, plugins.
+    Deliverables:
+        • Multi-agent support (no limit)
+        • RenAI with local LLM (Ollama) — intent → command execution
+        • Plugin Manager: Wasm plugin loading and execution
+        • Plugin API (basic: execute command, read device status)
+        • RenHub: AI chat interface, per-device dashboards, log viewer
+        • Agent auto-update mechanism
+        • CLI tool (renos status, renos exec, renos logs, renos enroll)
+        • Audit log hash chain verification
+        • macOS and Windows agent support
+
+    v0.3 — "Automation" (Months 7-9)
+    ─────────────────────────────────
+    Goal: RenFlow, containers, cloud AI.
+    Deliverables:
+        • RenFlow engine: cron/webhook/event triggers, conditions,
+          actions, error handling
+        • Visual workflow editor in RenHub (drag-and-drop DAG)
+        • Container plugin support (Docker sidecar)
+        • Cloud AI providers (OpenAI, Anthropic)
+        • Reverse tunnel for device web services
+        • File browser in RenHub (list, upload, download via MinIO)
+        • RBAC with custom roles
+        • Notification system with WebSocket push
+        • Workflow templates (pre-built: backup, update, health check)
+
+    v0.4 — "Hardening" (Months 10-12)
+    ──────────────────────────────────
+    Goal: Production readiness, testing, docs.
+    Deliverables:
+        • TOTP 2FA enforcement
+        • API key management UI + CLI
+        • Rate limiting and DoS protection
+        • Comprehensive error handling and recovery
+        • End-to-end tests
+        • Performance benchmarking and optimization
+        • Documentation: user guide, admin guide, API reference, plugin
+          development guide
+        • Security audit (internal + third-party)
+        • Helm chart for Kubernetes deployment (optional)
+
+    v1.0 — "Release" (Month 13)
+    ────────────────────────────
+    Goal: Stable, documented, secure first release.
+    Deliverables:
+        • All v0.4 hardening complete
+        • Security audit passed
+        • Website and project branding
+        • Public announcement and launch
+        • LTS commitment (2 years of backported security fixes)
+        • Plugin SDK documentation and examples
+        • Community contribution guidelines
+
+    v1.1 — v1.x — "Iteration" (Months 14-24)
+    ─────────────────────────────────────────
+    Goal: Community-driven improvements.
+    Likely features:
+        • Mobile PWA improvements (touch-optimized layouts)
+        • Additional AI providers
+        • More workflow triggers, actions, templates
+        • Plugin marketplace prototype
+        • SSH key management and agent
+        • Webhook management UI
+        • Performance improvements and bug fixes
+
+    v2.0 — "Mesh" (Year 2-3)
+    ─────────────────────────
+    Goal: No single point of failure. Mesh network.
+    Deliverables:
+        • libp2p mesh: agents can promote to Core roles
+        • NATS super-cluster for multi-region
+        • Agent-to-agent direct communication
+        • IoT bridge (MQTT gateway)
+        • Edge agent for ultra-low-power devices
+        • Native mobile apps (iOS + Android)
+        • End-to-end encryption option for sensitive commands
+        • Distributed workflow execution
+        • Multi-tenant / organization support
+
+    v3.0+ — "RenOS Linux" (Year 4+)
+    ────────────────────────────────
+    Goal: Full operating system distribution.
+    Deliverables:
+        • Custom immutable Linux distribution (based on Alpine or
+          Fedora CoreOS)
+        • RenCore as the init system / management daemon
+        • RenAgent built into the kernel's device management
+        • Declarative OS configuration (NixOS-inspired)
+        • A/B atomic updates
+        • Measured boot and TPM integration
+        • RenOS App Store (curated plugin + app marketplace)
+        • First-party hardware (future)
+
+10.3 Dependency Graph
+---------------------
+    v0.1 ────► v0.2 ────► v0.3 ────► v0.4 ────► v1.0
+                      │                  │
+                      │                  ▼
+                      │           v1.1-v1.x (maintenance)
+                      │
+                      ▼
+                  v2.0 (mesh)
+                      │
+                      ▼
+                  v3.0+ (RenOS Linux)
+
+    Each version is a superset of the previous. No rewrites. Only
+    additive changes and refactoring.
+
+================================================================================
+END OF ARCHITECTURE SPECIFICATION
+================================================================================

@@ -1,0 +1,136 @@
+# RenOS Development Environment
+# ==============================
+# Starts all external dependencies for local development.
+# Core, Agent, and Hub run outside this file directly on the host.
+#
+# Quick start:
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose down
+#
+# Services are reachable at localhost on their default ports.
+# The renos-dev network allows inter-service discovery by hostname.
+
+networks:
+  renos-dev:
+    driver: bridge
+
+services:
+  # ─── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  # Primary database. All RenOS entities stored here.
+  postgres:
+    image: postgres:16-alpine
+    container_name: renos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: renos
+      POSTGRES_PASSWORD: renos
+      POSTGRES_DB: renos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./core/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U renos -d renos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      renos-dev:
+        aliases:
+          - postgres
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
+  # Cache, session store, rate limiter counters, pub/sub for WS.
+  redis:
+    image: redis:7-alpine
+    container_name: renos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      renos-dev:
+        aliases:
+          - redis
+
+  # ─── NATS 2.10 ──────────────────────────────────────────────────────────────
+  # Internal event bus, command queue (JetStream), plugin communication.
+  nats:
+    image: nats:2.10-alpine
+    container_name: renos-nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"   # Client connections (gRPC, NATS protocol)
+      - "8222:8222"   # HTTP monitoring dashboard
+    command:
+      - "--jetstream"          # Enable JetStream for durable queues
+      - "--http_port=8222"     # Monitoring endpoint
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q http://localhost:8222/healthz -O /dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      renos-dev:
+        aliases:
+          - nats
+
+  # ─── MinIO (optional) ──────────────────────────────────────────────────────
+  # S3-compatible blob storage for backups, ISOs, file transfers.
+  # Uncomment to enable.
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: renos-minio
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9000:9000"   # S3 API
+  #     - "9001:9001"   # Console UI
+  #   environment:
+  #     MINIO_ROOT_USER: renos
+  #     MINIO_ROOT_PASSWORD: renos-secret
+  #   command: server /data --console-address ":9001"
+  #   volumes:
+  #     - miniodata:/data
+  #   networks:
+  #     renos-dev:
+  #       aliases:
+  #         - minio
+
+  # ─── Ollama (optional) ────────────────────────────────────────────────────
+  # Local LLM inference for RenAI.
+  # Uncomment to enable. Requires at least 8GB RAM; GPU recommended.
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: renos-ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollamadata:/root/.ollama
+  #   networks:
+  #     renos-dev:
+  #       aliases:
+  #         - ollama
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  natsdata:
+    driver: local
+  # miniodata:
+  # ollamadata:

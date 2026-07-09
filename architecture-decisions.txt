@@ -1,0 +1,27 @@
+RenOS — Architectural Decisions (Settled)
+==========================================
+
+1. Core Language Strategy
+   - RenOS Core: Go
+   - RenOS Agent: Rust
+   - Rationale: Go for networked backend/APIs, Rust for system-level agent safety and low resource usage.
+
+2. Deployment Model
+   - Docker Compose on existing server/NAS for v1
+   - Bare-metal / ISO installer deferred to later versions
+
+3. AI Model Strategy
+   - Both local (Ollama) and optional cloud (OpenAI, Anthropic)
+   - User configures the backend; local available offline
+
+4. Plugin API Surface
+   - Wasm plugins for lightweight sandboxed extensions
+   - Container/gRPC sidecar plugins for heavy integrations
+
+5. Mobile v1 Strategy
+   - PWA only for v1
+   - Native mobile apps deferred to later versions
+
+6. Target Audience for v1
+   - Homelab enthusiasts first
+   - But UI designed with prosumer polish from day one

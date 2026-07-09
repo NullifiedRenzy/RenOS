@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package renos.agent.v1;
+
+option go_package = "github.com/renos-project/renos/core/internal/agent/agentpb";
+
+// ─── Service Definitions ─────────────────────────────────────────────────────
+
+service AgentService {
+  // Bidirectional stream for command/control after enrollment.
+  // Agent sends AgentMessage, Core sends CoreMessage.
+  rpc StreamConnection(stream AgentMessage) returns (stream CoreMessage);
+
+  // One-shot enrollment request.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+// ─── Enrollment ──────────────────────────────────────────────────────────────
+
+message EnrollRequest {
+  string token = 1;          // One-time enrollment token
+  bytes csr_der = 2;         // PKCS#10 Certificate Signing Request (DER)
+  string hostname = 3;
+  string os = 4;
+  string arch = 5;
+  string agent_version = 6;
+}
+
+message EnrollResponse {
+  bytes device_cert_der = 1; // Signed X.509 device certificate (DER)
+  bytes ca_cert_der = 2;     // CA certificate (DER)
+  int64 cert_expiry_unix = 3;
+}
+
+// ─── Stream Messages ─────────────────────────────────────────────────────────
+
+message AgentMessage {
+  string message_id = 1;
+  oneof payload {
+    HealthReport health = 10;
+    CommandResult command_result = 11;
+    LogLine log_line = 12;
+    CapabilityReport capabilities = 13;
+    TunnelData tunnel_data = 14;
+    Ack ack = 15;
+  }
+}
+
+message CoreMessage {
+  string message_id = 1;
+  oneof payload {
+    CommandExec command = 10;
+    CommandCancel cancel = 11;
+    TunnelData tunnel_data = 12;
+    AgentUpdate update = 13;
+    Ping ping = 14;
+  }
+}
+
+// ─── Health ──────────────────────────────────────────────────────────────────
+
+message HealthReport {
+  string hostname = 1;
+  double uptime_seconds = 2;
+
+  CPU cpu = 3;
+  Memory memory = 4;
+  repeated Disk disks = 5;
+  Network network = 6;
+
+  int32 docker_containers_total = 7;
+  int32 docker_containers_running = 8;
+  repeated string services = 9;
+  double temperature_celsius = 10;
+}
+
+message CPU {
+  double usage_percent = 1;
+  int32 cores = 2;
+}
+
+message Memory {
+  double total_gb = 1;
+  double used_gb = 2;
+  double available_gb = 3;
+}
+
+message Disk {
+  string mount = 1;
+  double total_gb = 2;
+  double used_gb = 3;
+  double available_gb = 4;
+}
+
+message Network {
+  repeated string interfaces = 1;
+  int64 bytes_sent = 2;
+  int64 bytes_recv = 3;
+}
+
+// ─── Commands ────────────────────────────────────────────────────────────────
+
+message CommandExec {
+  string command_id = 1;
+  string command = 2;
+  int32 timeout_secs = 3;
+  map<string, string> env = 4;
+}
+
+message CommandCancel {
+  string command_id = 1;
+}
+
+message CommandResult {
+  string command_id = 1;
+  int32 exit_code = 2;
+  int64 duration_ms = 3;
+  string stdout = 4;
+  string stderr = 5;
+}
+
+// ─── Logging ─────────────────────────────────────────────────────────────────
+
+message LogLine {
+  string command_id = 1;
+  string stream = 2;           // "stdout" | "stderr"
+  string line = 3;
+  int64 timestamp_unix = 4;
+}
+
+// ─── Capabilities ────────────────────────────────────────────────────────────
+
+message CapabilityReport {
+  string agent_version = 1;
+  repeated string capabilities = 2;
+}
+
+// ─── Tunnel ──────────────────────────────────────────────────────────────────
+
+message TunnelData {
+  string tunnel_id = 1;
+  bytes data = 2;
+}
+
+// ─── Updates ─────────────────────────────────────────────────────────────────
+
+message AgentUpdate {
+  string download_url = 1;
+  string sha256_hash = 2;
+}
+
+// ─── Control ─────────────────────────────────────────────────────────────────
+
+message Ping {
+  int64 timestamp_unix = 1;
+}
+
+message Ack {
+  string message_id = 1;
+  bool success = 2;
+  string error_message = 3;
+}

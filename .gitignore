@@ -1,0 +1,56 @@
+# Go
+core/vendor/
+core/renos-core
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+__debug_bin
+
+# Rust
+agent/target/
+agent/**/*.rs.bk
+
+# Node
+hub/node_modules/
+hub/.next/
+hub/out/
+hub/build/
+hub/.swc/
+hub/*.tsbuildinfo
+hub/.env.local
+hub/.env.production.local
+hub/.env.development.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Docker
+.docker/
+*.log
+
+# Env
+.env
+.env.local
+.env.production
+
+# Proto generated
+proto/agent/v1/*.rs
+proto/agent/v1/*.pb.go
+
+# Misc
+*.tar.gz
+*.rpk
+tmp/

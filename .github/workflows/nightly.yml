@@ -1,0 +1,57 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Daily at 06:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  full-test:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.80"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Core tests with testcontainers
+      - name: Core integration tests
+        run: go test -v -count=1 -tags=integration ./...
+        working-directory: core
+
+      # Agent full test suite
+      - name: Agent tests
+        run: cargo test
+        working-directory: agent
+
+      # Hub build
+      - name: Hub build
+        run: |
+          npm ci
+          npm run build
+        working-directory: hub
+
+      # Security scan
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

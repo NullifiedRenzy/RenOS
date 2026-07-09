@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+hub/node_modules
+hub/.next
+hub/out
+
+# Rust
+agent/target
+
+# Go
+core/vendor
+core/renos-core
+
+# Docs (not needed in images)
+docs
+*.md
+LICENSE
+
+# Docker
+.docker
+docker-compose*.yml

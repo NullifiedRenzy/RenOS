@@ -1,0 +1,37 @@
+[package]
+name = "renos-agent"
+version = "0.1.0"
+edition = "2021"
+description = "RenOS Agent — lightweight device management daemon"
+authors = ["RenOS Contributors"]
+license = "MIT"
+repository = "https://github.com/renos-project/renos"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tonic = "0.12"
+prost = "0.13"
+rustls = "0.23"
+rustls-pemfile = "2"
+tokio-rustls = "0.26"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
+sysinfo = "0.32"
+rusqlite = { version = "0.32", features = ["bundled"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+toml = "0.8"
+ed25519-dalek = "2"
+rand = "0.8"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,1485 @@
+================================================================================
+               RenOS PRODUCT & UX DESIGN SPECIFICATION
+                    Version 1.0 — Design Draft
+================================================================================
+
+                      CONFIDENTIAL — INTERNAL DRAFT
+              Prepared by the RenOS Design Team
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  Design Philosophy
+  2.  Navigation
+  3.  The Home Screen
+  4.  Digital Twin (Device Page)
+  5.  AI Experience (RenAI)
+  6.  Automation Experience (RenFlow)
+  7.  Command Palette
+  8.  Projects
+  9.  Design Language
+  10. Branding
+  11. User Journey
+  12. Microcopy & Tone of Voice Guide
+
+================================================================================
+CHAPTER 1 — DESIGN PHILOSOPHY
+================================================================================
+
+1.1 Core Tenets
+---------------
+    RenOS is not a dashboard. It is a space where your devices live.
+
+    Every design decision starts from one question:
+
+        "Does this make the system feel simpler or more complex?"
+
+    If the answer is "more complex", we do not ship it until we find a
+    simpler path.
+
+1.2 The Five Principles
+-----------------------
+
+    1. CALM TECHNOLOGY
+       The interface should not demand attention. It should be glanceable.
+       Green means healthy. Red means act now. Most of the time, the
+       screen should be mostly white space with a few pieces of green
+       text. Noise is failure.
+
+    2. CONTENT FIRST, CHROME SECOND
+       The sidebar, toolbars, and chrome are always secondary to the
+       content. Navigation is thin, muted, and collapses automatically.
+       The device grid, the workflow canvas, the chat — these are the
+       stars. Everything else is just furniture.
+
+    3. FAST BY FEEL
+      "Fast" is not about milliseconds. It is about perceived speed.
+      Instant navigation transitions. Skeleton screens that load in under
+      200ms. Optimistic UI updates — when you press a button, the UI
+      responds immediately and corrects itself if the server disagrees.
+      Every action gives haptic-level feedback (micro-animation).
+
+    4. PROGRESSIVE DISCLOSURE
+      A new user sees one thing: a welcome message and a single call to
+      action. An expert user sees the full command palette, keyboard
+      shortcuts, and raw JSON views. The UI scales with the user, not
+      the other way around. Settings panels start collapsed. Advanced
+      options are behind a "Show more" link.
+
+    5. CONSISTENT INTELLIGENCE
+      Every text input respects the same keyboard shortcuts. Every card
+      follows the same padding rhythm. Every notification speaks in the
+      same voice. The AI assistant is available everywhere via the same
+      keyboard shortcut (Cmd+K → type question). Consistency is the
+      foundation of learnability.
+
+1.3 Emotional Design Goals
+--------------------------
+    When a user opens RenOS, they should feel:
+
+        "I understand what's happening. I am in control. This is
+        beautiful and it stays out of my way."
+
+    When something goes wrong, they should feel:
+
+        "I know exactly what happened and what to do next."
+
+    After a week of use:
+
+        "I can't imagine managing devices without this."
+
+1.4 Design Inspirations
+-----------------------
+    Linear — for kanban-level clarity, monochrome elegance, and
+             micro-animation excellence.
+    Arc Browser — for sidebar-first navigation done right, the split-view
+                  layout, and easter eggs that delight.
+    Raycast — for the gold standard of command palette UX.
+    Tailscale — for making a complex technical product feel like magic.
+    Apple Settings (iOS 18+) — for category-based settings that are
+                               actually searchable.
+    Notion — for block-based flexibility that doesn't sacrifice polish.
+
+1.5 What We Avoid
+-----------------
+    phpMyAdmin, Portainer, Proxmox — dense tables, too many buttons,
+    no hierarchy, no breathing room.
+    Home Assistant — endless configuration, inconsistent UX, no
+    information hierarchy.
+    Enterprise dashboards — chart vomit, primary/secondary/tertiary
+    buttons on every row.
+
+================================================================================
+CHAPTER 2 — NAVIGATION
+================================================================================
+
+2.1 Structure: Sidebar Primary, Command Palette Secondary
+----------------------------------------------------------
+    RenOS uses a thin, collapsible sidebar as the spatial navigation
+    layer and a global command palette (Cmd+K) as the action layer.
+
+    Why:
+    • A sidebar gives the user a persistent sense of location. They
+      always know where they are.
+    • The command palette gives them speed when they know what they
+      want to do. Spatial + transactional = complete coverage.
+    • No tabs, no top nav, no breadcrumbs — you are either in the
+      sidebar or in the palette.
+    • Sidebar collapses to icons-only at smaller widths, then hides
+      entirely on mobile.
+
+2.2 Sidebar Layout
+-------------------
+    ┌─────────────────────────┬──────────────────────────────────┐
+    │  Sidebar (240px)        │  Content Area                    │
+    │                         │                                  │
+    │  [RenOS logo + version] │                                  │
+    │                         │                                  │
+    │  ◉ Search (Cmd+K)       │                                  │
+    │  ─────────────────────  │                                  │
+    │                         │                                  │
+    │  🏠 Home                │                                  │
+    │  ├── Dashboard          │                                  │
+    │  └── Activity           │                                  │
+    │                         │                                  │
+    │  💻 Devices             │                                  │
+    │  ├── All Devices (12)   │                                  │
+    │  ├── desktop-01 ◉      │                                  │
+    │  ├── nas-01      ◉      │                                  │
+    │  ├── server-01    ○     │                                  │
+    │  └── pi-04       ◉      │                                  │
+    │                         │                                  │
+    │  ⚡ Automations         │                                  │
+    │  ├── All Workflows (4)  │                                  │
+    │  └── Templates          │                                  │
+    │                         │                                  │
+    │  🧩 Plugins             │                                  │
+    │                         │                                  │
+    │  📁 Projects            │                                  │
+    │  ├── Homelab            │                                  │
+    │  └── Web App            │                                  │
+    │                         │                                  │
+    │  ⚙️ Settings            │                                  │
+    │                         │                                  │
+    │  ─────────────────────  │                                  │
+    │  [User avatar + name]   │                                  │
+    │  [Online indicator]     │                                  │
+    └─────────────────────────┴──────────────────────────────────┘
+
+    Design details:
+    • 240px wide, 56px collapsed (icons only).
+    • Each section is collapsible (condenses to section header only).
+    • Devices show online/offline dot (◉/○) inline.
+    • Badge counts for actionable items.
+    • Bottom section is user menu (profile, preferences, logout).
+
+    Collapse behavior:
+    • Full sidebar at ≥1024px.
+    • Icons-only at 768-1023px (hover reveals tooltip names).
+    • Hidden on <768px; accessed via hamburger or swipe gesture.
+    • Keyboard: Cmd+B toggles sidebar visibility.
+
+2.3 Page Layout Convention
+--------------------------
+    Every content page follows the same skeleton:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Page header (72px)                                         │
+    │  ← Back | Page Title    | [Action button] [··· menu]       │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │  Content area (scrollable, 32px padding all sides)          │
+    │                                                             │
+    │  Cards. Cards. Cards.                                       │
+    │                                                             │
+    │  Consistent 16px gap grid.                                  │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+    Why:
+    • Every page feels familiar because the layout never changes.
+    • Back button appears only when navigated from within (not direct
+      URL entry).
+    • Triple-dot menu holds secondary actions (edit, delete, export).
+    • Content area has generous padding — nothing touches the edges.
+
+================================================================================
+CHAPTER 3 — THE HOME SCREEN
+================================================================================
+
+3.1 Purpose
+-----------
+    The home screen answers three questions instantly:
+
+    1. "Is everything okay?"  (health summary)
+    2. "What needs my attention?"  (action items)
+    3. "What can I do right now?"  (quick actions)
+
+    If everything is healthy, the home screen is mostly empty — and that
+    is the goal. A calm home screen means a healthy system.
+
+3.2 Layout (Desktop, ≥1280px)
+------------------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  Good morning, Alex. All 4 devices are healthy.                  │
+    │  ──────────────────────────────────────────────────────────────  │
+    │                                                                  │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────┐ │
+    │  │ Health Score │  │ Devices      │  │ Automations  │  │ Alert│ │
+    │  │ 98/100       │  │ 4 online     │  │ 3 active     │  │   1  │ │
+    │  │ ▲ 2 pts      │  │ 0 offline    │  │ 0 failed     │  │      │ │
+    │  └──────────────┘  └──────────────┘  └──────────────┘  └──────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Quick Actions                          [See all →]        │ │
+    │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐   │ │
+    │  │  │Run     │ │Update  │ │Deploy  │ │Create  │ │Ask AI  │   │ │
+    │  │  │Backup  │ │All     │ │Website │ │VM      │ │        │   │ │
+    │  │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘   │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────┐  ┌────────────────────────────┐ │
+    │  │ Active Automations         │  │ Recent Activity            │ │
+    │  │                             │  │                            │ │
+    │  │ ┌─────────────────────────┐│  │ ┌──────────────────────────┐│ │
+    │  │ │○ Nightly Backup         ││  │ │10:32  desktop-01 updated ││ │
+    │  │ │  Next: 2:00 AM    ✅ 3/3││  │ │09:15  nas-01 backup done ││ │
+    │  │ ├─────────────────────────┤│  │ │08:00  pi-04 went offline ││ │
+    │  │ │○ Health Check          ││  │ │07:45  Workflow "Deploy"  ││ │
+    │  │ │  Every 5 min      ✅ 12││  │ │       completed           ││ │
+    │  │ └─────────────────────────┘│  │ └──────────────────────────┘│ │
+    │  └─────────────────────────────┘  └────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  AI Assistant                                     [Expand] │ │
+    │  │  ┌─────────────────────────────────────────────────────────┐│ │
+    │  │  │ Ask me anything about your devices...                   ││ │
+    │  │  └─────────────────────────────────────────────────────────┘│ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+3.3 Widget Rationale
+--------------------
+
+    Welcome Greeting
+    ────────────────
+    "Good morning/afternoon/evening, Alex." Personal and warm. Gives an
+    immediate sense that this is YOUR space, not a generic admin panel.
+    Changes tone based on time of day and system health.
+
+    Health Score (top-left, largest)
+    ────────────────────────────────
+    The single most important metric. Green (90-100), yellow (70-89),
+    red (<70). Trend arrow. If everything is green, user stops reading
+    here. The goal is to make this the only thing they need to see.
+
+    Stat Cards (top row)
+    ────────────────────
+    Device count, automation status, alerts. Glanceable. Numbers, not
+    charts. Charts are for the device page.
+
+    Quick Actions
+    ─────────────
+    Contextual action buttons based on what the user has done before and
+    what needs attention. "Update All" appears when updates are pending.
+    "Run Backup" appears at scheduled times. Smart defaults reduce
+    cognitive load.
+
+    Active Automations
+    ──────────────────
+    Shows running workflows with their last status. Users should know
+    at a glance that their nightly backup ran successfully. Green check =
+    comfort.
+
+    Recent Activity
+    ───────────────
+    Chronological feed of everything that happened. This is the "what
+    changed while I was away" view. Timestamps, device names, action
+    summaries. No scrolling required — max 5 items.
+
+    AI Assistant (bottom)
+    ─────────────────────
+    Always-available chat input. Compact when idle, expandable when used.
+    Like Spotlight on macOS — always there, never in the way.
+
+3.4 Mobile Layout (<768px)
+---------------------------
+    Single-column stack:
+    1. Welcome + health score (full width, prominent)
+    2. Quick actions (horizontal scrollable row)
+    3. Active automations (accordion, tap to expand)
+    4. Recent activity (collapsible)
+    5. AI assistant (floating button bottom-right)
+
+    Tab bar at bottom with: Home, Devices, Automations, Settings.
+
+3.5 Empty State (First Time User)
+----------------------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                                                                  │
+    │                    Welcome to RenOS 🚀                          │
+    │                                                                  │
+    │         Your devices are waiting. Let's connect one.            │
+    │                                                                  │
+    │               ┌──────────────────────────────┐                  │
+    │               │  Add Your First Device  →    │                  │
+    │               └──────────────────────────────┘                  │
+    │                                                                  │
+    │                    Or explore the docs.                          │
+    │                                                                  │
+    └──────────────────────────────────────────────────────────────────┘
+
+    No empty table. No "no devices found". Just a clear next step.
+
+================================================================================
+CHAPTER 4 — DIGITAL TWIN (DEVICE PAGE)
+================================================================================
+
+4.1 Concept
+-----------
+    Every device gets a "digital twin" page. This is the single source of
+    truth for that device. The page tells the complete story of the
+    device: what it is, how it's doing, what's running on it, and what
+    has happened to it.
+
+    The page is organized top-to-bottom from "most important" to "deep
+    diagnostics". A glance at the top tells you if the device is healthy.
+    Scrolling down reveals progressively more detail.
+
+4.2 Layout
+-----------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Devices       desktop-01        ◉ Online     [···] [Exec]   │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Health Score     CPU     RAM      Disk      Network       │ │
+    │  │     92/100      12% used  6.2/32  340/1TB    ↑245 ↓12     │ │
+    │  │                 ━━━━━━━  ━━━━━━━   ━━━━━━━━━  ━━━━━━━     │ │
+    │  │                 ● 3.2GHz  ███░░░░  ████░░░░░  ░░░░░░░     │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌────────────────────────────┬─────────────────────────────────┐│
+    │  │  Top Processes             │  Docker Containers              ││
+    │  │  ┌──────────────────────┐  │  ┌────────────────────────────┐││
+    │  │  │docker   8.2%  420MB  │  │  │● minecraft   Up 3d   1.2GB│││
+    │  │  │pihole   2.1%   84MB  │  │  │● postgres    Up 12d  2.1GB│││
+    │  │  │nginx    1.8%   32MB  │  │  │● nginx       Up 12d  48MB│││
+    │  │  └──────────────────────┘  │  └────────────────────────────┘││
+    │  │                            │  ┌─▶ See all containers        ││
+    │  └────────────────────────────┴─────────────────────────────────┘│
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Storage                                                     │ │
+    │  │  ┌──────────────┬──────────┬──────────┬────────┬──────────┐ │ │
+    │  │  │ Mount        │ Size     │ Used     │ Avail  │ Usage    │ │ │
+    │  │  │ /            │ 500GB    │ 240GB    │ 260GB  │ █████░░░ │ │ │
+    │  │  │ /mnt/nas     │ 4TB      │ 2.1TB    │ 1.9TB  │ ███░░░░░ │ │ │
+    │  │  │ /mnt/backup  │ 2TB      │ 1.8TB    │ 200GB  │ ████████ │ │ │
+    │  │  └──────────────┴──────────┴──────────┴────────┴──────────┘ │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Network                                                     │ │
+    │  │  eth0: 192.168.1.100    ↑ 1.2TB / ↓ 450GB (this month)     │ │
+    │  │  wlan0: 192.168.1.101   ↑ 12GB  / ↓ 8GB   (this month)     │ │
+    │  │  [Open ports: 22, 80, 443, 25565, 9090]                     │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Timeline                                                    │ │
+    │  │  ┌─────────────────────────────────────────────────────────┐│ │
+    │  │  │ Today                                                    ││ │
+    │  │  │  10:32  Updated docker containers: minecraft, postgres  ││ │
+    │  │  │  09:15  Backup completed (2.4GB, 12s)                   ││ │
+    │  │  │  08:00  System health check passed                      ││ │
+    │  │  │ Yesterday                                                ││ │
+    │  │  │  22:00  Nightly backup completed (automation)           ││ │
+    │  │  │  18:30  User "alex" executed: apt update && apt upgrade ││ │
+    │  │  └─────────────────────────────────────────────────────────┘│ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌────────────────────────────┬─────────────────────────────────┐│
+    │  │  Related Automations       │  Logs                          ││
+    │  │  ┌──────────────────────┐  │  ┌────────────────────────────┐││
+    │  │  │● Nightly Backup     │  │  │  [ ▼ Error ] [ ▼ Info ]    │││
+    │  │  │  Runs at 2:00 AM    │  │  │  tail -f last 50 lines     │││
+    │  │  │● Health Check       │  │  │  ┌────────────────────────┐│││
+    │  │  │  Every 5 minutes    │  │  │  │ [..] systemd[1]: ...  ││││
+    │  │  └──────────────────────┘  │  │  │ [..] docker[..]: ... ││││
+    │  │                            │  │  └────────────────────────┘│││
+    │  ├────────────────────────────┤  └────────────────────────────┘││
+    │  │  Quick Actions             │                                 ││
+    │  │  [Restart] [SSH] [Tunnel]  │                                 ││
+    │  │  [Shutdown] [Update]       │                                 ││
+    │  └────────────────────────────┴─────────────────────────────────┘│
+    └──────────────────────────────────────────────────────────────────┘
+
+4.3 Layout Rationale
+---------------------
+    Top row (Health + Metrics): Answer "is this device okay?" at a glance.
+    Color-coded bars, no numbers needed at first glance.
+
+    Second row (Processes + Containers): Answer "what is running on it?"
+    These are the most common drill-downs. Side by side for space
+    efficiency.
+
+    Storage: Shows disk layout. Important for NAS and servers. Warns
+    early when disks are filling.
+
+    Network: Connection info and bandwidth usage. Useful for diagnosing
+    connectivity issues.
+
+    Timeline: Every action on this device, in reverse chronological.
+    The source of truth for "what happened to this machine?"
+
+    Automations + Logs + Actions (bottom): Tools to act on and debug the
+    device. Placed last because they are used less frequently.
+
+4.4 Status Indicators
+---------------------
+    ◉ Online (green dot, pulse animation)
+    ○ Offline (gray dot, no pulse)
+    ⚠ Degraded (yellow dot, slow pulse)
+    ✕ Unreachable (red dot)
+
+4.5 Quick Actions Panel (Slide-out)
+------------------------------------
+    Clicking "Exec" in the header opens a slide-out terminal panel from
+    the right. User types a command, sees real-time output. This is NOT a
+    full terminal emulator — it is a command runner with history,
+    favorites, and the ability to pipe output to a notification.
+
+================================================================================
+CHAPTER 5 — AI EXPERIENCE (RenAI)
+================================================================================
+
+5.1 Design Principles
+---------------------
+    • The AI is a CONCIERGE, not a butler. It suggests, asks permission,
+      then acts. The user is always in control.
+    • Every AI action is visible, auditable, and undoable when possible.
+    • The AI is available everywhere (Cmd+K), but has a dedicated chat
+      page for complex conversations.
+    • The AI speaks plainly. No "As an AI language model..." No robotic
+      disclaimers. Just clear, direct communication.
+
+5.2 Conversation UI
+-------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  AI Assistant                                    ⋮ (history)    │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ User: "Prepare my coding workspace."                        │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ RenAI:                                                      │ │
+    │  │                                                              │ │
+    │  │   I'll set up your coding workspace on desktop-01.          │ │
+    │  │   Here's my plan:                                           │ │
+    │  │                                                              │ │
+    │  │   □ Pull latest code from github.com/your/repo               │ │
+    │  │   □ Start Docker containers: postgres, redis                 │ │
+    │  │   □ Open VS Code with your project folder                    │ │
+    │  │   □ Restart the dev server                                   │ │
+    │  │                                                              │ │
+    │  │   Shall I proceed?  [Approve] [Edit Plan] [Cancel]          │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ User: "Yes, go ahead."                                      │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ RenAI:                                                      │ │
+    │  │                                                              │ │
+    │  │   ● Pulling latest code...                    ✅ Done (2s)  │ │
+    │  │   ● Starting Docker containers...                            │ │
+    │  │     ├ postgres...                              ✅ Done (3s)  │ │
+    │  │     └ redis...                                 ✅ Done (1s)  │ │
+    │  │   ● Opening VS Code...                         ✅ Done       │ │
+    │  │   ● Restarting dev server...                   ✅ Done       │ │
+    │  │                                                              │ │
+    │  │   ✅ Workspace is ready. Open VS Code on desktop-01 or       │ │
+    │  │      click the link below to view the dev server.            │ │
+    │  │                                                              │ │
+    │  │   [http://desktop-01:3000](http://desktop-01:3000)           │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ User: "Update everything."                                  │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ RenAI:                                                      │ │
+    │  │                                                              │ │
+    │  │   Updating all 4 devices. This will:                        │ │
+    │  │                                                              │ │
+    │  │   ■ Run apt update && apt upgrade on:                       │ │
+    │  │     desktop-01, server-01, nas-01, pi-04                    │ │
+    │  │   ■ Update Docker images: minecraft, postgres, nginx        │ │
+    │  │   ■ Restart services that need it                            │ │
+    │  │                                                              │ │
+    │  │   ⚠ desktop-01 will need a reboot after kernel update.      │ │
+    │  │                                                              │ │
+    │  │   Shall I proceed?  [Approve] [Edit] [Schedule for 2 AM]   │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+5.3 Failure Handling
+---------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │ RenAI:                                                      │ │
+    │  │                                                              │ │
+    │  │   ✖ Something went wrong:                                   │ │
+    │  │                                                              │ │
+    │  │   ● Backing up database...                    ✅ Done (4s)  │ │
+    │  │   ● Updating Docker images...                                │ │
+    │  │     ├ postgres...                              ✅ Done (2s)  │ │
+    │  │     └ minecraft...                             ✖ FAILED      │ │
+    │  │        Reason: Not enough disk space on nas-01.             │ │
+    │  │        (2.1GB needed, 200MB available)                      │ │
+    │  │                                                              │ │
+    │  │   What would you like to do?                                │ │
+    │  │                                                              │ │
+    │  │   [Clean up old backups] [Skip and continue] [Cancel all]   │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Design notes:
+    • Each step shows real-time progress (spinner → checkmark or X).
+    • Failures are specific, actionable, and offer recovery paths.
+    • No generic "An error occurred" messages.
+    • The user can cancel mid-operation.
+
+5.4 Permissions & Approvals
+----------------------------
+    Destructive actions (delete, reboot, format, shutdown) ALWAYS show
+    an approval dialog:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ⚠ RenAI needs your approval to continue                       │
+    │                                                                  │
+    │  Restart server-01?                                             │
+    │  This will interrupt: Minecraft server (3 players online)       │
+    │                          Plex stream (1 active stream)          │
+    │                                                                  │
+    │  [Allow Once] [Always Allow on server-01] [Deny]               │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Why: The AI should tell you CONSEQUENCES before you approve.
+    Showing active users/streams makes the decision informed.
+
+5.5 Ambient AI (Compact Mode)
+------------------------------
+    When not actively chatting, the AI lives as a compact bar at the
+    bottom of the screen:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Ask me anything...     [🎤]                         [Cmd+K]│ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Clicking or pressing Cmd+K opens the full conversation. The compact
+    bar is always visible but takes only 48px of vertical space.
+
+================================================================================
+CHAPTER 6 — AUTOMATION EXPERIENCE (RENFLOW)
+================================================================================
+
+6.1 Design Goals
+----------------
+    • A non-programmer should be able to build a working automation in
+      under 2 minutes.
+    • The canvas should feel spacious, not like a wiring diagram.
+    • Every node has a clear visual purpose. No cryptic icons.
+    • Templates get users to "wow" on day one.
+
+6.2 Canvas Layout
+------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Automations   Nightly Backup    [Run Now] [Draft] [···]    │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Canvas (infinite pan/zoom)                                 │ │
+    │  │                                                              │ │
+    │  │  ┌──────────────┐                                           │ │
+    │  │  │  ⏰ Every    │                                           │ │
+    │  │  │  day at     │                                           │ │
+    │  │  │  2:00 AM    │                                           │ │
+    │  │  └──────┬───────┘                                           │ │
+    │  │         │                                                   │ │
+    │  │         ▼                                                   │ │
+    │  │  ┌──────────────┐  ┌────────────────┐  ┌──────────────┐   │ │
+    │  │  │  🔍 Disk     │  │  💾 Run        │  │  📬 Notify   │   │ │
+    │  │  │  usage < 90% │─►│  backup script │─►│  on success  │   │ │
+    │  │  └──────────────┘  └────────┬───────┘  └──────────────┘   │ │
+    │  │                             │                              │ │
+    │  │                             ▼                              │ │
+    │  │                     ┌──────────────┐                      │ │
+    │  │                     │  📬 Notify   │                      │ │
+    │  │                     │  on failure  │                      │ │
+    │  │                     └──────────────┘                      │ │
+    │  │                                                              │ │
+    │  │  ┌─────────────────────────────────────────────────────────┐ │ │
+    │  │  │  + Add Trigger    + Add Condition    + Add Action       │ │ │
+    │  │  └─────────────────────────────────────────────────────────┘ │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Properties Panel (right side, shows selected node config)  │ │
+    │  │  ───────────────────────────────────────────────────────────│ │
+    │  │                                                              │ │
+    │  │  Trigger: Cron Schedule                                      │ │
+    │  │  ──────────────────                                          │ │
+    │  │  Expression:  0 3 * * 0                                       │ │
+    │  │  Timezone:  America/New_York                                │ │
+    │  │  [Test Trigger]                                              │ │
+    │  │                                                              │ │
+    │  │  Note: Connected to "Disk Usage" condition                   │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+6.3 Node Types & Visual Design
+-------------------------------
+    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+    │  ⏰ Trigger  │    │  🔍 Condition│    │  ⚡ Action   │
+    │  (rounded    │    │  (diamond,   │    │  (rounded    │
+    │   pill, blue)│    │   yellow)    │    │   pill,      │
+    └──────────────┘    └──────────────┘    │   green)     │
+                                            └──────────────┘
+    ┌──────────────┐    ┌──────────────┐
+    │  🔀 Branch   │    │  🔁 Loop     │
+    │  (diamond,   │    │  (rounded,   │
+    │   purple)    │    │   teal)      │
+    └──────────────┘    └──────────────┘
+
+    Connection lines are smooth bezier curves. Green when active, gray
+    when inactive, red when failed. Lines animate when the workflow runs.
+
+    Why:
+    • Shapes and colors are distinct enough that a user can identify
+      node types without reading text.
+    • Pill shapes feel friendly, not technical.
+    • Diamond for conditions/branches is a universal flowchart convention.
+
+6.4 Template Gallery
+---------------------
+    On first open, users see a template gallery before the blank canvas:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  Start from a template                    [Blank Canvas]        │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+    │  │ Nightly      │  │ System       │  │ Deploy       │          │
+    │  │ Backup       │  │ Health Check │  │ Web App      │          │
+    │  │ ⭐ Popular   │  │              │  │              │          │
+    │  └──────────────┘  └──────────────┘  └──────────────┘          │
+    │                                                                  │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+    │  │ Container    │  │ Uptime       │  │ Custom       │          │
+    │  │ Update       │  │ Monitor      │  │ Workflow     │          │
+    │  └──────────────┘  └──────────────┘  └──────────────┘          │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Each template shows: name, description, estimated complexity (dots),
+    and a miniature preview of the node graph.
+
+6.5 Execution History & Debugging
+----------------------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Automations   Nightly Backup    Execution History           │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Run #142  │  Today 2:00 AM  │  Duration: 4m 12s  │ ✅     │ │
+    │  │  ┌────────────────────────────────────────────────────────── │ │
+    │  │  │ Step Timeline (expandable):                              │ │
+    │  │  │ ✅ 2:00:00  Trigger: Cron fired                          │ │
+    │  │  │ ✅ 2:00:01  Condition: Disk usage 62% < 90% → true       │ │
+    │  │  │ ✅ 2:00:02  Action: backup.sh started (PID 1234)         │ │
+    │  │  │ ✅ 2:04:10  Action: backup.sh completed (exit 0)         │ │
+    │  │  │ ✅ 2:04:11  Action: Notification sent                     │ │
+    │  │  └────────────────────────────────────────────────────────── │ │
+    │  ├───────────────────────────────────────────────────────────── │ │
+    │  │  Run #141  │  Today 1:00 AM  │  Duration: 12s    │ ❌      │ │
+    │  │  ┌────────────────────────────────────────────────────────── │ │
+    │  │  │ ❌ 1:00:02  Condition: Disk usage 92% >= 90% → false     │ │
+    │  │  │ ✅ 1:00:03  Action: Notification sent (disk full alert)  │ │
+    │  │  └────────────────────────────────────────────────────────── │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Every run is recorded. Green/red at the run level. Click to expand
+    and see every step with timing. Debug mode adds raw output,
+    environment variables, and full command logs.
+
+================================================================================
+CHAPTER 7 — COMMAND PALETTE
+================================================================================
+
+7.1 Concept
+-----------
+    The command palette (Cmd+K) is the universal action hub. It is
+    available from every screen, every state. It is the fastest way to
+    do anything in RenOS.
+
+    Inspiration: Raycast, macOS Spotlight, Linear command menu.
+
+7.2 Visual Design
+-----------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  > Ask AI or search...                                      │ │
+    │  │  ─────────────────────────────────────────────────────────── │ │
+    │  │                                                              │ │
+    │  │  ʘ Ask AI                                                    │ │
+    │  │     Talk to RenAI about anything                             │ │
+    │  │                                                              │ │
+    │  │  🔍 Devices                                                  │ │
+    │  │     Search devices by name, IP, label                        │ │
+    │  │                                                              │ │
+    │  │  ⚡ Quick Actions                                            │ │
+    │  │     ┌──────────────────────────────────────────────────────┐ │ │
+    │  │     │ 🖥 Wake desktop-01           desk  → "Wake desktop"  │ │ │
+    │  │     │ 🔄 Restart server-01         serv  → "Restart serv"  │ │ │
+    │  │     │ 📦 Update All Devices        upda  → "Update every"  │ │ │
+    │  │     │ 💾 Run Nightly Backup Now    back  → "Run backup"    │ │ │
+    │  │     │ 🐳 Restart Minecraft         mine  → "Restart MC"    │ │ │
+    │  │     │ 🖥 Create Ubuntu VM           vm    → "Create VM"     │ │ │
+    │  │     └──────────────────────────────────────────────────────┘ │ │
+    │  │                                                              │ │
+    │  │  📁 Recent                                                    │ │
+    │  │     desktop-01 — Device page                                 │ │
+    │  │     Nightly Backup — Automation                              │ │
+    │  │     Homelab — Project                                        │ │
+    │  │                                                              │ │
+    │  │  Type "?" for all commands          ⚡ 42 results            │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+7.3 Behavior
+------------
+    • Opens on Cmd+K (Mac) / Ctrl+K (Windows/Linux).
+    • Closes on Escape or click outside.
+    • Default width: 640px, centered, modal overlay with backdrop blur.
+    • Search prioritizes: fuzzy match actions → device names → workflow
+      names → project names.
+    • Every action shows its keyboard shortcut (if any) on the right.
+    • Actions are grouped by category with section headers.
+    • Navigation: ↑↓ to move, Enter to select, Tab to autocomplete.
+    • Natural language search works: "wake desktop", "update everything",
+      "restart minecraft", "deploy website" — interpreted by RenAI and
+      routed to the appropriate action.
+
+7.4 Action Types
+-----------------
+    Built-in:
+        renos:device:wake
+        renos:device:restart
+        renos:device:shutdown
+        renos:device:ssh
+        renos:update:all
+        renos:update:device
+        renos:backup:run
+        renos:vm:create
+        renos:deploy:app
+        renos:search:logs
+        renos:search:devices
+        renos:workflow:run
+        renos:plugin:open
+
+    Plugin-registered actions (dynamic):
+        minecraft:restart
+        minecraft:status
+        plex:scan
+        pihole:disable
+
+7.5 AI Integration
+-------------------
+    If the user types a natural language phrase that doesn't match a
+    known action, the palette shows:
+
+        ┌─────────────────────────────────────────────────────────────┐
+        │  ʘ "Set up a Minecraft server with 4GB RAM"                │
+        │     Ask RenAI to handle this                                │
+        └─────────────────────────────────────────────────────────────┘
+
+    Selecting this opens the AI chat with the query pre-filled.
+
+================================================================================
+CHAPTER 8 — PROJECTS
+================================================================================
+
+8.1 Concept
+-----------
+    A Project is a logical grouping of resources related to a goal.
+
+    Examples:
+    • "Homelab" — all devices, backups, monitoring automations
+    • "Web App" — dev server, deployment workflow, cloud credentials
+    • "Media Stack" — Plex, Sonarr, Radarr, NAS with media storage
+
+    Projects transform RenOS from a device manager into a GOAL manager.
+    The user thinks about "my web app", not "server-01 and server-02".
+
+8.2 Project Page Layout
+------------------------
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Projects    Homelab                    [···] [Add Device]   │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌──────────────────────┬──────────────────────────────────────┐│
+    │  │  Devices (3)         │  Overview                            ││
+    │  │  ┌────────────────┐  │  Created: Jan 15, 2026               ││
+    │  │  │ ◉ desktop-01  │  │  Health:  98/100  ✅ All good        ││
+    │  │  │ ◉ nas-01      │  │  Status:  All automations running    ││
+    │  │  │ ◉ pi-04       │  │                                      ││
+    │  │  └────────────────┘  │  Tags: homelab, media, backup       ││
+    │  ├──────────────────────┴──────────────────────────────────────┤│
+    │  │  Automations (4)                                            ││
+    │  │  ┌────────────────────────────────────────────────────────┐ ││
+    │  │  │ ● Nightly Backup    ✅ Last: 2:00 AM  →              │ ││
+    │  │  │ ● Health Check      ✅ Last: just now  →              │ ││
+    │  │  │ ● Media Sync        ✅ Last: 1:00 AM  →              │ ││
+    │  │  │ ● Docker Update     ⏳ Scheduled: Sunday 3 AM  →     │ ││
+    │  │  └────────────────────────────────────────────────────────┘ ││
+    │  ├──────────────────────┬──────────────────────────────────────┤│
+    │  │  Recent Activity     │  Files & Notes                      ││
+    │  │  ┌────────────────┐  │  ┌────────────────────────────────┐ ││
+    │  │  │ 10:32 Updated  │  │  │ 📄 architecture-overview.md   │ ││
+    │  │  │      docker    │  │  │ 📄 homelab-topology.drawio    │ ││
+    │  │  │ 09:15 Backup   │  │  └────────────────────────────────┘ ││
+    │  │  │      done      │  │                                      ││
+    │  │  └────────────────┘  │                                      ││
+    │  └──────────────────────┴──────────────────────────────────────┘│
+    └──────────────────────────────────────────────────────────────────┘
+
+8.3 Project Interactions
+-------------------------
+    • Projects appear in the sidebar.
+    • A device can belong to multiple projects.
+    • Automations created within a project are automatically scoped to
+      that project's devices.
+    • AI chats in a project are saved and searchable by project.
+    • Projects have tags, descriptions, and optional documentation
+      (markdown notes).
+    • Projects can be exported/imported as a bundle (devices + workflows
+      + config).
+
+8.4 Why Projects?
+-----------------
+    Without projects, users manage devices. With projects, users manage
+    GOALS. This is a fundamental shift in mental model that makes RenOS
+    feel intelligent rather than just organized.
+
+================================================================================
+CHAPTER 9 — DESIGN LANGUAGE
+================================================================================
+
+9.1 Color Palette
+-----------------
+    Primary (Neutral):
+        #0A0A0B  — 900 (deepest, used for text)
+        #1C1C1E  — 800
+        #2C2C2E  — 700
+        #3A3A3C  — 600
+        #636366  — 500
+        #8E8E93  — 400
+        #C7C7CC  — 300
+        #E5E5EA  — 200
+        #F2F2F7  — 100 (background)
+        #FFFFFF  — 50
+
+    Accent (Blue):
+        #007AFF  — primary accent (buttons, links, active states)
+        #0055CC  — hover state
+        #003399  — pressed state
+        #E8F0FE  — tint (selected backgrounds)
+
+    Semantic:
+        #34C759  — success (green)
+        #FF9500  — warning (yellow/orange)
+        #FF3B30  — error/danger (red)
+        #5AC8FA  — info (light blue)
+        #AF52DE  — accent secondary (purple, for AI messages)
+
+    Status (Device indicators):
+        #34C759  — online (green)
+        #8E8E93  — offline (gray)
+        #FF9500  — degraded (yellow)
+        #FF3B30  — error (red)
+
+    Charts:
+        Blue gradient: #007AFF → #5AC8FA
+        Green gradient: #34C759 → #30D158
+        Orange gradient: #FF9500 → #FF9F0A
+        Red gradient: #FF3B30 → #FF453A
+
+    Why this palette:
+    • Monochrome base with a single strong accent (blue). Linear and
+      Apple use this approach — it feels premium and reduces visual noise.
+    • Semantic colors are standard so users instantly understand
+      red=bad, green=good.
+    • Status colors match common conventions (green dot = online).
+
+9.2 Typography
+--------------
+    Primary font: Inter (open-source, designed for screens)
+    Monospace: JetBrains Mono (for code, logs, command output)
+
+    Scale:
+        Headline 1: 32px / 40px line height / 700 weight
+        Headline 2: 24px / 32px line height / 600 weight
+        Headline 3: 20px / 28px line height / 600 weight
+        Headline 4: 18px / 24px line height / 600 weight
+        Body:       15px / 22px line height / 400 weight
+        Body Small: 13px / 18px line height / 400 weight
+        Caption:    12px / 16px line height / 400 weight
+        Monospace:  14px / 20px line height / 400 weight
+
+    Why Inter: It is the default for modern design tools (Figma, Linear,
+    Arc). It has excellent legibility at small sizes, a large character
+    set, and feels both technical and approachable.
+
+9.3 Spacing
+-----------
+    4px grid system. All spacing is a multiple of 4.
+
+    • 4px  — micro (icon to text gap)
+    • 8px  — tight (inline elements)
+    • 12px — compact (card internal padding, small)
+    • 16px — standard (card padding, button padding)
+    • 24px — medium (section spacing)
+    • 32px — large (page content padding)
+    • 48px — xlarge (between major sections)
+    • 64px — xxlarge (page top padding)
+
+7.4 Border Radius
+-----------------
+    • Small: 6px  (buttons, small tags)
+    • Medium: 10px (cards, input fields, modals)
+    • Large: 16px  (panels, sidebars)
+    • Full: 50%   (avatars, status dots)
+
+    Why: Consistent radii make the UI feel cohesive. 6/10/16 maps to
+    almost every component need.
+
+9.5 Shadows
+-----------
+    • Small (cards, default state):
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)
+    • Medium (dropdowns, modals):
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)
+    • Large (command palette, dialogs):
+        box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 8px 20px rgba(0,0,0,0.06)
+
+    Dark mode shadows use a tint (e.g., rgba(0,122,255,0.15)) instead
+    of pure black to feel more natural.
+
+9.6 Animation
+-------------
+    Durations:
+    • Micro-interactions (hover, click): 150ms ease-out
+    • Navigation transitions: 200ms ease-in-out
+    • Modal/sheet open: 300ms cubic-bezier(0.16, 1, 0.3, 1)  ← spring
+    • Toast/snackbar: 400ms ease-out
+
+    Principles:
+    • Animations are subtle, not showy. A card should gently lift on
+      hover, not bounce.
+    • Page transitions: content fades in slightly (100ms delay) while
+      the header stays static. Creates depth.
+    • Loading: skeleton pulses (not spinners). Spinners only for
+      operations that could take >5s.
+    • The spring curve (0.16, 1, 0.3, 1) is used for sheets/modals
+      entering — it overshoots very slightly then settles, feeling
+      physical but restrained.
+
+9.7 Cards
+---------
+    Every card follows this structure:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Title (15px, semibold)              [Action] [··· menu]   │
+    │  ─────                                                      │
+    │  Content (13px, regular, secondary color)                   │
+    │                                                              │
+    │  [Footer actions if needed]                                 │
+    └─────────────────────────────────────────────────────────────┘
+
+    • White background (or elevated surface in dark mode).
+    • 10px border radius.
+    • 16px padding.
+    • 1px border in light mode (#E5E5EA), none in dark mode (elevation
+      via shadow).
+    • Right side reserved for actions (button, toggle, menu).
+
+9.8 Buttons
+-----------
+    Primary:
+    ┌──────────────────────┐
+    │  Action Name         │  ← Blue fill, white text, 10px radius
+    └──────────────────────┘    32px height, 16px horizontal padding
+
+    Secondary:
+    ┌──────────────────────┐
+    │  Action Name         │  ← Transparent, blue border, blue text
+    └──────────────────────┘
+
+    Tertiary (Ghost):
+    ┌──────────────────────┐
+    │  Action Name         │  ← No border, blue text, only visible
+    └──────────────────────┘    on hover
+
+    Destructive:
+    ┌──────────────────────┐
+    │  Delete              │  ← Red text/icon, same padding as ghost
+    └──────────────────────┘
+
+    Icon button:
+    [🔍]  ← 32x32, ghost style, tooltip on hover
+
+    Button groups: primary + secondary side by side, primary on right
+    (Fitts's law — user reads left to right, primary action is rightmost
+    and largest).
+
+9.9 Icons
+---------
+    • Use a consistent icon set (Lucide or Phosphor icons, both open-
+      source with consistent stroke weights).
+    • 20px default size for inline icons.
+    • 16px for small/tag icons.
+    • 24px for sidebar navigation icons.
+    • All icons are outline style (filled only for status indicators).
+    • Stroke width: 1.5px (consistent across the set).
+
+9.10 Loading Indicators
+-----------------------
+    Initial page load:
+    • Skeleton rectangles matching the page layout. Pulse animation.
+    • No spinners.
+
+    Action loading:
+    • Button shows a small spinner inside the button, text remains
+      visible but dimmed.
+    • Or: optimistic update — button changes to "Done ✓" immediately,
+      reverts to "Failed ✗" if the server rejects.
+
+    Full-page loading:
+    • Should never happen. Every page is pre-cached by the service worker.
+    • If it does happen: a subtle RenOS logo pulse, centered.
+
+9.11 Notification Style
+-----------------------
+    Toast (bottom-right):
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ✅ Backup completed successfully                  [Undo]  │
+    │  2:00 AM  •  4.2GB in 3m 12s                              │
+    └─────────────────────────────────────────────────────────────┘
+
+    Types:
+    • Success: green left border, ✅ icon
+    • Error: red left border, ✖ icon
+    • Warning: yellow left border, ⚠ icon
+    • Info: blue left border, ℹ icon
+
+    Stacked notifications: up to 3 visible, older ones collapse into
+    a "3 more" pill.
+
+    In-app notification center (bell icon in sidebar bottom):
+    • List of all notifications grouped by day.
+    • Read/unread state.
+    • Clear all button.
+
+9.12 Empty States
+-----------------
+    Every list/table/panel must have a designed empty state.
+
+    Examples:
+    • No devices: "Add your first device to get started."
+    • No automations: "Automate repetitive tasks."
+    • No logs: "Logs will appear here when the device is active."
+    • No search results: "No results for 'xyz'. Try a different search."
+
+    Empty states include:
+    • A relevant illustration or icon (gentle, friendly).
+    • A short message explaining the empty state.
+    • A single call-to-action button.
+
+9.13 Error States
+-----------------
+    Errors follow a consistent pattern:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ✖ Something went wrong                                         │
+    │  Connection to nas-01 lost. Retrying in 30s...                  │
+    │                                                                  │
+    │  [Try Again] [View Logs] [Go to Device]                         │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Principles:
+    • State WHAT happened, WHY it happened, and WHAT TO DO NEXT.
+    • Provide action buttons for resolution.
+    • Never show raw error codes or stack traces to users. "Error 0x87AF"
+      is meaningless. "Connection refused" is meaningful.
+    • Offer to auto-retry when appropriate.
+
+9.14 Success States
+-------------------
+    • After an action completes: show a brief success toast + the outcome.
+    • The button that triggered the action briefly turns green, then
+      resets.
+    • For multi-step operations: a summary view showing what was done
+      and what changed.
+
+9.15 Dark Mode
+--------------
+    RenOS supports light and dark mode, following the system preference
+    by default with a manual override.
+
+    Dark mode palette:
+    • Background: #1C1C1E (iOS system background)
+    • Surface (cards): #2C2C2E
+    • Text: #FFFFFF / #E5E5EA (primary/secondary)
+    • Borders: #3A3A3C
+    • Accent: #0A84FF (brighter blue for dark mode)
+
+    All other semantic colors remain the same. Shadows in dark mode use
+    the accent color with low opacity.
+
+================================================================================
+CHAPTER 10 — BRANDING
+================================================================================
+
+10.1 Logo Direction
+-------------------
+    The RenOS logo should be a minimalist geometric mark.
+
+    Concept: A hexagon (representing mesh/network) with a subtle
+    gradient aperture in the center (representing AI/vision). Or a
+    simple letterform "R" built from two interlocking rings.
+
+    Characteristics:
+    • Single color capable (works as a solid shape).
+    • Recognizable at 16px (favicon) and 256px (hero).
+    • No text required — the mark stands alone.
+    • Strokes are rounded, friendly but precise.
+
+10.2 Icon Style
+---------------
+    All product icons follow the same principle:
+    • 2px stroke outline style.
+    • Rounded caps and joins.
+    • 20px baseline, scaled proportionally.
+    • No filled areas except for status dots and toggles.
+
+10.3 Naming Conventions
+-----------------------
+    Product: RenOS (always capitalized R, OS).
+    Core:    RenCore (internal service, not user-facing)
+    Agent:   RenAgent (internal)
+    UI:      RenHub (user-facing name for the web interface)
+    AI:      RenAI (user-facing name for the assistant)
+    Flows:   RenFlow (user-facing name for automations)
+    Plugins: RenPlugins (or just "Plugins" in UI)
+
+    Version naming: semantic versioning for developers.
+    Release naming: code names inspired by celestial bodies (public).
+
+    v0.1 — "Nova"
+    v0.2 — "Pulsar"
+    v0.3 — "Nebula"
+    v1.0 — "Orbit"
+    v2.0 — "Constellation"
+
+10.4 Tone of Voice
+------------------
+    RenOS speaks like a knowledgeable colleague, not like a manual.
+
+    Core principles:
+    • Direct — "Your backup failed. Disk is full." Not "It appears that
+      the backup operation was not completed due to insufficient storage."
+    • Warm — "Good morning, Alex." Not "Welcome, user 42."
+    • Honest — "I don't understand. Can you rephrase?" Not "An error
+      occurred processing your request."
+    • Confident — "I updated 3 containers and restarted 2 services."
+      Not "The update process may have completed."
+    • Brief — Every message should be readable in under 3 seconds.
+
+    Examples:
+
+    Notification:
+        ✅ Good: "Backup complete — 4.2GB saved to nas-01 (3m 12s)"
+        ❌ Bad: "The scheduled backup operation has been successfully
+                 completed. Total size: 4.2 gigabytes."
+
+    Error:
+        ✅ Good: "Can't reach server-01. It went offline 12 minutes ago."
+        ❌ Bad: "Connection to remote host 192.168.1.101:8443 failed
+                 with error: i/o timeout."
+
+    AI:
+        ✅ Good: "I'll update all 4 devices. Should take about 5
+                 minutes. Want me to proceed?"
+        ❌ Bad: "I have analyzed your request and determined that a
+                 system update operation across multiple nodes may be
+                 beneficial. Shall I initiate this process?"
+
+    Empty state:
+        ✅ Good: "No automations yet. Automate your first task."
+        ❌ Bad: "No records found."
+
+10.5 Notification Wording
+-------------------------
+    Success:
+        "{Action} completed — {summary}. ({duration})"
+
+    Error:
+        "Can't {action}. {reason}. {next step}"
+
+    Warning:
+        "{resource} needs attention. {what's wrong}. {what to do}"
+
+    Info:
+        "{something happened} on {device}. {optional detail}"
+
+10.6 Error Wording Patterns
+---------------------------
+    Network error:
+        "Can't reach {device}. It's been offline for {duration}."
+        Actions: [Try Again] [Check Device Page]
+
+    Permission error:
+        "You don't have permission to {action} on {target}."
+        Actions: [Request Access]
+
+    System error:
+        "Something went wrong while {action}. {reason}."
+        Actions: [View Logs] [Try Again]
+
+    Not found:
+        "Couldn't find {what}."
+        Actions: [Search Again]
+
+10.7 Success Wording Patterns
+------------------------------
+    Command executed:
+        "✅ {command} completed on {device} (exit {code}, {duration})"
+
+    Automation triggered:
+        "✅ {workflow} ran successfully — {summary}"
+
+    Update installed:
+        "✅ {package} updated to v{version} on {device}"
+
+    Device enrolled:
+        "✅ {hostname} is now connected. {n} devices online."
+
+================================================================================
+CHAPTER 11 — USER JOURNEY
+================================================================================
+
+11.1 Step 1: Installation
+--------------------------
+    User runs:
+        docker compose up -d
+
+    They see:
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                                                                  │
+    │                     ✨ RenOS is starting up...                  │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  [██████████████████████████████░░░░░░]  82%                │ │
+    │  │  Starting services...                                       │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    │                                                                  │
+    │  Open https://renos.local:8443 to continue.                     │
+    │                                                                  │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Emotion: Curiosity. Excitement.
+
+11.2 Step 2: First Launch — Account Setup
+------------------------------------------
+    User opens the URL. Sees:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                                                                  │
+    │                    🚀 Welcome to RenOS                          │
+    │                                                                  │
+    │               Your devices. One intelligent system.             │
+    │                                                                  │
+    │               ┌──────────────────────────────┐                  │
+    │               │  Create Admin Account        │                  │
+    │               │  ┌────────────────────────┐  │                  │
+    │               │  │ Email                   │  │                  │
+    │               │  └────────────────────────┘  │                  │
+    │               │  ┌────────────────────────┐  │                  │
+    │               │  │ Password                │  │                  │
+    │               │  └────────────────────────┘  │                  │
+    │               │  ┌────────────────────────┐  │                  │
+    │               │  │ Display Name            │  │                  │
+    │               │  └────────────────────────┘  │                  │
+    │               │                              │                  │
+    │               │  [Create Account →]          │                  │
+    │               └──────────────────────────────┘                  │
+    │                                                                  │
+    │  No configuration. No YAML files. No database setup.            │
+    │                                                                  │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Emotion: Relief. "That was easy."
+
+11.3 Step 3: Empty Home — Call to Action
+-----------------------------------------
+    After account creation, user lands on the home screen:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                                                                  │
+    │                    Welcome to RenOS 🚀                          │
+    │                                                                  │
+    │         Your devices are waiting. Let's connect one.            │
+    │                                                                  │
+    │               ┌──────────────────────────────┐                  │
+    │               │  Add Your First Device  →    │                  │
+    │               └──────────────────────────────┘                  │
+    │                                                                  │
+    │                    Or explore the docs.                          │
+    │                                                                  │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Emotion: Clear direction. No confusion.
+
+11.4 Step 4: Adding a Device
+-----------------------------
+    User clicks "Add Your First Device". Sees:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Home    Add Device                                           │
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  Step 1: Run this command on the target device              │ │
+    │  │                                                              │ │
+    │  │  ┌──────────────────────────────────────────────────────────┐│ │
+    │  │  │ renos enroll https://renos.local:8443 RENOS-ENROLL-XXXX ││ │
+    │  │  └──────────────────────────────────────────────────────────┘│ │
+    │  │                                                              │ │
+    │  │  [Copy] [Show QR Code]                                      │ │
+    │  │                                                              │ │
+    │  │  Step 2: Wait for connection                                │ │
+    │  │                                                              │ │
+    │  │  ◌ Waiting for device to connect...                         │ │
+    │  │                                                              │ │
+    │  │  ┌──────────────────────────────────────────────────────────┐│ │
+    │  │  │ Live log: connecting | handshake | verifying | enrolled ││ │
+    │  │  └──────────────────────────────────────────────────────────┘│ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+    User goes to their laptop, pastes the command. Within seconds:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ✅ desktop-01 connected!                                       │
+    │                                                                  │
+    │  Hostname:  desktop-01                                          │
+    │  OS:        Ubuntu 24.04 LTS                                    │
+    │  CPU:       Intel i7-13700K (16 cores)                          │
+    │  RAM:       32GB                                                 │
+    │  Storage:   1TB NVMe (340GB used)                               │
+    │  Docker:    3 containers running                                │
+    │                                                                  │
+    │  [Go to Dashboard] [Add Another Device]                         │
+    └──────────────────────────────────────────────────────────────────┘
+
+    Emotion: Delight. "It just worked."
+
+11.5 Step 5: Running First Automation
+--------------------------------------
+    User navigates to Automations → sees template gallery. Clicks
+    "Nightly Backup":
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  ← Automations   Nightly Backup                           [Draft]│
+    │  ─────────────────────────────────────────────────────────────── │
+    │                                                                  │
+    │  ┌─────────────────────────────────────────────────────────────┐ │
+    │  │  This template will:                                        │ │
+    │  │  • Run every night at 2:00 AM                               │ │
+    │  │  • Check disk usage is below 90%                            │ │
+    │  │  • Back up /data to nas-01                                  │ │
+    │  │  • Notify you on completion or failure                      │ │
+    │  │                                                              │ │
+    │  │  Target devices: desktop-01  pi-04                          │ │
+    │  │                                                              │ │
+    │  │  [Use This Template] [Customize] [Cancel]                   │ │
+    │  └─────────────────────────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────┘
+
+    User clicks "Use This Template". Workflow is created and enabled.
+    User sees the visual canvas with nodes connected. They feel proud.
+
+    Emotion: Accomplishment. "I just set up automated backups in 30
+    seconds without writing a single line of code."
+
+11.6 Step 6: Talking to AI
+---------------------------
+    User types in the AI bar at the bottom of the home screen:
+
+    "What's the status of everything?"
+
+    RenAI responds:
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  All 4 devices are online and healthy.                          │
+    │                                                                  │
+    │  ◉ desktop-01 — 12% CPU, 6.2GB/32GB RAM, up 14d               │
+    │  ◉ nas-01     — 8% CPU, 4.1GB/16GB RAM, up 42d                │
+    │  ◉ server-01  — 22% CPU, 8.4GB/32GB RAM, up 87d               │
+    │  ◉ pi-04      — 5% CPU, 0.4GB/8GB RAM, up 3d                  │
+    │                                                                  │
+    │  Your nightly backup ran successfully at 2:00 AM.               │
+    │  No alerts.                                                      │
+    └──────────────────────────────────────────────────────────────────┘
+
+    User types: "Update everything."
+
+    RenAI: "I'll update all 4 devices. This will install ~15 package
+    updates and update 3 Docker containers. desktop-01 will need a
+    reboot. Shall I proceed?"
+
+    User clicks [Approve]. Real-time progress shown. Done in 2 minutes.
+
+    Emotion: Powerful. "I just updated my entire homelab with two
+    sentences."
+
+11.7 Step 7: Confidence
+------------------------
+    After a week, the user:
+
+    • Opens RenOS first thing in the morning.
+    • Glances at the health score (98/100). Everything is green.
+    • Sees the nightly backup completed successfully.
+    • Searches for a device with Cmd+K.
+    • Runs a workflow from the command palette.
+    • Asks RenAI to set up a Minecraft server — it plans, they approve,
+      it's done in 3 minutes.
+
+    The user feels:
+    "I have complete visibility and control over my entire infrastructure.
+    And it took me 5 minutes to learn."
+
+    Emotion: Trust. Mastery. Delight.
+
+================================================================================
+END OF UX SPECIFICATION
+================================================================================

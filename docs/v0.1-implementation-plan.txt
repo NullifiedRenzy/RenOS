@@ -1,0 +1,735 @@
+================================================================================
+           RenOS v0.1 "Nova" — Implementation Plan
+================================================================================
+
+  Based on:  architecture-specification.txt
+             ux-specification.txt
+             engineering-specification.txt
+
+  Version:   0.1.0 "Nova"
+  Timeline:  12 weeks (3 months)
+  Goal:      Core + 1 agent, same machine, basic dashboard, command execution
+
+================================================================================
+MILESTONE OVERVIEW
+================================================================================
+
+  M01  Week 1  Repository setup
+  M02  Week 1  Docker Compose development environment
+  M03  Week 2  Go RenCore skeleton
+  M04  Week 3  PostgreSQL schema + migrations
+  M05  Week 4  Rust RenAgent skeleton
+  M06  Week 5  Device enrollment (Core + Agent)
+  M07  Week 6  Heartbeat reporting
+  M08  Week 7  Next.js dashboard (RenHub)
+  M09  Week 8  WebSocket live updates
+  M10  Week 9  Testing + first release
+  M11  Week 10-12 Buffer / bugfix / polish
+
+================================================================================
+M01 — REPOSITORY SETUP
+================================================================================
+
+GOAL
+  Create the GitHub monorepo with the correct folder structure, CI
+  scaffolding, and developer documentation so the team can begin work in
+  parallel.
+
+FILES / FOLDERS
+  renos/
+  ├── .github/
+  │   ├── workflows/
+  │   │   ├── ci.yml                # PR lint + test + build
+  │   │   └── release.yml           # Tag pipeline (placeholder)
+  │   └── CONTRIBUTING.md
+  ├── core/                         # Empty Go module
+  │   └── go.mod
+  ├── agent/                        # Empty Rust crate
+  │   └── Cargo.toml
+  ├── hub/                          # Empty Next.js app
+  │   └── package.json
+  ├── proto/                        # Protobuf definitions
+  │   └── agent/v1/
+  │       └── agent.proto
+  ├── docs/
+  │   ├── architecture/             # ADRs, specs
+  │   ├── development/
+  │   │   └── getting-started.md
+  │   └── operations/
+  ├── docker-compose.yml            # Dev stack
+  ├── Makefile                      # Top-level commands
+  ├── .gitignore
+  ├── .editorconfig
+  ├── README.md
+  └── LICENSE
+
+ACCEPTANCE CRITERIA
+  - `git clone` works, subdirectories exist
+  - `go build ./...` succeeds in core/ (no Go files yet, just mod init)
+  - `cargo build` succeeds in agent/ (no Rust files yet)
+  - `npm install && npm run build` succeeds in hub/
+  - `make lint` runs all linters (may have no files to lint yet)
+  - CI passes on a dummy PR (e.g., README update)
+  - Docker Compose starts PostgreSQL + Redis + NATS with defaults
+
+RISKS
+  - Go / Rust / Node version mismatches across team → document exact
+    versions in getting-started.md
+  - GitHub Actions minutes for large monorepo → use path filters
+
+COMMANDS
+  mkdir -p renos/.github/workflows
+  mkdir -p renos/core/cmd/renos-core
+  mkdir -p renos/core/internal
+  mkdir -p renos/agent/src
+  mkdir -p renos/hub/app
+  mkdir -p renos/proto/agent/v1
+  cd renos/core && go mod init github.com/renos-project/renos/core
+  cd renos/agent && cargo init --name renos-agent
+  cd renos/hub && npx create-next-app@latest . --typescript --tailwind --app
+  touch renos/Makefile renos/.gitignore renos/.editorconfig renos/README.md
+  touch renos/docker-compose.yml
+  cp architecture-*.txt engineering-specification.txt ux-specification.txt renos/docs/
+
+================================================================================
+M02 — DOCKER COMPOSE DEVELOPMENT ENVIRONMENT
+================================================================================
+
+GOAL
+  One-command `docker compose up` starts all dependencies so the team
+  can develop against live PostgreSQL, Redis, and NATS without local
+  installations.
+
+FILES / FOLDERS
+  renos/docker-compose.yml
+  renos/.env.example
+  renos/docs/development/getting-started.md
+
+ACCEPTANCE CRITERIA
+  - `docker compose up -d` starts postgres:16, redis:7, nats:2.10
+  - PostgreSQL accessible at localhost:5432 with database `renos`
+  - NATS accessible at localhost:4222
+  - Redis accessible at localhost:6379
+  - All containers restart on crash (restart: unless-stopped)
+  - Volumes persist across restarts
+  - .env.example documents all required environment variables
+  - Getting-started.md explains how to start/stop/rebuild
+
+RISKS
+  - Port conflicts on developer machines → document how to override in
+    .env
+  - Docker disk usage → add docker prune commands to Makefile
+  - ARM vs AMD images for Apple Silicon → pin multi-arch images
+
+COMMANDS
+  docker compose up -d
+  docker compose logs -f
+  docker compose down
+  psql -h localhost -U renos -d renos -c "SELECT 1"
+  nats pub test "hello" && nats sub --count=1 test
+
+================================================================================
+M03 — GO RENCORE SKELETON
+================================================================================
+
+GOAL
+  A runnable Go binary that starts an HTTP server, loads configuration,
+  connects to PostgreSQL/NATS/Redis, and responds to health checks.
+
+FILES / FOLDERS
+  core/
+  ├── cmd/renos-core/
+  │   └── main.go               # Entrypoint: config → deps → server
+  ├── internal/
+  │   ├── config/
+  │   │   └── config.go         # Env-based config struct
+  │   ├── api/
+  │   │   ├── router.go         # chi router with middleware
+  │   │   ├── health.go         # GET /healthz, GET /readyz
+  │   │   └── middleware.go     # Logger, request ID, recovery
+  │   ├── db/
+  │   │   └── postgres.go       # pgx pool init + ping
+  │   ├── bus/
+  │   │   └── nats.go           # NATS connection + JetStream context
+  │   └── cache/
+  │       └── redis.go          # Redis client init
+  ├── migrations/               # Empty for now
+  ├── go.mod
+  └── go.sum
+
+ACCEPTANCE CRITERIA
+  - `go run ./cmd/renos-core` starts, logs "starting RenOS Core v0.1.0"
+  - `curl localhost:8443/healthz` returns 200 {"status":"ok"}
+  - `curl localhost:8443/readyz` returns 200 with all dep checks passing
+  - Missing RENOS_DATABASE_URL → startup fails with clear error
+  - SIGTERM → graceful shutdown in <5s
+  - All dependencies injected via constructor (main.go wires them)
+  - Tests: health endpoint returns expected JSON
+
+RISKS
+  - pgx connection string parsing → test with various URL formats
+  - NATS connection hanging on startup → add startup timeout (10s)
+  - Port 8443 conflict → document RENOS_PORT override
+
+COMMANDS
+  cd core && go mod tidy
+  cd core && go run ./cmd/renos-core
+  curl http://localhost:8443/healthz
+  cd core && go test ./...
+  cd core && golangci-lint run ./...
+
+ENVIRONMENT (from .env)
+  RENOS_DATABASE_URL=postgres://renos:renos@localhost:5432/renos?sslmode=disable
+  RENOS_NATS_URL=nats://localhost:4222
+  RENOS_REDIS_URL=redis://localhost:6379/0
+  RENOS_JWT_SECRET=dev-secret-do-not-use-in-production
+  RENOS_LOG_LEVEL=debug
+  RENOS_PORT=8443
+
+================================================================================
+M04 — POSTGRESQL SCHEMA + MIGRATIONS
+================================================================================
+
+GOAL
+  All v0.1 tables created via automated migrations. The schema covers
+  the entities needed for enrollment and heartbeat: users, devices,
+  sessions, audits, settings.
+
+FILES / FOLDERS
+  core/migrations/
+  ├── 000001_create_users.up.sql
+  ├── 000001_create_users.down.sql
+  ├── 000002_create_devices.up.sql
+  ├── 000002_create_devices.down.sql
+  ├── 000003_create_sessions.up.sql
+  ├── 000003_create_sessions.down.sql
+  ├── 000004_create_audits.up.sql
+  ├── 000004_create_audits.down.sql
+  └── 000005_create_settings.up.sql
+  └── 000005_create_settings.down.sql
+
+  core/internal/
+  └── db/
+      └── migrate.go            # golang-migrate runner (embedded SQL)
+
+ACCEPTANCE CRITERIA
+  - `go run ./cmd/renos-core migrate` runs all up migrations
+  - All tables exist in PostgreSQL
+  - Running again is idempotent (no errors)
+  - `migrate down 1` rolls back last migration
+  - Foreign keys, unique constraints, and check constraints are enforced
+  - INSERT/UPDATE/DELETE works against all tables
+  - Down migrations restore previous state
+
+TABLES (v0.1 subset from architecture spec)
+  users
+    id UUID PK, email UNIQUE, password TEXT, display_name TEXT,
+    role TEXT DEFAULT 'viewer', totp_secret TEXT nullable,
+    totp_enabled BOOLEAN DEFAULT FALSE, settings JSONB DEFAULT '{}',
+    created_at, updated_at, deleted_at TIMESTAMPTZ nullable
+
+  devices
+    id UUID PK, user_id UUID FK→users, hostname TEXT, os TEXT,
+    arch TEXT, agent_version TEXT, cert_fingerprint TEXT UNIQUE,
+    enrolled_at TIMESTAMPTZ, last_seen TIMESTAMPTZ,
+    status TEXT DEFAULT 'offline',
+    labels JSONB DEFAULT '{}', capabilities JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}', created_at, updated_at
+
+  sessions
+    id UUID PK, user_id UUID FK→users, token_hash TEXT UNIQUE,
+    device_info TEXT, ip_address INET, expires_at TIMESTAMPTZ,
+    created_at
+
+  audits
+    id UUID PK, timestamp TIMESTAMPTZ, actor_type TEXT, actor_id TEXT,
+    action TEXT, target_type TEXT, target_id TEXT,
+    details JSONB DEFAULT '{}', signature TEXT, prev_hash TEXT,
+    created_at
+
+  settings
+    key TEXT PK, value JSONB, scope TEXT DEFAULT 'global', updated_at
+
+RISKS
+  - Migration ordering with foreign keys → migrations must run in order;
+    use version numbers, not timestamps, for ordering
+  - Down migration drops column used by later migration → never drop
+    columns until they've had 2+ versions of deprecation window
+  - Embedded SQL files require Go embed → use //go:embed
+
+COMMANDS
+  psql -h localhost -U renos -d renos -f migrations/000001_create_users.up.sql
+  go run ./cmd/renos-core migrate
+  psql -h localhost -U renos -d renos -c "\dt"
+  go run ./cmd/renos-core migrate down 1
+
+================================================================================
+M05 — RUST RENAGENT SKELETON
+================================================================================
+
+GOAL
+  A runnable Rust binary that loads config, parses CLI args, starts a
+  gRPC client, and connects to the Core with a placeholder gRPC stream.
+
+FILES / FOLDERS
+  agent/
+  ├── src/
+  │   ├── main.rs               # Entrypoint: CLI args → config → connect
+  │   ├── config.rs             # CLI + env + file config
+  │   ├── identity.rs           # Load/generate Ed25519 keypair
+  │   ├── grpc_client.rs        # Tonic gRPC client (Connect + Enroll stubs)
+  │   └── platform/
+  │       ├── mod.rs
+  │       └── linux.rs          # Linux-specific (systemd notify, etc.)
+  ├── proto/                    # Symlink or copy of proto/agent/v1
+  │   └── agent.v1.rs           # Generated tonic code
+  ├── build.rs                  # tonic-build to compile protos
+  └── Cargo.toml
+
+  proto/agent/v1/
+  └── agent.proto               # Enroll + Connect RPCs (placeholders)
+
+ACCEPTANCE CRITERIA
+  - `cargo build --release` produces ~5MB binary
+  - `renos-agent --help` prints usage
+  - `renos-agent` starts, loads config, prints "RenAgent v0.1.0"
+  - Agent attempts gRPC connection to Core (may fail gracefully)
+  - SIGTERM → graceful shutdown in <2s
+  - No panics during normal startup with Core unavailable
+  - Tests pass: `cargo test`
+
+RISKS
+  - tonic-build needs protoc installed → document in getting-started;
+    use tonic-build's vendored protoc feature (`protoc = "vendored"`)
+  - Cross-compilation for ARM → add CI matrix early
+  - macOS: tonic may need OpenSSL → use `rustls` feature, not
+    `native-tls`
+
+COMMANDS
+  cd agent && cargo build
+  cd agent && cargo run -- --help
+  cd agent && cargo test
+  cd agent && cargo clippy -- -D warnings
+
+PROTO DEFINITION (initial)
+  syntax = "proto3";
+  package renos.agent.v1;
+
+  service AgentService {
+    rpc Connect(stream AgentMessage) returns (stream CoreMessage);
+    rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  }
+  // Message types defined fully in engineering-spec.txt chapter 5.6
+
+================================================================================
+M06 — DEVICE ENROLLMENT (CORE + AGENT)
+================================================================================
+
+GOAL
+  End-to-end enrollment flow: admin generates token from Core's API,
+  agent presents token → receives signed certificate → establishes mTLS
+  gRPC connection. Device is registered in the database.
+
+FILES / FOLDERS
+  core/internal/
+  ├── api/
+  │   └── devices.go            # POST /devices/enroll-token, handlers
+  ├── auth/
+  │   ├── jwt.go                # JWT issue + verify (used for user auth)
+  │   ├── totp.go               # TOTP verify (placeholder)
+  │   └── password.go           # bcrypt hash + verify
+  ├── agent/
+  │   ├── manager.go            # Agent connection tracker (map of conns)
+  │   ├── grpc_server.go        # gRPC server: Enroll + Connect handlers
+  │   └── enroll.go             # Token validation + cert signing
+  ├── ca/
+  │   ├── ca.go                 # Internal CA: generate key, sign CSR
+  │   └── cert.go               # X.509 cert creation helpers
+  ├── api/
+  │   └── router.go             # Mount device routes + gRPC on same port
+  ├── db/
+  │   ├── users.go              # User repository (create, find by email)
+  │   └── devices.go            # Device repository (create, find, update)
+  └── config/
+      └── config.go             # Added RENOS_EXTERNAL_URL, CA fields
+
+  core/cmd/renos-core/
+  └── main.go                   # Wire CA, gRPC server, agent manager
+
+  agent/src/
+  ├── enroll.rs                 # Enroll flow: CSR gen → send → store cert
+  ├── grpc_client.rs            # Add mTLS with device cert
+  └── identity.rs               # Expanded: keypair gen, cert storage
+
+  proto/agent/v1/
+  └── agent.proto               # Fleshed out EnrollRequest/Response
+
+ACCEPTANCE CRITERIA
+  - POST /api/v1/devices/enroll-token (with admin JWT) → 201 { token,
+    expires }
+  - `renos-agent enroll --token X --core https://localhost:8443` exits 0
+  - Device row created in `devices` table with correct hostname, OS,
+    arch, cert fingerprint
+  - Certificate stored at /var/lib/renos/identity.pem (Linux)
+  - Agent starts in normal mode, loads cert, establishes mTLS gRPC
+    connection to Core
+  - Core marks device "online" in database
+  - Audit entry created for enrollment event
+  - Re-enrollment with expired token → rejected
+  - Enrollment from unauthenticated request → 401
+
+RISKS
+  - gRPC + HTTP on same port → use cmux or separate ports (v1: separate
+    ports; document in config)
+  - CA key management in dev → auto-generate on first boot, store in
+    DB encrypted
+  - mTLS cert verification → test with expired cert, wrong CA, revoked
+    cert
+  - Windows agent enrollment → skip for v0.1 (Linux + macOS only)
+
+COMMANDS
+  # Core startup
+  cd core && go run ./cmd/renos-core
+
+  # Generate enrollment token
+  TOKEN=$(curl -s -X POST http://localhost:8443/api/v1/devices/enroll-token \
+    -H "Authorization: Bearer $(admin_jwt)" | jq -r '.token')
+
+  # Enroll agent
+  cd agent && cargo run -- enroll --token "$TOKEN" --core http://localhost:8443
+
+  # Start agent normally
+  cd agent && cargo run --
+
+  # Verify
+  curl -s http://localhost:8443/api/v1/devices \
+    -H "Authorization: Bearer $(admin_jwt)" | jq '.'
+  # → device should show "online"
+
+================================================================================
+M07 — HEARTBEAT REPORTING
+================================================================================
+
+GOAL
+  Agent sends periodic health reports on the gRPC stream. Core receives
+  them, updates the device's `last_seen` and `status` fields, and makes
+  health data available via REST API.
+
+FILES / FOLDERS
+  core/internal/
+  ├── agent/
+  │   ├── manager.go            # Handle incoming HealthReport messages
+  │   └── stream.go             # Bidirectional stream handler per agent
+  ├── db/
+  │   └── devices.go            # Update last_seen, status, metadata
+  └── api/
+      └── devices.go            # GET /devices/:id returns health metrics
+
+  agent/src/
+  ├── health.rs                 # Collect system info (CPU, RAM, disk)
+  ├── executor.rs               # Placeholder command executor
+  └── grpc_client.rs            # Send HealthReport every 30s
+
+  proto/agent/v1/
+  └── agent.proto               # Add HealthReport message definition
+
+ACCEPTANCE CRITERIA
+  - Agent sends HealthReport every 30s (±5s jitter)
+  - Core updates devices.last_seen on each report
+  - GET /api/v1/devices/:id returns CPU, RAM, disk, uptime
+  - If Core doesn't receive heartbeat for 90s, device marked "offline"
+  - Offline device returns to "online" on next heartbeat
+  - Health metrics stored in devices.metadata JSONB (for v0.1; time-
+    series storage deferred to v0.2)
+  - Agent CPU usage while idle: < 1% (measured)
+  - Agent RAM usage: < 20MB (measured)
+
+RISKS
+  - sysinfo crate may not report all metrics on macOS → tier 2 for v0.1;
+    document limitations
+  - Heartbeat data volume at scale → for v0.1 it's metadata JSONB, no
+    concern
+  - Time sync issues → all timestamps in UTC, set on Core side
+
+COMMANDS
+  # Start Core
+  cd core && go run ./cmd/renos-core
+
+  # Start Agent (after enrollment)
+  cd agent && cargo run --
+
+  # Wait 30s, then check
+  curl -s http://localhost:8443/api/v1/devices --header "Authorization: Bearer $(admin_jwt)" | jq '.data[0].last_seen, .data[0].status'
+
+  # Check agent logs for health report
+  # Check Core logs for incoming health reports
+
+================================================================================
+M08 — NEXT.JS DASHBOARD (RENHUB)
+================================================================================
+
+GOAL
+  A functional single-page dashboard that shows:
+    - Login page → JWT auth
+    - Home screen with device summary, health score, quick actions
+    - Device list page
+    - Device detail page (digital twin, read-only)
+
+FILES / FOLDERS
+  hub/
+  ├── app/
+  │   ├── login/
+  │   │   └── page.tsx              # Login form → POST /auth/login
+  │   ├── (dashboard)/
+  │   │   ├── layout.tsx            # Sidebar + content shell
+  │   │   ├── page.tsx              # Home dashboard
+  │   │   ├── devices/
+  │   │   │   ├── page.tsx          # Device list (cards/table)
+  │   │   │   └── [id]/
+  │   │   │       └── page.tsx      # Device detail (digital twin)
+  │   │   └── settings/
+  │   │       └── page.tsx
+  │   ├── layout.tsx                # Root: theme, fonts, providers
+  │   └── error.tsx
+  ├── components/
+  │   ├── ui/                       # Button, Card, Input, Badge, Skeleton
+  │   ├── layout/
+  │   │   ├── sidebar.tsx
+  │   │   ├── topbar.tsx
+  │   │   └── command-palette.tsx
+  │   ├── devices/
+  │   │   ├── device-card.tsx       # Card for device list
+  │   │   ├── device-health.tsx     # Health score widget
+  │   │   ├── device-metrics.tsx    # CPU/RAM/Disk bars
+  │   │   └── device-timeline.tsx   # Recent activity for device
+  │   └── dashboard/
+  │       ├── welcome-banner.tsx
+  │       ├── stat-cards.tsx         # Device count, online count
+  │       └── quick-actions.tsx
+  ├── lib/
+  │   ├── api-client.ts             # Typed fetch wrapper
+  │   └── types.ts                  # Device, User, HealthReport types
+  ├── hooks/
+  │   ├── use-auth.ts               # Login, logout, token management
+  │   └── use-devices.ts            # TanStack Query for device list/detail
+  ├── stores/
+  │   ├── auth-store.ts             # Zustand: JWT tokens, user
+  │   └── ui-store.ts               # Zustand: sidebar, theme
+  └── styles/
+      └── globals.css               # Tailwind + CSS variables
+
+ACCEPTANCE CRITERIA
+  - Login form → POST /api/v1/auth/login → redirects to dashboard
+  - Invalid credentials show error toast (not alert box)
+  - Dashboard shows device count, online count, health score
+  - Device list shows cards with hostname, OS, status dot, last seen
+  - Click device → device detail page with CPU, RAM, disk bars
+  - Sidebar collapses to icons at <1024px
+  - Dark mode toggle works (persisted)
+  - 404 page on unknown routes
+  - Empty state shown when no devices exist
+  - All API errors handled gracefully (no white screens)
+
+RISKS
+  - No auth endpoint yet (M06) → stub the auth response for frontend
+    development; add note to remove stub when M06 merges
+  - TanStack Query cache invalidation → use staleTime: 30s for v0.1
+  - Tailwind config drift from design spec → create tokens in tailwind.config
+
+COMMANDS
+  cd hub && npm run dev
+  # Open http://localhost:3000
+  # Login with seeded admin account (or stub)
+  cd hub && npm run build   # verify production build
+  cd hub && npm run lint    # verify lint
+
+DESIGN NOTES (from ux-specification.txt)
+  - Sidebar: 240px, icon-only at <1024px, hidden at <768px
+  - Color: monochrome + blue accent (#007AFF), Inter font
+  - Cards: 10px radius, 16px padding, subtle shadow
+  - Health score: green 90-100, yellow 70-89, red <70
+  - Status dots: green pulse = online, gray = offline
+  - Empty state: illustration + single CTA button
+
+================================================================================
+M09 — WEBSOCKET LIVE UPDATES
+================================================================================
+
+GOAL
+  Real-time updates flow from Agent → Core → Browser via WebSocket.
+  Dashboard and device page update without page refresh.
+
+FILES / FOLDERS
+  core/internal/
+  ├── api/
+  │   ├── ws.go                  # WebSocket upgrade handler
+  │   └── ws_hub.go             # Connection hub (register/unregister/broadcast)
+  ├── api/
+  │   └── router.go             # Add WS endpoint: /api/v1/ws
+  └── agent/
+      └── manager.go            # Publish agent events to NATS
+
+  hub/
+  ├── lib/
+  │   └── ws-client.ts          # WebSocket client with reconnect
+  ├── hooks/
+  │   ├── use-websocket.ts      # Subscribe to channels, dispatch events
+  │   └── use-devices.ts        # Invalidate queries on WS event
+  ├── components/
+  │   ├── devices/
+  │   │   └── device-status-dot.tsx  # Pulse animation for online
+  │   └── dashboard/
+  │       └── recent-activity.tsx    # Live activity feed
+  └── stores/
+      └── ui-store.ts           # Add lastEvent for cross-component state
+
+EVENT TYPES (v0.1 subset)
+  device.online     → device card shows green dot
+  device.offline    → device card shows gray dot
+  device.health     → health bars update in place (no flash)
+  command.started   → activity feed: "desktop-01: running apt update"
+  command.completed → activity feed: "desktop-01: apt update completed"
+
+ACCEPTANCE CRITERIA
+  - WebSocket connection established on login
+  - Device online/offline events update UI without refresh
+  - Health updates (CPU%) reflect on dashboard within 5s of agent
+    sending heartbeat
+  - Reconnection: WS drops → client reconnects with backoff → state
+    resyncs
+  - 50+ simultaneous WebSocket connections maintain < 1% CPU increase
+  - Events stop arriving after user logs out
+
+RISKS
+  - WebSocket behind reverse proxy (Caddy/Traefik) → ensure proxy
+    supports WS; document in deploy guide
+  - Connection state management in React → use Zustand for UI state,
+    WebSocket for events; avoid coupling
+  - Reconnection storm if Core restarts → jitter on client reconnect
+
+COMMANDS
+  # Core + agent running, agent sending heartbeats
+  # Open two browser tabs: dashboard + device page
+  # Kill agent → device should show offline within 90s
+  # Restart agent → device should show online within 30s
+
+WS MESSAGE FORMAT
+  {
+    "type": "device.health",
+    "id": "evt_uuid",
+    "timestamp": "2026-07-08T12:00:00Z",
+    "data": {
+      "device_id": "uuid",
+      "hostname": "desktop-01",
+      "cpu_percent": 12.5,
+      "memory_percent": 19.4,
+      "disk_percent": 34.0
+    }
+  }
+
+================================================================================
+M10 — TESTING + FIRST RELEASE
+================================================================================
+
+GOAL
+  All v0.1 features tested, documented, and packaged as a release.
+  Team can cut v0.1.0 "Nova".
+
+FILES / FOLDERS
+  core/
+  └── internal/
+      ├── api/
+      │   └── health_test.go        # Health endpoint unit tests
+      ├── auth/
+      │   └── jwt_test.go           # JWT issue/verify tests
+      ├── ca/
+      │   └── ca_test.go            # CSR sign + verify
+      ├── agent/
+      │   └── enroll_test.go        # Enrollment flow integration test
+      └── db/
+          └── devices_test.go        # Device repository tests
+
+  agent/
+  └── src/
+      ├── enroll_test.rs
+      ├── health_test.rs
+      └── config_test.rs
+
+  hub/
+  └── __tests__/
+      ├── login.test.tsx
+      ├── device-card.test.tsx
+      └── dashboard.test.tsx
+
+  .github/workflows/
+  ├── ci.yml                    # PR: lint + test + build
+  ├── integration.yml           # Merge to dev: testcontainers tests
+  ├── release.yml               # Tag: build images, push, release
+  └── nightly.yml               # Nightly: full test suite + load test
+
+  docs/
+  └── operations/
+      └── deploy.md             # Production deployment guide
+
+ACCEPTANCE CRITERIA
+  - All unit tests pass: `go test ./...`, `cargo test`, `vitest run`
+  - Integration tests pass (testcontainers-go: postgres + nats)
+  - E2E flow tested manually:
+      1. docker compose up
+      2. Create admin account (CLI seed command)
+      3. Login via browser
+      4. Generate enrollment token
+      5. Run agent (Docker container for testing)
+      6. See device appear in dashboard
+      7. Execute command from dashboard
+      8. See live output via WebSocket
+  - Docker images build and start
+  - Release tag v0.1.0 pushed → GitHub Release created
+  - README updated with features, screenshot, quick start
+  - CHANGELOG.md generated
+
+RISKS
+  - testcontainers-go may be slow in CI → cache Docker images in GitHub
+    Actions
+  - Flaky E2E tests → use retry in CI (1 retry for known-flaky tests)
+  - Release pipeline secrets → use GitHub Environments + OIDC
+
+COMMANDS
+  # Full test run
+  cd core && go test -v -count=1 ./... --tags=integration
+  cd agent && cargo test
+  cd hub && npm test
+
+  # E2E manual test
+  docker compose up -d
+  cd core && go run ./cmd/renos-core &
+  cd hub && npm run dev &
+  # Open browser, run through acceptance criteria above
+
+  # Build + release
+  make build
+  docker compose -f docker-compose.prod.yml up -d
+  git tag v0.1.0
+  git push origin v0.1.0
+
+================================================================================
+M11 — BUFFER / POLISH (Weeks 10-12)
+================================================================================
+
+GOAL
+  Address bugs, UX polish, performance tuning, and documentation gaps
+  identified during the first 9 milestones.
+
+FOCUS AREAS
+  - UI polish: animation timing, empty states, error messages
+  - Error handling: every API error returns a useful message
+  - Logging: review all log levels (no debug in prod paths)
+  - Configuration: document every env var
+  - Loading states: skeleton screens everywhere data loads
+  - Edge cases: duplicate hostname, re-enrollment, token expiry
+  - Performance: first meaningful paint < 2s, API p95 < 200ms
+  - Security: no secrets in logs, no stack traces in API responses
+
+================================================================================
+END OF IMPLEMENTATION PLAN
+================================================================================

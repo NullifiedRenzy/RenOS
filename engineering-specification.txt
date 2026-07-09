@@ -1,0 +1,2775 @@
+================================================================================
+                 RenOS ENGINEERING SPECIFICATION
+                    Version 1.0 — Engineering Draft
+================================================================================
+
+                      CONFIDENTIAL — INTERNAL DRAFT
+              Prepared by the RenOS Engineering Team
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  Chapter 1:  Repository Strategy
+  Chapter 2:  Backend Engineering (Go)
+  Chapter 3:  Frontend Engineering (Next.js/React/TypeScript)
+  Chapter 4:  RenAgent (Rust)
+  Chapter 5:  API Specification
+  Chapter 6:  Database Engineering
+  Chapter 7:  Plugin SDK
+  Chapter 8:  RenFlow Engine
+  Chapter 9:  RenAI Integration
+  Chapter 10: Security Engineering
+  Chapter 11: Observability
+  Chapter 12: Testing Strategy
+  Chapter 13: CI/CD
+  Chapter 14: Coding Standards
+  Chapter 15: Future Evolution
+
+================================================================================
+CHAPTER 1 — REPOSITORY STRATEGY
+================================================================================
+
+1.1 GitHub Organisation
+-----------------------
+    Organisation: github.com/renos-project
+
+    Repositories:
+        renos              — Main monorepo (Core, Hub, Agent, docs)
+        renos-plugin-sdk   — Plugin SDK examples, templates, CLI tools
+        renos-marketplace  — Plugin marketplace index (future)
+        renos-www          — Website and documentation site
+        renos-linux        — Linux distribution build system (v3.0+)
+
+1.2 Monorepo Decision
+---------------------
+    Decision: Monorepo for all v1 components.
+
+    Rationale:
+    • One `git log` shows the full history of any change.
+    • Cross-component refactors (e.g., changing a protobuf definition and
+      updating both Core and Agent) happen in a single commit.
+    • CI can run all tests together — no "but it works on my repo" gaps.
+    • Simplified versioning: all components share the same tag.
+    • Go's module system and Rust's workspace feature handle monorepo
+      dependencies well.
+
+    Trade-off acknowledged: Monorepo is larger to clone. Mitigated by
+    sparse checkout in CI and `git clone --filter=blob:none`.
+
+    At v2.0, if the team grows beyond ~15 engineers, evaluate splitting
+    the Agent into its own repo (it has an independent release cycle).
+
+1.3 Repository Layout
+---------------------
+    renos/
+    ├── .github/
+    │   ├── workflows/        # CI/CD pipelines
+    │   ├── CODEOWNERS        # Per-path ownership
+    │   └── CONTRIBUTING.md   # Contribution guide
+    ├── core/                 # RenCore (Go)
+    │   ├── cmd/
+    │   │   └── renos-core/   # Main binary entrypoint
+    │   ├── internal/
+    │   │   ├── api/          # HTTP/gRPC handlers
+    │   │   ├── auth/         # Authentication logic
+    │   │   ├── bus/          # NATS client abstraction
+    │   │   ├── config/       # Configuration loading
+    │   │   ├── db/           # Database layer (repository pattern)
+    │   │   ├── renai/        # AI orchestration
+    │   │   ├── renflow/      # Automation engine
+    │   │   ├── plugins/      # Plugin manager
+    │   │   ├── agent/        # Agent communication (gRPC client mgmt)
+    │   │   ├── notifications/# Push notification service
+    │   │   ├── audit/        # Audit log engine
+    │   │   └── scheduler/    # Distributed job scheduler
+    │   ├── pkg/
+    │   │   ├── apierror/     # Standardized error types
+    │   │   ├── pagination/   # Pagination helpers
+    │   │   └── validate/     # Input validation utilities
+    │   ├── migrations/       # SQL migrations
+    │   ├── go.mod
+    │   └── go.sum
+    ├── agent/                # RenAgent (Rust)
+    │   ├── src/
+    │   │   ├── main.rs
+    │   │   ├── enroll.rs     # Device enrollment
+    │   │   ├── executor.rs   # Command execution
+    │   │   ├── health.rs     # Health monitoring
+    │   │   ├── tunnel.rs     # Reverse tunnel
+    │   │   ├── cache.rs      # Offline command cache
+    │   │   ├── updater.rs    # Self-update
+    │   │   └── platform/     # OS-specific implementations
+    │   └── Cargo.toml
+    ├── hub/                  # RenHub (Next.js)
+    │   ├── app/              # App Router pages
+    │   ├── components/       # React components
+    │   ├── lib/              # Utility functions, API client
+    │   ├── hooks/            # Custom React hooks
+    │   ├── stores/           # Zustand stores
+    │   ├── styles/           # Global styles, theme tokens
+    │   ├── public/           # Static assets
+    │   ├── package.json
+    │   └── tsconfig.json
+    ├── proto/                # Shared protobuf definitions
+    │   ├── agent/v1/
+    │   ├── core/v1/
+    │   └── plugin/v1/
+    ├── docs/                 # Documentation
+    │   ├── architecture/     # Architecture Decision Records (ADRs)
+    │   ├── api/              # API reference
+    │   ├── development/      # Developer setup guide
+    │   └── operations/       # Deployment and admin guides
+    ├── docker-compose.yml    # Root deployment
+    ├── Makefile              # Top-level build commands
+    ├── README.md
+    └── LICENSE
+
+1.4 Branching Strategy
+----------------------
+    Trunk-based development with short-lived feature branches.
+
+    main       — Production-ready. Always deployable.
+    dev        — Integration branch. All PRs merge here.
+    feat/*     — Feature branches (squash-merge to dev)
+    fix/*      — Bugfix branches (squash-merge to dev)
+    release/*  — Release preparation branches (merge to main + dev)
+
+    Rules:
+    • No direct commits to main or dev.
+    • Every PR requires at least one approval.
+    • PRs must pass CI (lint, test, build, security scan).
+    • Feature branches live at most 3 days. Large features use
+      feature flags behind `dev` branch.
+
+1.5 Release Strategy
+--------------------
+    Tags: v0.1.0, v0.2.0, v1.0.0, etc.
+
+    Process:
+    1. `release/v0.1.0` branch created from `dev`
+    2. Release candidates tagged: v0.1.0-rc.1
+    3. Regression tests run against RC
+    4. On pass: merge to `main`, tag v0.1.0
+    5. Main merged back to `dev`
+    6. Release notes generated from conventional commits
+
+    Hotfixes: branch from `main`, fix, PR to `main` AND `dev`.
+
+1.6 Semantic Versioning
+-----------------------
+    Given a version number MAJOR.MINOR.PATCH:
+
+    • MAJOR: Breaking API changes (v1→v2 gRPC proto changes)
+    • MINOR: New features, backward-compatible
+    • PATCH: Backward-compatible bug fixes
+
+    Pre-release suffixes: -alpha.1, -beta.2, -rc.3
+
+    All components in the monorepo version together until v2.0 (where
+    Agent may split and version independently).
+
+1.7 Documentation Organisation
+------------------------------
+    docs/
+    ├── README.md                 — Entry point
+    ├── architecture/             — ADRs (numbered: 001-use-go.md)
+    ├── api/                      — REST + gRPC reference
+    │   ├── rest.md
+    │   └── grpc.md
+    ├── development/              — Setup, guides
+    │   ├── getting-started.md
+    │   ├── go-conventions.md
+    │   └── rust-conventions.md
+    ├── operations/               — Deployment, admin
+    │   ├── docker-compose.md
+    │   ├── backups.md
+    │   └── security.md
+    ├── plugin-development/       — Plugin SDK docs
+    └── user/                     — User-facing documentation
+
+1.8 Contribution Guidelines
+---------------------------
+    • All contributions must follow the coding standards (Chapter 14).
+    • Every commit must use conventional commits format:
+      `type(scope): description`
+    • Types: feat, fix, refactor, test, docs, chore, security, perf
+    • PR description must explain WHAT and WHY, not HOW.
+    • New features require tests.
+    • Breaking changes require an ADR.
+
+================================================================================
+CHAPTER 2 — BACKEND ENGINEERING (Go)
+================================================================================
+
+2.1 Framework Choices
+---------------------
+    HTTP Router: chi (go-chi/chi/v5)
+        Why: Lightweight, stdlib-compatible, no magic. Middleware chain
+        is explicit. Fifth most popular Go router, stable API, no
+        reflection. Alternatives considered: gin (too much magic, slow
+        for large routes), echo (good but heavier), fiber (too
+        express-like, breaks Go idioms).
+
+    Database: pgx (jackc/pgx/v5)
+        Why: The fastest PostgreSQL driver for Go. Native PostgreSQL
+        protocol support (not database/sql wrapper). Connection pooling,
+        prepared statements, COPY support. Alternatives considered:
+        database/sql + lib/pq (slower, less features), GORM (too much
+        magic, hides queries), sqlx (good but wraps database/sql).
+
+    Migrations: golang-migrate (golang-migrate/migrate/v4)
+        Why: Declarative SQL files, not Go code. Simple CLI + library
+        mode. Supports embedded migrations (important for single-binary
+        deployment). Alternatives considered: goose (similar, less
+        ecosystem), bytebase (too heavy for v1).
+
+    Message Bus: NATS (nats-io/nats.go)
+        Why: Lightweight (~20MB binary), fast (million msgs/sec), built-
+        in auth, JetStream for durable queues. Go client is first-party.
+        Alternatives considered: RabbitMQ (heavier, needs Erlang), Redis
+        Streams (missing durability guarantees), Kafka (overkill for v1).
+
+    Logging: slog (stdlib, Go 1.21+)
+        Why: Standard library, zero dependencies, structured logging.
+        Alternatives considered: zerolog (faster but external dep), zap
+        (fast but external). slog is "fast enough" and removes a dep.
+
+    Config: envconfig (kelseyhightower/envconfig)
+        Why: Environment variables are the Docker/Kubernetes standard.
+        No config files to manage. Alternatives considered: viper
+        (supports files but adds complexity), koanf (powerful but heavy).
+
+    Validation: go-playground/validator/v10
+        Why: Struct tag-based validation, widely adopted, supports custom
+        validators. Uses reflection (acceptable for request validation
+        path).
+
+    Testing: stdlib testing + testify + testcontainers-go
+        Why: testify for assertions and mocking. testcontainers-go for
+        spinning up PostgreSQL/Redis/NATS in integration tests.
+
+2.2 Dependency Injection
+-------------------------
+    Approach: Constructor injection via a centralized "wire" pattern in
+    `cmd/renos-core/main.go`. No DI framework.
+
+    Why: Go's simplicity means DI frameworks add more complexity than
+    they remove. A single `main.go` that constructs all services and
+    injects them into handlers is readable, debuggable, and doesn't hide
+    dependencies.
+
+    Pattern:
+    ```go
+    func main() {
+        cfg := config.Load()
+        db := db.New(cfg.DatabaseURL)
+        nats := bus.New(cfg.NATSUrl)
+        authSvc := auth.NewService(db, cfg.JWTSecret)
+        deviceReg := device.NewRegistry(db, nats)
+        // ... construct handlers ...
+        router := api.NewRouter(authSvc, deviceReg, ...)
+        server.Run(router)
+    }
+    ```
+
+    At v2.0, if the main function exceeds 200 lines, adopt Google Wire
+    for code-generated dependency injection.
+
+2.3 Configuration Management
+-----------------------------
+    All configuration comes from environment variables with sensible
+    defaults.
+
+    Core variables:
+        RENOS_DATABASE_URL         — PostgreSQL connection string
+        RENOS_NATS_URL             — NATS server address
+        RENOS_REDIS_URL            — Redis address (optional)
+        RENOS_JWT_SECRET           — HMAC signing key (auto-generated)
+        RENOS_ENCRYPTION_KEY       — Master key for secrets (auto)
+        RENOS_AI_PROVIDER          — ollama | openai | anthropic
+        RENOS_AI_OLLAMA_URL        — http://ollama:11434
+        RENOS_AI_OPENAI_KEY        — OpenAI API key
+        RENOS_AI_ANTHROPIC_KEY     — Anthropic API key
+        RENOS_LOG_LEVEL            — debug | info | warn | error
+        RENOS_EXTERNAL_URL         — Public-facing URL for enrollment
+
+    Secrets (JWT key, encryption key) are auto-generated on first boot
+    and stored in the database (encrypted). Environment variables take
+    precedence.
+
+2.4 Logging
+-----------
+    Structured JSON logging via slog.
+
+    Every log line includes:
+    • timestamp (ISO8601)
+    • level (debug/info/warn/error)
+    • message (lowercase, no trailing period)
+    • request_id (correlation ID)
+    • service (rencore, renai, renflow, etc.)
+    • duration_ms (for request logs)
+
+    Error logs include:
+    • error (the error message)
+    • stack (captured at the error site, not unwound)
+
+    Log levels:
+    • debug: verbose internal state (disabled in production)
+    • info: normal operations (request completed, device enrolled)
+    • warn: unexpected but handled (retry, degraded performance)
+    • error: failure that needs investigation
+
+2.5 Metrics
+-----------
+    Export Prometheus metrics at /metrics endpoint (via
+    prometheus/client_golang).
+
+    Default metrics:
+    • renos_http_requests_total{method, path, status}
+    • renos_http_request_duration_ms{method, path}
+    • renos_websocket_connections_active
+    • renos_agents_connected
+    • renos_commands_executed_total{status}
+    • renos_workflows_run_total{status}
+    • renos_ai_requests_total{provider, status}
+    • renos_audit_entries_total
+    • renos_plugin_calls_total{plugin, action}
+
+    All metrics labelled for multi-dimensional slicing.
+
+2.6 Health Checks
+-----------------
+    Endpoint: GET /healthz (no auth)
+
+    Returns 200:
+    ```json
+    {
+      "status": "ok",
+      "version": "0.1.0",
+      "uptime_seconds": 3600,
+      "checks": {
+        "database": { "status": "ok", "latency_ms": 2 },
+        "nats": { "status": "ok", "latency_ms": 1 },
+        "redis": { "status": "ok", "latency_ms": 1 }
+      }
+    }
+    ```
+
+    If any dependency is unhealthy, return 503 with the failing check.
+    Dedicated readiness probe: /readyz (same checks, used by k8s/Docker).
+
+2.7 Graceful Shutdown
+---------------------
+    On SIGTERM/SIGINT:
+    1. Stop accepting new connections (1s grace)
+    2. Signal in-flight requests to finish (30s timeout)
+    3. Close NATS subscription
+    4. Close database connections
+    5. Flush pending audit log entries
+    6. Exit
+
+    Go's `signal.NotifyContext` + `http.Server.Shutdown()`.
+
+2.8 Background Jobs
+-------------------
+    Long-running background work uses a job queue pattern on NATS
+    JetStream:
+
+    • Workflow execution
+    • Scheduled backups
+    • Health check aggregation
+    • Certificate renewal
+    • Audit log compaction
+    • Dashboard metric computation
+
+    Each job type has its own subject + consumer group. Workers are
+    scaled by adding more Core instances (consumers in same group = work
+    queue, different groups = pub/sub).
+
+2.9 API Versioning
+------------------
+    URL-based: /api/v1/...
+
+    When v2 is needed (breaking changes), a new route group is mounted
+    at /api/v2/. The old v1 routes remain for at least 6 months or 2
+    minor versions, whichever is longer, with a deprecation header:
+    `Sunset: Sat, 1 Jan 2028 00:00:00 GMT`
+
+2.10 Error Handling
+-------------------
+    All API errors return a consistent JSON envelope:
+
+    ```json
+    {
+      "error": {
+        "code": "DEVICE_NOT_FOUND",
+        "message": "Device desktop-01 not found.",
+        "details": {
+          "device_id": "desktop-01"
+        }
+      }
+    }
+    ```
+
+    Internal errors are logged with a correlation ID. The API returns
+    a generic 500 with the correlation ID — never internal stack traces.
+
+    Error code categories:
+    • VALIDATION_*    — 400 Bad Request
+    • AUTH_*         — 401 Unauthorized
+    • PERMISSION_*   — 403 Forbidden
+    • NOT_FOUND      — 404 Not Found
+    • CONFLICT_*     — 409 Conflict
+    • RATE_LIMITED   — 429 Too Many Requests
+    • INTERNAL_*     — 500 Internal Server Error
+    • UNAVAILABLE_*  — 503 Service Unavailable
+
+    Domain errors are defined in `internal/apierror/errors.go` as
+    typed sentinel errors with codes.
+
+================================================================================
+CHAPTER 3 — FRONTEND ENGINEERING (Next.js/React/TypeScript)
+================================================================================
+
+3.1 Framework Choices
+---------------------
+    Framework: Next.js 15+ (App Router)
+        Why: Server components for initial page load performance, client
+        components for interactivity. App Router provides layouts,
+        loading states, error boundaries out of the box. PWA support
+        via next-pwa or service worker. Alternatives considered: Remix
+        (great but smaller ecosystem), Vite + React Router (more manual
+        setup).
+
+    State Management: Zustand
+        Why: Minimal boilerplate, no providers, works outside React
+        components (useful for API client). 2KB gzipped. Alternatives
+        considered: Redux Toolkit (too much ceremony for this app's
+        complexity), Jotai (good but more experimental), TanStack Query
+        (used for server state alongside Zustand for client state).
+
+    Server State: TanStack Query (React Query v5)
+        Why: Automatic caching, background refetching, optimistic
+        updates, retry, pagination support. Fits the CRUD-heavy nature
+        of device management. Every API call goes through a query key.
+
+    Forms: React Hook Form + Zod
+        Why: Performant (uncontrolled by default), tiny bundle. Zod for
+        schema validation shared between client and server.
+
+    Styling: Tailwind CSS v4
+        Why: Utility-first, zero runtime, excellent build-time
+        optimization. Keeps CSS bundle size small. Design tokens map
+        directly to Tailwind classes.
+
+    UI Primitives: Radix UI (headless, accessible primitives)
+        Why: Unstyled, accessible, composable. We apply our design
+        language on top. Alternatives considered: shadcn/ui (our
+        preferred pattern — copy-paste components built on Radix),
+        Headless UI, Ark UI.
+
+    Charts: Recharts (for devices) + Tremor (for dashboards)
+        Why: Recharts is React-native, composable, good for CPU/RAM
+        sparklines. Tremor provides opinionated dashboard components
+        that match our design aesthetic.
+
+    Icons: Lucide
+        Why: Consistent 1.5px stroke, tree-shakable, open-source.
+
+3.2 Project Structure (hub/)
+----------------------------
+    hub/
+    ├── app/                          # Next.js App Router
+    │   ├── (auth)/                   # Auth layout group
+    │   │   ├── login/
+    │   │   └── setup/
+    │   ├── (dashboard)/              # Main app layout group
+    │   │   ├── layout.tsx            # Sidebar + content area
+    │   │   ├── page.tsx              # Home screen
+    │   │   ├── devices/
+    │   │   │   ├── page.tsx          # Device list
+    │   │   │   └── [id]/page.tsx     # Device detail (digital twin)
+    │   │   ├── automations/
+    │   │   │   ├── page.tsx          # Automation list
+    │   │   │   ├── new/page.tsx      # Workflow editor
+    │   │   │   └── [id]/page.tsx     # Workflow detail + history
+    │   │   ├── projects/
+    │   │   ├── plugins/
+    │   │   ├── ai/
+    │   │   └── settings/
+    │   ├── layout.tsx                # Root layout (theme, fonts)
+    │   ├── error.tsx                 # Global error boundary
+    │   └── not-found.tsx             # 404 page
+    ├── components/
+    │   ├── ui/                       # Design system primitives
+    │   │   ├── Button.tsx
+    │   │   ├── Card.tsx
+    │   │   ├── Input.tsx
+    │   │   ├── Modal.tsx
+    │   │   ├── Toast.tsx
+    │   │   └── ...
+    │   ├── devices/                  # Device-specific components
+    │   ├── automations/              # Workflow editor components
+    │   ├── ai/                       # AI chat components
+    │   └── layout/                   # Sidebar, header, nav
+    ├── lib/
+    │   ├── api-client.ts             # Typed API client (fetch wrapper)
+    │   ├── ws-client.ts              # WebSocket client
+    │   ├── types.ts                  # Shared TypeScript types
+    │   └── utils.ts                  # Helpers
+    ├── hooks/
+    │   ├── use-devices.ts            # TanStack Query hooks
+    │   ├── use-automations.ts
+    │   └── use-websocket.ts          # WebSocket hook
+    ├── stores/
+    │   ├── auth-store.ts             # Zustand auth state
+    │   ├── ui-store.ts               # Sidebar state, theme, etc.
+    │   └── command-palette-store.ts  # Cmd+K state
+    └── styles/
+        ├── globals.css               # Tailwind base + design tokens
+        └── theme.ts                  # JS design tokens
+
+3.3 Component Architecture
+--------------------------
+    All components follow a strict hierarchy:
+
+    Page Component (app router page)
+        └── Feature Component (device list, workflow editor)
+                └── Composition Component (card, grid, list)
+                        └── UI Primitive (Button, Card, Input)
+
+    • Pages fetch data and pass it down (server component by default).
+    • Feature components are the smallest unit that could be extracted
+      to a separate page.
+    • Composition components are reusable combinations of primitives.
+    • UI primitives are atoms: Button, Input, Card, Modal, Toast.
+
+    Every component is typed with TypeScript. No `any` types.
+    Props are explicit interfaces, never `React.FC<Props>` (prefer
+    inline destructured props with `interface Props`).
+
+3.4 State Management Decisions
+------------------------------
+    Server State (TanStack Query):
+    • Device list, device detail, automation list, workflow definitions,
+      plugin list, user settings.
+    • Queries auto-refetch on window focus (staleTime: 30s for lists,
+      10s for device health).
+    • Mutations use optimistic updates for instant UI feedback.
+
+    Client State (Zustand):
+    • auth — current user, JWT tokens, permissions
+    • ui — sidebar open/closed, theme (light/dark), active modal
+    • commandPalette — open/closed, search query, results
+
+    No Redux. No context pollution. Zustand stores are small and
+    focused.
+
+3.5 Routing
+-----------
+    All routes are defined in the App Router file system.
+
+    Key routes:
+    /                   → Home screen (redirects to /dashboard)
+    /login              → Login page
+    /setup              → Initial admin account setup
+    /dashboard          → Home dashboard
+    /devices            → Device list
+    /devices/[id]       → Device detail (digital twin)
+    /automations        → Automation list
+    /automations/new    → Workflow editor (blank)
+    /automations/[id]   → Workflow detail + history
+    /automations/templates → Template gallery
+    /projects           → Project list
+    /projects/[id]      → Project detail
+    /ai                 → Full AI chat page
+    /plugins            → Plugin manager
+    /plugins/[id]       → Plugin detail
+    /settings           → Settings
+    /settings/users     → User management
+    /settings/security  → Security settings
+
+3.6 Authentication Flow
+-----------------------
+    1. User visits any protected route → redirected to /login
+    2. Login form → POST /api/v1/auth/login → receives
+       { access_token, refresh_token, user }
+    3. Access token stored in Zustand (in-memory) + short-lived cookie
+       (httpOnly, secure, sameSite: strict)
+    4. Refresh token stored in httpOnly cookie (renewed automatically
+       via axios interceptor / fetch wrapper)
+    5. On 401 → attempt token refresh → if fails, redirect to /login
+    6. On login success → redirect to original URL
+
+    The API client (lib/api-client.ts) handles token refresh transparently.
+
+3.7 Theme System
+----------------
+    CSS custom properties (variables) defined in globals.css for both
+    light and dark themes. Tailwind `darkMode: 'class'`.
+
+    Tokens: Defined in Tailwind config using CSS variables.
+
+    ```css
+    :root {
+      --color-bg: #FFFFFF;
+      --color-surface: #F2F2F7;
+      --color-text-primary: #0A0A0B;
+      --color-accent: #007AFF;
+      /* ... */
+    }
+    .dark {
+      --color-bg: #1C1C1E;
+      --color-surface: #2C2C2E;
+      --color-text-primary: #FFFFFF;
+      --color-accent: #0A84FF;
+    }
+    ```
+
+    Theme preference: system default, overridable in settings.
+    Persisted in localStorage + cookie (for SSR).
+
+3.8 Internationalization (i18n)
+-------------------------------
+    Approach: next-intl
+
+    v1: English only. Architecture designed for i18n from day one:
+    • All user-visible strings wrapped in t() calls.
+    • Messages stored in JSON files per locale (en.json, ja.json, etc.).
+    • Date/number formatting via Intl.DateTimeFormat (not locale-
+      dependent formatting in code).
+
+    v1.0+ languages: Japanese, German, French, Spanish, Chinese.
+
+3.9 Accessibility
+-----------------
+    Target: WCAG 2.2 AA minimum.
+
+    Requirements:
+    • All interactive elements keyboard-accessible.
+    • Focus indicators visible (2px outline, offset 2px).
+    • Color contrast ratio >= 4.5:1 for text, >= 3:1 for large text.
+    • ARIA labels on all icons-only buttons.
+    • Semantic HTML (nav, main, aside, section, button, a).
+    • Skip-to-content link.
+    • Screen reader announcements for dynamic content (toast, loading).
+    • Reduced motion media query honored.
+
+    All Radix UI primitives include built-in accessibility.
+
+3.10 Performance Optimization
+-----------------------------
+    • Server Components by default — minimal client JS.
+    • Route segments lazy-loaded via Next.js dynamic imports.
+    • Images: next/image with WebP/AVIF, lazy loading.
+    • Bundle analysis: @next/bundle-analyzer in CI.
+    • Target: < 100KB initial JS (gzipped).
+    • Lighthouse target: 95+ on all categories.
+    • Virtual list (TanStack Virtual) for device lists > 50 items.
+    • Debounced search inputs (300ms).
+
+3.11 Offline Support (PWA)
+----------------------------
+    Manifest: next-pwa or custom service worker.
+
+    Service worker caches:
+    • App shell (HTML, CSS, JS) — Cache First
+    • API responses — Network First, fallback to cache
+    • Static assets — Cache First
+
+    Offline behavior:
+    • Show cached dashboard data with "stale" indicator.
+    • Queue commands in IndexedDB, sync when online.
+    • AI chat history available offline (cached).
+    • Device page shows last known health data.
+
+3.12 PWA Behaviour
+-------------------
+    • Install prompt via beforeinstallprompt event.
+    • Display: standalone (no browser chrome).
+    • Splash screen with RenOS logo + background color.
+    • Icon set: 192x192, 512x512, maskable.
+    • Shortcuts: Dashboard, Devices, Automations, AI Chat.
+
+================================================================================
+CHAPTER 4 — RENAGENT (Rust)
+================================================================================
+
+4.1 Framework Choices
+---------------------
+    gRPC: tonic
+        Why: Pure Rust gRPC implementation, async, tokio-based, well-
+        maintained. Alternatives considered: grpc-rust (abandoned).
+
+    Async Runtime: tokio
+        Why: Industry standard for Rust async. Wide ecosystem support.
+
+    TLS: rustls
+        Why: Pure Rust TLS (no OpenSSL dependency). Cross-compilation
+        friendly. Alternatives considered: native-tls (needs OpenSSL,
+        painful for cross-compiling to ARM).
+
+    HTTP Client: reqwest (used for self-update downloads)
+        Why: Most popular Rust HTTP client, async, TLS support via
+        rustls feature.
+
+    CLI Args: clap
+        Why: Derive macros for declarative argument parsing. De facto
+        standard.
+
+    Serialization: serde + serde_json
+        Why: Universal serialization framework.
+
+    SQLite: rusqlite (for offline command cache)
+        Why: Bundled SQLite (no system dependency), reliable.
+
+    System Info: sysinfo
+        Why: Cross-platform system information (CPU, RAM, disk, network).
+
+    Command Execution: tokio::process::Command
+        Why: Built-in async process management. No external crate needed.
+
+4.2 Boot Sequence
+-----------------
+    1. Parse CLI arguments (clap).
+    2. Load configuration from:
+       a. CLI flags (highest priority)
+       b. Config file at /etc/renos/agent.toml or ./agent.toml
+       c. Environment variables
+    3. Load or generate device identity:
+       a. If /var/lib/renos/identity.pem exists, load it
+       b. If not, enter enrollment mode (see 4.3)
+    4. Load CA certificate and device certificate.
+    5. Connect to RenCore via gRPC (mTLS).
+    6. Authenticate (present device certificate).
+    7. Send initial health report.
+    8. Enter main loop: handle incoming commands, send periodic health
+       reports, manage tunnels.
+
+4.3 Device Registration
+-----------------------
+    Entry point: renos enroll --token <token> --core <url>
+
+    1. Generate Ed25519 keypair.
+    2. Create CSR with:
+       - Hostname
+       - OS + version
+       - Architecture
+       - Agent version
+       - Enrollment token
+    3. Send Enroll RPC to Core (no mTLS, just TLS with token in message).
+    4. Core validates token, signs certificate, returns:
+       - Signed device certificate
+       - CA certificate
+       - NATS credentials (future)
+    5. Store to /var/lib/renos/identity.pem (encrypted at rest).
+    6. Exit with success.
+    7. Next boot: normal flow (step 4.2).
+
+4.4 Heartbeat
+-------------
+    Sent every 30 seconds (configurable) as a `HealthReport` message on
+    the gRPC stream.
+
+    Payload:
+    {
+      "hostname": "desktop-01",
+      "uptime_seconds": 1234567,
+      "cpu": {
+        "usage_percent": 12.5,
+        "temperature_celsius": 52.3,
+        "cores": 16
+      },
+      "memory": {
+        "total_gb": 32.0,
+        "used_gb": 6.2,
+        "available_gb": 25.8
+      },
+      "disks": [
+        { "mount": "/", "total_gb": 1000, "used_gb": 340, "avail_gb": 660 }
+      ],
+      "network": {
+        "interfaces": ["eth0", "wlan0"],
+        "bytes_sent": 123456789,
+        "bytes_recv": 987654321
+      },
+      "docker_containers": {
+        "total": 3,
+        "running": 3,
+        "stopped": 0
+      },
+      "services": ["docker", "sshd", "nginx"]
+    }
+
+    If Core doesn't receive a heartbeat for 90 seconds, device marked
+    "offline".
+
+4.5 Authentication
+------------------
+    mTLS: Every gRPC connection presents the device certificate.
+    Certificate validated against the CA certificate stored at enrollment.
+    Certificate contains:
+    • CN: device hostname
+    • O: RenOS Devices
+    • OU: device UUID
+    • Extended Key Usage: clientAuth
+
+4.6 Capability Discovery
+-------------------------
+    On initial connect, agent sends a CapabilityReport:
+
+    {
+      "agent_version": "0.1.0",
+      "capabilities": [
+        "command_exec",
+        "docker_management",
+        "file_transfer",
+        "reverse_tunnel",
+        "health_reporting",
+        "self_update"
+      ]
+    }
+
+    Core uses this to decide what features to enable for each agent.
+
+4.7 Update Mechanism
+---------------------
+    1. Core sends `AgentUpdate` message with new binary URL + SHA256 hash.
+    2. Agent downloads binary to /tmp/renos-agent-new.
+    3. Agent verifies SHA256 hash.
+    4. Agent verifies GPG signature (future).
+    5. Agent replaces /usr/local/bin/renos-agent (atomic rename).
+    6. Agent sends ACK and exits.
+    7. Systemd/Docker restarts agent with new binary.
+
+    Rollback: If new binary fails to start within 60s, systemd auto-
+    restarts old binary (systemd failure guard).
+
+4.8 Command Execution
+---------------------
+    1. Receive `CommandExec` message:
+       { "command_id": "uuid", "command": "apt update", "timeout_secs": 300 }
+    2. Validate command against allowed/blocked list (configurable:
+       block list by default is empty; allow list can be set).
+    3. Fork child process via tokio::process::Command.
+    4. Stream stdout/stderr back via `LogLine` messages.
+    5. On completion, send `CommandResult`:
+       { "command_id": "uuid", "exit_code": 0, "duration_ms": 1234 }
+
+    Timeout: kill child process, send failure result.
+    Security: agent NEVER runs commands as root unless explicitly
+    configured. Runs as `renos-agent` user.
+
+4.9 Permissions (Local Enforcement)
+-----------------------------------
+    Agent enforces local permissions in addition to Core RBAC:
+    • Blocked commands file: /etc/renos/agent.blocked (regex patterns)
+    • Allowed paths: /etc/renos/agent.allowed (whitelist exec paths)
+    • Dangerous operations (reboot, shutdown, rm -rf /) require explicit
+      agent config flag: allow_dangerous_commands = false
+
+4.10 Plugin Loading (Agent-side)
+---------------------------------
+    Agent detects plugins at startup:
+    • /var/lib/renos/plugins/*.wasm — WASM plugins run in wasmtime.
+    • Container plugins: managed by Core (agent triggers docker pull +
+      run).
+
+    Agent-side plugins are for DEEP system integration (e.g., eBPF
+    probes, custom hardware). Most plugins run on Core or as containers.
+
+4.11 Crash Recovery
+-------------------
+    On unexpected crash:
+    1. systemd restarts agent immediately.
+    2. Agent detects dirty shutdown (check for /var/lib/renos/crash-
+       marker or unprocessed command cache).
+    3. Replays unacknowledged commands from SQLite cache.
+    4. Reports crash reason to Core on reconnect.
+
+4.12 Automatic Reconnection
+---------------------------
+    On gRPC stream disconnect:
+    1. Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 60s.
+    2. Jitter: +/- 25% of current backoff.
+    3. On each reconnect attempt: present certificate, resume stream.
+    4. Queue commands received while offline in SQLite.
+    5. On reconnect: replay queued commands, resync health state.
+
+4.13 Offline Behaviour
+-----------------------
+    • Continue monitoring health (store locally).
+    • Queue commands with TTL (default 24h).
+    • Cache up to 100MB of command data.
+    • Accept local commands via Unix socket (future: local CLI).
+    • No functionality loss other than remote management.
+
+4.14 Resource Usage Goals
+--------------------------
+    • Idle CPU: < 0.5%
+    • Idle RAM: < 15MB (Rust, no GC)
+    • Disk: < 100MB (binary + cache)
+    • Network: ~1KB per heartbeat (every 30s)
+    • Binary size: < 10MB stripped
+
+    These targets ensure the agent runs comfortably on a Raspberry Pi
+    Zero (512MB RAM, single-core ARM).
+
+4.15 Cross-Platform Support (v1)
+---------------------------------
+    Tier 1 (tested every release):
+    • Linux (x86_64, aarch64) — systemd integration
+    • Linux (armv7) — Raspberry Pi 32-bit
+
+    Tier 2 (tested less frequently, community-supported):
+    • macOS (x86_64, arm64) — launchd integration
+    • Windows (x86_64) — Windows Service
+
+    Platform-specific code is in `src/platform/` with conditional
+    compilation (`#[cfg(target_os = "linux")]`).
+
+================================================================================
+CHAPTER 5 — API SPECIFICATION
+================================================================================
+
+5.1 REST API
+------------
+    Base: /api/v1
+
+    ┌────────────────────┬─────────────────────────┬──────────────────┐
+    │ Method │ Path      │ Description             │ Auth             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ POST   │ /auth/login       │ Authenticate user    │ None            │
+    │ POST   │ /auth/refresh     │ Refresh access token │ Refresh cookie  │
+    │ POST   │ /auth/logout      │ Invalidate session   │ JWT             │
+    │ GET    │ /auth/me          │ Current user info    │ JWT             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /devices          │ List devices         │ JWT / API Key   │
+    │ GET    │ /devices/:id      │ Get device details   │ JWT / API Key   │
+    │ DELETE │ /devices/:id      │ Decommission device  │ JWT (admin)     │
+    │ POST   │ /devices/enroll   │ Create enroll token  │ JWT (admin)     │
+    │ POST   │ /devices/:id/exec │ Execute command      │ JWT / API Key   │
+    │ GET    │ /devices/:id/logs │ Stream/fetch logs    │ JWT / API Key   │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /workflows        │ List workflows       │ JWT             │
+    │ POST   │ /workflows        │ Create workflow      │ JWT             │
+    │ GET    │ /workflows/:id    │ Get workflow         │ JWT             │
+    │ PUT    │ /workflows/:id    │ Update workflow      │ JWT             │
+    │ DELETE │ /workflows/:id    │ Delete workflow      │ JWT             │
+    │ POST   │ /workflows/:id/run│ Trigger manually     │ JWT             │
+    │ GET    │ /workflows/:id/runs│ Execution history   │ JWT             │
+    │ GET    │ /runs/:id         │ Run details          │ JWT             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /plugins          │ List plugins         │ JWT             │
+    │ POST   │ /plugins          │ Install plugin       │ JWT (admin)     │
+    │ DELETE │ /plugins/:id      │ Uninstall plugin     │ JWT (admin)     │
+    │ POST   │ /plugins/:id/enable │ Enable plugin     │ JWT (admin)     │
+    │ POST   │ /plugins/:id/disable│ Disable plugin    │ JWT (admin)     │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /projects         │ List projects        │ JWT             │
+    │ POST   │ /projects         │ Create project       │ JWT             │
+    │ GET    │ /projects/:id     │ Get project          │ JWT             │
+    │ PUT    │ /projects/:id     │ Update project       │ JWT             │
+    │ DELETE │ /projects/:id     │ Delete project       │ JWT (admin)     │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /audit            │ Query audit log      │ JWT (admin)     │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /notifications    │ List notifications   │ JWT             │
+    │ PUT    │ /notifications/:id/read │ Mark read      │ JWT             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ POST   │ /ai/chat          │ Send message to RenAI│ JWT             │
+    │ POST   │ /ai/approve       │ Approve pending action│ JWT            │
+    │ GET    │ /ai/conversations │ List conversations   │ JWT             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /settings         │ Get settings         │ JWT             │
+    │ PUT    │ /settings         │ Update settings      │ JWT             │
+    ├────────────────────┼─────────────────────────┼──────────────────┤
+    │ GET    │ /healthz          │ Health check         │ None            │
+    │ GET    │ /readyz           │ Readiness check      │ None            │
+    │ GET    │ /metrics          │ Prometheus metrics   │ None (internal) │
+    └────────────────────┴─────────────────────────┴──────────────────┘
+
+5.2 Pagination
+--------------
+    Request: ?page=1&per_page=50 (default: 1, 50. Max: 100)
+    Response includes:
+    ```json
+    {
+      "data": [...],
+      "pagination": {
+        "page": 1,
+        "per_page": 50,
+        "total": 142,
+        "total_pages": 3,
+        "next": "/api/v1/devices?page=2&per_page=50",
+        "prev": null
+      }
+    }
+    ```
+
+5.3 Filtering
+--------------
+    Format: ?field=value (exact match), ?field=value1,value2 (IN)
+    Range: ?created_after=ISO8601&created_before=ISO8601
+    Search: ?q=searchterm (full-text search on name/hostname)
+    Labels: ?label=env:prod (key:value)
+
+5.4 Rate Limiting
+-----------------
+    • Authenticated: 1000 requests/minute per user.
+    • Unauthenticated: 30 requests/minute per IP.
+    • Command execution: 60 commands/minute per user.
+    • Response header: X-RateLimit-Remaining, X-RateLimit-Reset.
+
+5.5 WebSocket Events
+--------------------
+    All events are JSON with envelope:
+    ```json
+    {
+      "type": "device.online",
+      "id": "evt-uuid",
+      "timestamp": "2026-07-08T12:00:00Z",
+      "data": { ... }
+    }
+    ```
+
+    Event types:
+    • device.online        — device came online
+    • device.offline       — device went offline
+    • device.health        — health update
+    • device.log           — new log line from device
+    • command.started      — command began execution
+    • command.completed    — command finished
+    • command.failed       — command failed
+    • workflow.started     — workflow began
+    • workflow.completed   — workflow finished
+    • workflow.failed      — workflow failed
+    • notification         — new notification
+    • ai.progress          — AI step completed
+    • ai.requires_approval — AI needs permission
+    • plugin.event         — plugin-specific event
+
+5.6 gRPC Agent Interface
+-------------------------
+    Proto package: renos.agent.v1
+
+    service AgentService {
+        rpc Connect(stream AgentMessage) returns (stream CoreMessage);
+        rpc Enroll(EnrollRequest) returns (EnrollResponse);
+    }
+
+    message EnrollRequest {
+        string token = 1;
+        bytes csr_der = 2;         // PKCS#10 CSR
+        string hostname = 3;
+        string os = 4;
+        string arch = 5;
+        string agent_version = 6;
+    }
+
+    message EnrollResponse {
+        bytes device_cert_der = 1; // Signed X.509 cert
+        bytes ca_cert_der = 2;
+        int64 cert_expiry_unix = 3;
+    }
+
+    message AgentMessage {
+        string message_id = 1;
+        oneof payload {
+            HealthReport health = 10;
+            CommandResult command_result = 11;
+            LogLine log_line = 12;
+            CapabilityReport capabilities = 13;
+            TunnelData tunnel_data = 14;
+            Ack ack = 15;
+        }
+    }
+
+    message CoreMessage {
+        string message_id = 1;
+        oneof payload {
+            CommandExec command = 10;
+            CommandCancel cancel = 11;
+            TunnelData tunnel_data = 12;
+            AgentUpdate update = 13;
+            Ping ping = 14;
+        }
+    }
+
+5.7 Request Validation
+-----------------------
+    All inputs validated at the API layer:
+    • UUIDs: format validation
+    • Emails: regex + length
+    • Passwords: minimum 8 chars, complexity requirements
+    • URLs: parsed and validated
+    • Numeric ranges: min/max
+    • Required fields checked before processing
+
+    Validation errors return 400 with per-field errors:
+    ```json
+    {
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Request validation failed.",
+        "details": {
+          "fields": {
+            "email": "Must be a valid email address.",
+            "password": "Must be at least 8 characters."
+          }
+        }
+      }
+    }
+    ```
+
+5.8 API Versioning Strategy
+----------------------------
+    • URL-prefixed: /api/v1/, /api/v2/
+    • v1 frozen when v2 ships (only critical bugfixes).
+    • Deprecation communicated via Sunset header with date.
+    • Minimum 6-month overlap between deprecation and removal.
+
+================================================================================
+CHAPTER 6 — DATABASE ENGINEERING
+================================================================================
+
+6.1 Full Schema
+---------------
+    All tables as defined in the Architecture Specification (see
+    Chapter 6 of architecture-specification.txt) with the following
+    additions and engineering notes:
+
+6.2 Indexes
+-----------
+    Additional performance indexes:
+
+    CREATE INDEX idx_audits_timestamp_brin ON audits USING BRIN (timestamp)
+        WHERE timestamp > NOW() - INTERVAL '30 days';
+        -- BRIN index is 100x smaller than B-tree for append-only tables
+
+    CREATE INDEX idx_exec_logs_lookup ON exec_logs(workflow_id, created_at DESC);
+    CREATE INDEX idx_notifications_lookup ON notifications(user_id, created_at DESC);
+    CREATE INDEX idx_devices_labels ON devices USING GIN (labels);
+        -- GIN for JSONB containment queries
+    CREATE INDEX idx_ai_conversations_user ON ai_conversations(user_id, updated_at DESC);
+
+    Full-text search:
+    CREATE INDEX idx_devices_fts ON devices USING GIN (to_tsvector('english', hostname));
+    CREATE INDEX idx_workflows_fts ON workflows USING GIN (to_tsvector('english', name || ' ' || COALESCE(description, '')));
+
+6.3 Constraints
+---------------
+    -- Prevent duplicate device hostnames per user
+    CREATE UNIQUE INDEX idx_devices_user_hostname ON devices(user_id, hostname);
+
+    -- Ensure workflow names are unique per creator
+    CREATE UNIQUE INDEX idx_workflows_user_name ON workflows(created_by, name);
+
+    -- Audit chain integrity
+    ALTER TABLE audits ADD CONSTRAINT chk_audit_hash CHECK (signature ~ '^[A-Za-z0-9+/=]+$');
+
+    -- Check constraints
+    ALTER TABLE devices ADD CONSTRAINT chk_device_status
+        CHECK (status IN ('offline', 'online', 'degraded', 'decommissioned'));
+
+    ALTER TABLE users ADD CONSTRAINT chk_user_role
+        CHECK (role IN ('admin', 'operator', 'developer', 'viewer'));
+
+    ALTER TABLE plugins ADD CONSTRAINT chk_plugin_status
+        CHECK (status IN ('inactive', 'active', 'error', 'blocked'));
+
+6.4 Migrations Strategy
+------------------------
+    Migration files in core/migrations/:
+    000001_create_users.up.sql
+    000001_create_users.down.sql
+    000002_create_devices.up.sql
+    ...
+
+    Naming: {version}_{description}.{up|down}.sql
+
+    Run on startup (or via CLI: `renos-core migrate`).
+    Migrations are idempotent: wrapped in transactions with IF NOT EXISTS.
+    Never delete a migration file once committed.
+
+    Migration principles:
+    • Always create DOWN migration (for local dev rollback).
+    • Never drop a column in the same migration that creates it (allow
+      1 version window).
+    • Test migrations against a copy of production data before deploying.
+
+6.5 Backups
+-----------
+    Automated via pg_dump (CronJob or scheduled task):
+    • Full backup daily at 3 AM.
+    • WAL archiving for point-in-time recovery (continuous).
+    • Retention: 30 daily, 12 monthly.
+    • Encryption: GPG with automated key management.
+    • Storage: MinIO bucket on local network (optional S3/GCS).
+
+    Restore procedure documented in docs/operations/backups.md.
+
+6.6 Replication
+---------------
+    v1: Single PostgreSQL instance (Docker volume).
+    v2: Streaming replica for read-heavy queries (dashboard, audit search).
+
+    Application-level read/write splitting:
+    • Writes go to primary.
+    • Reads go to replica (with staleness tolerance).
+
+    Connection string format:
+    RENOS_DATABASE_URL=postgres://user:pass@primary:5432/renos
+    RENOS_DATABASE_READER_URL=postgres://user:pass@replica:5432/renos
+
+6.7 Future Scalability
+-----------------------
+    • TimescaleDB hypertable for device metrics (CPU, RAM, disk over
+      time). This replaces the current health report storage pattern at
+      v2.0.
+    • Read replicas for the dashboard (most read-heavy queries are
+      dashboard-related).
+    • Connection pooling via PgBouncer when connection count exceeds
+      100.
+    • Partition audits table by month (declarative partitioning) when
+      it exceeds 10M rows.
+
+================================================================================
+CHAPTER 7 — PLUGIN SDK
+================================================================================
+
+7.1 Plugin Lifecycle (Detailed)
+--------------------------------
+    1. Package: Developer creates plugin wasm binary + manifest + config
+       schema. Package as .rpk (RenOS Plugin Kit) — a tar.gz with
+       manifest.yaml inside.
+    2. Upload: User uploads .rpk via RenHub or CLI.
+    3. Verify: Core extracts manifest, verifies signature (Ed25519),
+       validates schema.
+    4. Scan: Static analysis of declared vs required permissions.
+       If plugin requests more permissions than it needs, warn user.
+    5. Approve: User reviews permissions and approves.
+    6. Install: Wasm binary stored in MinIO, metadata in PostgreSQL.
+       Container image pulled via Docker/Podman.
+    7. Configure: User sets plugin-specific config (validated against
+       config_schema).
+    8. Enable: Plugin starts receiving events and API calls.
+    9. Monitor: Core tracks health, latency, error rate.
+    10. Update: New version uploaded. Permissions diff shown. On
+        approval, binary/image replaced, runtime restarted.
+    11. Disable: Plugin stopped but data preserved.
+    12. Uninstall: Plugin removed, data purged, containers removed.
+
+7.2 Plugin Manifest
+--------------------
+    Full schema as defined in Architecture Chapter 7, with these
+    engineering additions:
+
+    wasm:
+      entrypoint: plugin.wasm
+      max_memory: 64MB
+      max_cpu_percent: 50
+      exports:
+        - handle_event(event_type, data) -> Result
+        - handle_command(command, params) -> Result
+        - render_panel(context) -> PanelHTML (future: JS sandbox)
+      imports:
+        - renos:plugin/host         # Host functions available
+        - renos:plugin/logger       # Logging interface
+
+    container:
+      image: ghcr.io/renos-plugins/minecraft-manager:1.0.0
+      pull_policy: always          # always | if_not_present
+      resources:
+        cpu_limit: 0.5
+        memory_limit: 512MB
+      healthcheck:
+        command: ["wget", "-q", "http://localhost:8080/health"]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+
+7.3 Plugin Registration API (Core)
+-----------------------------------
+    POST /api/v1/plugins — Upload or register a plugin
+      Request: multipart/form-data with .rpk file
+      Response: 201 { plugin_id, name, version, permissions, status: "pending" }
+
+    GET /api/v1/plugins — List installed plugins
+    GET /api/v1/plugins/:id — Plugin details
+    POST /api/v1/plugins/:id/approve — Approve permissions
+    POST /api/v1/plugins/:id/enable — Enable
+    POST /api/v1/plugins/:id/disable — Disable
+    DELETE /api/v1/plugins/:id — Uninstall
+
+7.4 Plugin Sandbox
+-------------------
+    WASM plugins:
+    • Run in wasmtime-go.
+    • No filesystem access by default.
+    • No network access by default.
+    • Capability-based: plugin declares what it needs; host grants it.
+    • Memory limit: configurable (default 64MB).
+    • CPU limit: configurable (default 50% of one core).
+    • All host function calls go through a permission check.
+
+    Container plugins:
+    • Run with Docker/Podman API.
+    • Read-only root filesystem (unless declared).
+    • User-namespace mapped (not root inside container).
+    • Resource limits via cgroups (CPU, memory, pids).
+    • Network: isolated bridge unless port mapping declared.
+    • Health check required for all container plugins.
+
+7.5 Plugin Communication
+-------------------------
+    All plugins communicate via NATS (even WASM — the runtime proxies
+    for them).
+
+    Subjects:
+    renos.plugin.{plugin_id}.request    — Plugin → Core requests
+    renos.plugin.{plugin_id}.response   — Core → Plugin responses
+    renos.plugin.{plugin_id}.events     — Core pushes events to plugin
+
+    Message envelope (JSON):
+    ```json
+    {
+      "id": "uuid",
+      "type": "request|response|event",
+      "method": "core.devices.exec",
+      "params": { "device_id": "...", "command": "..." },
+      "result": { ... },                    // for responses
+      "error": { "code": "...", message: "..." },
+      "timestamp": "ISO8601"
+    }
+    ```
+
+7.6 Plugin SDK (Developer-Facing)
+-----------------------------------
+    The SDK is a Go library + CLI tool.
+
+    SDK Features:
+    • Go types for common request/response structures.
+    • Helper functions: CallDevice, SendNotification, ReadSecret,
+      RegisterTrigger, EmitEvent.
+    • Logger interface (logs prepended with plugin ID for correlation).
+    • Config parser (automatically validates against config_schema).
+    • Testing utilities: mock Core, fake NATS.
+
+    CLI Tool (renos-plugin):
+    • renos-plugin init — Scaffold new plugin project
+    • renos-plugin build — Compile to WASM
+    • renos-plugin test — Run plugin tests
+    • renos-plugin sign — Sign .rpk with Ed25519 key
+    • renos-plugin validate — Validate manifest + permissions
+
+    The SDK is distributed as a Go module:
+    github.com/renos-project/renos-plugin-sdk
+
+7.7 Plugin Signing
+------------------
+    • Plugin authors generate an Ed25519 keypair.
+    • Private key kept locally. Public key published (e.g., on a
+      public keyserver or in the marketplace profile).
+    • At build time: `renos-plugin sign --key plugin.key` produces a
+      .rpk.signed file (original .rpk + detached signature).
+    • Core verifies: `verify(plugin.rpk, signature, author_public_key)`.
+    • If signature is missing or invalid, plugin marked as "unverified"
+      and user warned before install.
+
+7.8 Plugin Dependencies
+-----------------------
+    Plugins can declare dependencies on other plugins or system
+    capabilities.
+
+    ```yaml
+    dependencies:
+      plugins:
+        - name: monitoring-base
+          version: ">=1.0.0"
+      capabilities:
+        - docker_management
+        - file_transfer
+    ```
+
+    Core resolves dependencies at install time. Missing dependencies
+    block installation with clear error message.
+
+7.9 Marketplace Readiness
+--------------------------
+    The plugin format (.rpk), signing, and manifest schema are designed
+    for future marketplace integration. When the marketplace launches:
+    • .rpk files published to marketplace.renos.io
+    • Core fetches marketplace index (signed JSON).
+    • One-click install: `renos plugin install minecraft-manager` pulls
+      from marketplace, verifies signature, installs.
+
+    No changes to the plugin format needed. Marketplace is additive.
+
+7.10 Version Compatibility
+--------------------------
+    Plugin SDK version informed by Core's plugin API version.
+
+    SDK v1.x ↔ Core API v1.x — guaranteed compatibility.
+    Plugin declares `sdk_version: ">=1.0.0, <2.0.0"` in manifest.
+    Core checks SDK version compatibility at install time.
+
+================================================================================
+CHAPTER 8 — RENFLOW ENGINE
+================================================================================
+
+8.1 Architecture
+----------------
+    The RenFlow engine is a DAG runner embedded in RenCore. It has four
+    main components:
+
+    • Scheduler: Watches for triggers (cron, events) and enqueues
+      workflow runs.
+    • Runner: Executes workflow DAGs, tracking node state through
+      transitions.
+    • State Store: PostgreSQL + Redis for runtime state.
+    • Worker Pool: Goroutine pool that processes workflow nodes
+      concurrently.
+
+8.2 Scheduling
+--------------
+    Cron triggers:
+    • Evaluated every 60 seconds (configurable via RENOS_SCHEDULER_TICK).
+    • Uses robfig/cron/v3 for cron expression parsing.
+    • Stored in PostgreSQL, loaded into memory on startup.
+    • Missed schedules: catch-up logic (if system was down, don't
+      backfill — skip missed, run next).
+
+    Event triggers:
+    • Subscribe to NATS subjects matching workflow trigger criteria.
+    • On matching event → enqueue workflow run.
+
+    Webhook triggers:
+    • Core generates unique URL per workflow: /api/v1/hooks/{hook_id}
+    • URL is stable (workflow ID + secret suffix).
+    • On POST → enqueue workflow run with webhook payload as input
+      variable.
+
+    Manual triggers:
+    • User clicks "Run" in UI → POST /api/v1/workflows/:id/run
+    • Immediate enqueue.
+
+8.3 Execution Engine
+--------------------
+    Workflow run lifecycle:
+    PENDING → QUEUED → RUNNING → COMPLETED | FAILED | CANCELLED
+
+    Node execution states within a run:
+    PENDING → RUNNING → SUCCEEDED | FAILED | SKIPPED
+
+    1. Scheduler publishes workflow run request to NATS subject:
+       `renos.engine.run.{workflow_id}`
+    2. Worker picks up message, creates execution record in PostgreSQL.
+    3. Worker processes DAG nodes in topological order.
+    4. For each node:
+       a. Evaluate condition (if condition node).
+       b. Execute action (if action node).
+       c. Record result in PostgreSQL.
+       d. Stream progress via WebSocket.
+       e. If fail and retry configured: retry with backoff.
+       f. If fail and no retry: mark run as FAILED, run error handler.
+    5. On completion: run complete handler (notification, webhook).
+
+8.4 Workflow Runtime
+--------------------
+    Workers are goroutines managed by a semaphore-bound pool.
+
+    Pool size: configurable (default: 10 concurrent runs).
+    Each run can fan out to parallel nodes (goroutines within a run).
+
+    For long-running actions (commands with timeout):
+    • Worker launches goroutine, waits for result on channel.
+    • If timeout expires first: kill command, mark node as FAILED.
+
+    Idempotency: Each run has a unique run_id. Actions can declare
+    idempotency_key to prevent duplicate side effects on retry.
+
+8.5 Variables
+-------------
+    Three scopes:
+    1. Workflow variables (locals): defined in workflow definition,
+       initialized per run.
+    2. User variables (persistent): stored in PostgreSQL, accessible
+       across workflows for a user.
+    3. Global variables: stored in PostgreSQL, accessible by all
+       workflows. Example: backup_target_path.
+
+    Variable resolution order: local → user → global.
+
+    Template syntax: {{ variable_name | filter }}
+    Filters: date, upper, lower, trim, split, join, default, json,
+    base64, sha256.
+
+    Implementation: text/template from Go stdlib with custom function
+    map (sandboxed — no access to runtime functions).
+
+8.6 Secrets in Workflows
+-------------------------
+    Workflows can reference secrets:
+    {{ secret "aws_access_key" }}
+
+    Secrets are fetched from the secrets table at runtime. Not logged.
+    Not exposed in execution history. Only the fact that a secret was
+    accessed is recorded (audit).
+
+8.7 Retry Logic
+---------------
+    Per-node retry configuration:
+
+    ```json
+    {
+      "retry": {
+        "count": 3,
+        "backoff": "exponential",       // fixed | exponential | linear
+        "initial_delay_ms": 1000,
+        "max_delay_ms": 60000,
+        "retry_on_timeout": true,
+        "retry_on_exit_codes": [1, 137, 255]
+      }
+    }
+    ```
+
+    Exponential: delay = initial * 2^attempt (with jitter ±25%).
+    Max retry duration: 1 hour.
+
+8.8 Rollback
+-------------
+    Rollback is opt-in per action. Actions declare an `undo` action:
+
+    ```json
+    {
+      "type": "command",
+      "config": {
+        "device": "server-01",
+        "command": "systemctl stop myapp"
+      },
+      "undo": {
+        "command": "systemctl start myapp"
+      }
+    }
+    ```
+
+    If a workflow fails after a node with undo, the engine executes
+    undo nodes in reverse order (stack order). This is NOT automatic —
+    workflow author must define undo actions. The engine provides the
+    framework; the workflow author ensures correctness.
+
+8.9 Failure Recovery
+---------------------
+    If the engine crashes mid-run:
+    1. On restart, engine scans for runs with status = RUNNING and
+       updated_at older than 60s (stale runs).
+    2. For each stale run:
+       a. Mark run as FAILED with reason "engine_crash".
+       b. For completed nodes: check each action's idempotency.
+       c. For incomplete nodes: no re-execution (manual retry).
+
+    If a specific node fails:
+    1. Apply per-node retry logic.
+    2. If retries exhausted: mark node FAILED.
+    3. Check for next_on_failure: if present, run that node.
+    4. If no next_on_failure: mark run FAILED, run error handler,
+       send notification.
+
+8.10 Logging
+------------
+    Every execution step is logged:
+    • Run started: workflow_id, run_id, trigger_type, input variables
+    • Node started: node_id, node_type, input values
+    • Node completed: node_id, duration_ms, output values
+    • Node failed: node_id, error, attempt_number
+    • Run completed: workflow_id, run_id, status, total_duration_ms
+
+    Logs stored in exec_logs table and streamed via WebSocket for
+    real-time visibility.
+
+8.11 Audit Trail
+-----------------
+    Workflow-related audit entries:
+    • workflow.created
+    • workflow.updated
+    • workflow.deleted
+    • workflow.run_started
+    • workflow.run_completed
+    • workflow.run_failed
+    • workflow.action_executed (per node, with result summary)
+
+8.12 Concurrency
+----------------
+    • Per-workflow concurrency limit: 1 (no parallel runs of the same
+      workflow unless explicitly configured).
+    • Global concurrency limit: configurable (default 10).
+    • If limit reached: workflow run is queued (NATS JetStream).
+    • Queue size: unlimited (bounded by disk).
+
+8.13 Performance Targets
+-------------------------
+    • DAG parsing: < 10ms for 100-node workflow.
+    • Node execution overhead (non-command actions): < 5ms.
+    • State persistence: < 50ms per node transition.
+    • 1000 concurrent runs per Core instance (theoretical).
+
+================================================================================
+CHAPTER 9 — RENAI INTEGRATION
+================================================================================
+
+9.1 Provider Abstraction Layer
+-------------------------------
+    Defined as a Go interface in `internal/renai/provider.go`:
+
+    ```go
+    type Provider interface {
+        // Chat sends a conversation and returns the response.
+        Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
+
+        // StreamChat sends a conversation and returns a stream of chunks.
+        StreamChat(ctx context.Context, req ChatRequest) (<-chan ChatChunk, error)
+
+        // Embed generates embeddings for the given text (future).
+        Embed(ctx context.Context, text string) ([]float32, error)
+
+        // Name returns the provider name for logging/metrics.
+        Name() string
+    }
+
+    type ChatRequest struct {
+        Model    string          // model name/ID
+        Messages []Message       // conversation history
+        Tools    []Tool          // available tools (function calling)
+        Stream   bool            // enable streaming
+    }
+
+    type ChatResponse struct {
+        Message   Message
+        ToolCalls []ToolCall     // structured tool invocations
+        Usage     TokenUsage     // input/output token counts
+    }
+    ```
+
+    Implementations:
+    • provider_ollama.go — uses Ollama REST API (compatible with OpenAI
+      API shape via Ollama's OpenAI compatibility endpoint).
+    • provider_openai.go — uses OpenAI Go SDK.
+    • provider_anthropic.go — uses Anthropic Go SDK.
+    • provider_generic.go — for any OpenAI-compatible endpoint.
+
+9.2 Prompt Routing
+------------------
+    System prompt is dynamically constructed per request:
+
+    1. Base system prompt (hardcoded): Defines RenAI's role as a system
+       concierge. Constraints (never do X without approval, etc.).
+    2. User context: Who the user is, their role, their permissions.
+    3. Device context: Current state of all devices the user can access.
+    4. Skill context: Available skills (tool definitions) from built-in
+       + plugin skills.
+    5. Workflow context: Running workflows, recent activity (if
+       relevant to query).
+    6. Conversation history: Last N messages (configurable, default 20).
+
+    The prompt is assembled in `PromptBuilder` and cached for 5s
+    (since device state doesn't change faster than that).
+
+9.3 Memory
+----------
+    Short-term: Conversation history stored in ai_conversations table.
+    Retrieved on each chat request. Truncated to token budget (model-
+    dependent, typically 128K context, but we limit to 32K for latency).
+
+    Long-term (future): Vector embeddings of past conversations,
+    stored in pgvector. Retrieved via similarity search when context
+    is relevant. v2.0 feature.
+
+9.4 Planning Engine
+-------------------
+    For complex requests, RenAI uses ReAct (Reasoning + Acting) pattern.
+
+    Flow:
+    1. User request → system prompt + tools → AI response
+    2. AI can respond with:
+       a. Text message (clarifying question)
+       b. Tool call(s) (actions to execute)
+       c. Plan (multi-step tool call sequence)
+    3. If plan: present to user for approval.
+    4. On approval: execute plan step by step.
+    5. After each step: feed result back to AI for next step.
+
+    Plan structure:
+    ```json
+    {
+      "steps": [
+        { "tool": "execute_command", "params": { "device": "server-01", "command": "..." } },
+        { "tool": "execute_command", "params": { "device": "server-01", "command": "..." } },
+        { "tool": "send_notification", "params": { "title": "Done", "body": "..." } }
+      ]
+    }
+    ```
+
+9.5 Tool Execution
+------------------
+    Tools available to the AI are dynamically registered:
+
+    Built-in tools:
+    • execute_command(device, command, timeout)
+    • list_devices(filter)
+    • get_device_status(device)
+    • run_workflow(workflow_id, params)
+    • create_workflow(name, triggers, actions)
+    • send_notification(user_id, title, body)
+    • search_logs(query, device, time_range)
+    • read_secret(name, scope)  (audit logged, requires permission)
+    • list_automations(filter)
+    • get_automation_status(workflow_id)
+
+    Plugin tools: Plugins register tool definitions at install time.
+    These are injected into the system prompt.
+
+    Each tool call passes through:
+    1. Permission check (does user have permission for this action on
+       this target?)
+    2. Approval gate (is this action marked as requiring approval?)
+    3. Execution (via Command Bus, API, or plugin call)
+    4. Result capture (stdout, exit code, duration)
+
+9.6 Approval Workflow
+---------------------
+    Actions requiring approval:
+    • reboot, shutdown on any device
+    • delete operations
+    • format, mkfs, fdisk commands
+    • commands on devices the user hasn't interacted with before
+    • operations modifying system state (install, remove packages)
+    • actions costing money (cloud API calls)
+
+    Approval UI renders as a card in the chat:
+    ┌──────────────────────────────────────────────────────────────┐
+    │  ⚠ Restart server-01?                                       │
+    │                                                              │
+    │  This will interrupt:                                        │
+    │    • Minecraft server (3 players online)                    │
+    │    • Plex media server (1 stream)                           │
+    │    • Nightly backup (in progress, 60%)                      │
+    │                                                              │
+    │  [Approve Once]  [Always Allow for this action]  [Deny]    │
+    └──────────────────────────────────────────────────────────────┘
+
+    "Always Allow" stores an approval policy in the database:
+    user_id, action_pattern, target_pattern, expires_at.
+
+9.7 Execution Verification
+--------------------------
+    After each tool call, the result is fed back to the AI:
+
+    ```
+    Tool: execute_command
+    Args: { device: "desktop-01", command: "apt-get update" }
+    Result: { exit_code: 0, stdout: "Hit:1 ...", stderr: "", duration_ms: 3241 }
+    ```
+
+    The AI decides if the result matches the intent. If not, it can
+    retry, adjust, or report failure.
+
+    Verification is NOT automated (AI-dependent). The AI's confidence
+    in its verification is part of the response.
+
+9.8 Conversation Storage
+------------------------
+    Stored in ai_conversations table.
+
+    Messages array grows with each turn. After N messages (configurable,
+    default 50), older messages are summarized by the AI and replaced
+    with a summary token. This prevents unbounded growth.
+
+    Retention: 90 days (configurable). Cleanup job runs daily.
+
+9.9 Future AI Skills
+--------------------
+    Skills will follow this format:
+
+    ```yaml
+    name: disk-management
+    description: Advanced disk management operations
+    tools:
+      - name: list_disks
+        description: List all block devices
+        params: { device: string }
+      - name: create_partition
+        description: Create a new partition
+        params: { device: string, size_gb: number, filesystem: string }
+      - name: mount_disk
+        description: Mount a partition
+        params: { device: string, mount_point: string }
+    examples:
+      - prompt: "Create a 500GB ext4 partition on /dev/sdb and mount it to /mnt/data"
+        plan: [...]
+    ```
+
+    Skills are loaded from the database and injected as tool definitions
+    + system prompt enhancements. They can be:
+    • Built-in (shipped with Core)
+    • Plugin-provided (bundled with plugin)
+    • User-defined (custom YAML uploaded via UI)
+
+9.10 Model Switching
+---------------------
+    Provider configuration supports multiple models per provider.
+
+    Default model: configured in settings.
+    Fallback model: if default is unavailable, fall back to next
+    configured model.
+
+    Example:
+    ```yaml
+    ai:
+      default_model: ollama:llama3.1:70b
+      fallback_models:
+        - openai:gpt-4o-mini
+        - anthropic:claude-3-haiku
+    ```
+
+9.11 Local vs Cloud Execution
+-------------------------------
+    • User configures the provider order in settings.
+    • Local (Ollama) is tried first if configured and available.
+    • If local is unavailable or too slow, fallback to cloud providers
+      in configured order.
+    • Users can force a provider: "Ask GPT-4 to ..."
+    • Metrics track per-provider latency, availability, and cost.
+
+================================================================================
+CHAPTER 10 — SECURITY ENGINEERING
+================================================================================
+
+10.1 Authentication
+-------------------
+    User authentication:
+    • bcrypt(password) with cost 12.
+    • TOTP 2FA: Secret stored encrypted. Verification via
+      github.com/pquerna/otp/totp.
+    • OAuth2/OIDC: Support for external identity providers (Google,
+      GitHub, Azure AD, generic OIDC).
+    • Implementation: github.com/coreos/go-oidc/v3 for OIDC discovery.
+
+    Password policy:
+    • Minimum 8 characters.
+    • Must include 3 of: uppercase, lowercase, digit, symbol.
+    • Rate-limited: 5 attempts per IP per minute.
+    • Account lockout after 10 consecutive failures (30 min).
+
+10.2 Authorization (RBAC)
+--------------------------
+    Casbin (github.com/casbin/casbin) for policy enforcement.
+
+    Why Casbin:
+    • Supports ACL, RBAC, ABAC in one model.
+    • Policy stored in PostgreSQL adapter (casbin-pgx-adapter).
+    • Sub-second enforcement.
+    • Auditing built in.
+
+    Policy model (casbin.conf):
+    ```
+    [request_definition]
+    r = sub, obj, act
+
+    [policy_definition]
+    p = sub, obj, act, eft
+
+    [role_definition]
+    g = _, _
+
+    [matchers]
+    m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
+
+    [effects]
+    e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
+    ```
+
+    Built-in policies are seeded by migration. Custom roles are
+    stored in a `policies` table and loaded into Casbin on startup.
+
+10.3 JWT
+--------
+    Library: github.com/golang-jwt/jwt/v5
+
+    Access token:
+    ```json
+    {
+      "sub": "user-uuid",
+      "email": "alex@example.com",
+      "role": "admin",
+      "permissions": ["*"],
+      "iat": 1700000000,
+      "exp": 1700000900
+    }
+    ```
+    Signed with HMAC-SHA256 (HS256). 15-minute TTL.
+
+    Refresh token:
+    Opaque 256-bit random string. Stored as SHA-256 hash in sessions
+    table. 7-day TTL, rotation on use.
+
+10.4 Sessions
+-------------
+    • Session cookie: httpOnly, secure, SameSite=Strict, Path=/api/v1.
+    • Refresh token stored in cookie.
+    • Server-side session record in sessions table.
+    • Revocation: delete session from database.
+    • Max active sessions: 10 per user (oldest evicted).
+
+10.5 Encryption
+---------------
+    At rest:
+    • Database: encrypted at filesystem level (LUKS/dm-crypt recommended).
+    • Secrets column: AES-256-GCM with per-secret nonce.
+      Master key from RENOS_ENCRYPTION_KEY env var (auto-generated on
+      first boot, stored in database, encrypted with a KEK from env).
+
+    In transit:
+    • TLS 1.3 minimum. Cipher suites: TLS_AES_128_GCM_SHA256,
+      TLS_AES_256_GCM_SHA384.
+    • mTLS for agent ↔ Core and service ↔ service.
+
+    Key hierarchy:
+    ```
+    Master KEK (env var)
+        ↓ wraps
+    Data Encryption Key (DB, auto-generated)
+        ↓ encrypts
+    Individual secrets (AES-256-GCM per value)
+    ```
+
+10.6 Secret Storage
+--------------------
+    The secrets table stores:
+    • encrypted_value (BYTEA): AES-256-GCM encrypted
+    • Nonce stored alongside (first 12 bytes of encrypted_value)
+
+    Secret access:
+    1. Fetch encrypted value from DB.
+    2. Decrypt with master key.
+    3. Return plaintext to authorized caller.
+    4. Log audit entry: "secret.access" (not the value, just that it
+       was accessed and by whom).
+
+10.7 Zero Trust Implementation
+-------------------------------
+    1. Every request authenticated (JWT for users, cert for agents,
+       token for plugins).
+    2. No authenticated path can bypass authorization.
+    3. mTLS between all services.
+    4. Network segmentation: Core only listens on the Docker network;
+       reverse proxy (Caddy/Traefik) handles external TLS termination.
+    5. All internal traffic encrypted (even within Docker network).
+    6. Default deny: if no policy matches, request is denied.
+
+10.8 Device Identity
+---------------------
+    • X.509 certificates with Ed25519 keys.
+    • Certificate issued by RenCore internal CA.
+    • CA key: Ed25519, stored encrypted, backed up to MinIO.
+    • Certificate template:
+      ```
+      CN: device hostname
+      O: RenOS Devices
+      OU: device UUID (from database)
+      1.2.3.4.5.6.7.8: agent_version (custom OID)
+      NotBefore: now
+      NotAfter: now + 1 year
+      KeyUsage: digitalSignature, keyEncipherment
+      ExtKeyUsage: clientAuth
+      ```
+
+10.9 Certificate Management
+-----------------------------
+    • Auto-renewal: agent requests renewal 30 days before expiry.
+    • Renewal via gRPC stream: agent sends CSR, Core signs, returns
+      new cert.
+    • Revocation: Core publishes CRL. Agents check CRL on reconnect
+      (or on a 24h timer).
+    • Compromised device: admin revokes from UI → Core updates CRL →
+      agent's cert invalid on next reconnect → agent must re-enroll.
+
+10.10 Audit Log Implementation
+-------------------------------
+    Hash chain integrity:
+
+    Each audit entry's `prev_hash` is SHA-256 of the previous entry's
+    canonical JSON representation (sorted keys, no whitespace).
+
+    On write:
+    1. Serialize {timestamp, actor, action, target, details, prev_hash}
+       as canonical JSON.
+    2. Sign with Core's Ed25519 signing key.
+    3. Store signature in `signature` column.
+    4. Store previous entry's SHA-256 in `prev_hash`.
+
+    Verification:
+    ```
+    SELECT id, timestamp, actor_type, actor_id, action, details,
+           prev_hash, signature
+    FROM audits
+    ORDER BY timestamp
+    ```
+
+    For each entry, verify:
+    1. SHA-256(previous entry) == current.prev_hash
+    2. Verify(current_entry_canonical_json, signature, core_public_key)
+
+    Tampering with any entry invalidates all subsequent entries.
+    Verification job runs daily and alerts if chain is broken.
+
+10.11 RBAC Implementation
+--------------------------
+    Roles table:
+    ```sql
+    CREATE TABLE roles (
+        id   UUID PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL  -- admin | operator | developer | viewer | custom
+    );
+
+    CREATE TABLE role_permissions (
+        role_id    UUID REFERENCES roles(id) ON DELETE CASCADE,
+        resource   TEXT NOT NULL,     -- devices | users | workflows | plugins | audit | settings | secrets
+        action     TEXT NOT NULL,     -- create | read | update | delete | exec | install | manage
+        scope      TEXT DEFAULT '*',  -- specific ID, label selector, or *
+        PRIMARY KEY (role_id, resource, action, scope)
+    );
+
+    CREATE TABLE user_roles (
+        user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+        role_id    UUID REFERENCES roles(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, role_id)
+    );
+    ```
+
+10.12 Future Enterprise Support
+--------------------------------
+    • SAML 2.0 / SCIM for user provisioning (v2.0).
+    • Audit log shipping to SIEM (syslog, Splunk, Datadog).
+    • Just-in-time access requests with approval workflows.
+    • Session recording for compliance.
+    • Hardware security module (HSM) support for CA key.
+    • FIPS 140-2 mode.
+
+    These are designed as additive — the current architecture supports
+    all of them without refactoring.
+
+================================================================================
+CHAPTER 11 — OBSERVABILITY
+================================================================================
+
+11.1 Logging Architecture
+-------------------------
+    All components log structured JSON to stdout (Docker best practice).
+
+    Log format:
+    ```json
+    {
+      "timestamp": "2026-07-08T12:00:00.000Z",
+      "level": "info",
+      "service": "rencore",
+      "component": "api",
+      "message": "request completed",
+      "request_id": "req_abc123",
+      "method": "GET",
+      "path": "/api/v1/devices",
+      "status": 200,
+      "duration_ms": 42,
+      "user_id": "usr_xyz"
+    }
+    ```
+
+    Log levels per component:
+    • rencore: info (debug in development)
+    • renai: info (with request/response tokens logged)
+    • renflow: info (with workflow run IDs)
+    • agent: info (debug in development)
+
+11.2 Metrics
+------------
+    All metrics above (Chapter 2.5) plus:
+
+    Business metrics:
+    • renos_devices_total{status}
+    • renos_users_active
+    • renos_workflows_enabled_total
+    • renos_plugins_installed
+    • renos_ai_total_tokens{provider, direction}
+    • renos_ai_latency_ms{provider}
+
+    All metrics are counters or histograms. No gauges (prefer explicit
+    pushes).
+
+11.3 Tracing
+------------
+    v1: No distributed tracing. Use correlation IDs (request_id) to
+    trace across log lines.
+
+    v2: OpenTelemetry with Jaeger/Zipkin for distributed traces.
+    Instrumentation: OpenTelemetry Go SDK auto-instrumentation.
+
+    Trace propagation: W3C Trace Context (traceparent header).
+
+11.4 Dashboards
+---------------
+    Grafana dashboards packaged in repository:
+    • System Overview: CPU, RAM, disk for Core container; agent counts
+    • API Performance: request rate, latency p50/p95/p99, error rate
+    • Agent Health: connected agents, heartbeat latency, command latency
+    • Workflow Performance: runs/minute, success rate, duration p50/p95
+    • AI Performance: request rate, latency, token usage, cost (cloud)
+    • Audit: audit entry rate, anomaly detection (unusual patterns)
+
+    Dashboard JSON in docs/operations/grafana/.
+
+11.5 Alerting
+-------------
+    Prometheus rules + Alertmanager:
+
+    Critical (page on-call):
+    • Core down (no metrics for 5m)
+    • Agent disconnection spike (>50% disconnected)
+    • Database connection pool exhausted
+    • Audit hash chain broken
+
+    Warning (notify in Slack/Discord):
+    • Device offline > 24h
+    • Command failure rate > 5%
+    • Workflow failure rate > 10%
+    • Disk usage > 85%
+    • API latency p99 > 500ms
+
+    Info (daily digest):
+    • New devices enrolled
+    • Plugin updates available
+    • Certificate expiry < 30 days
+
+11.6 Performance Monitoring
+---------------------------
+    Continuous profiling with pyroscope (or pprof endpoints):
+
+    Core exposes /debug/pprof/ (Go standard profiler).
+    In production, pprof enabled only on internal port.
+
+    CPU profile, heap profile, goroutine profile, mutex profile.
+
+11.7 Crash Reporting
+---------------------
+    Sentry for error tracking:
+    • Go: github.com/getsentry/sentry-go
+    • Rust: sentry crate
+    • Frontend: @sentry/nextjs
+
+    Sentry events triggered on:
+    • Uncaught panics
+    • Unexpected 500 errors
+    • Agent crashes
+    • Auth failures (repeated)
+
+11.8 Diagnostics
+----------------
+    Admin CLI command: renos-core diagnostics
+    Outputs:
+    • Version info
+    • Database connectivity + latency
+    • NATS connectivity + subject stats
+    • Connected agents (count, list)
+    • Goroutine count
+    • Memory usage (heap alloc, sys)
+    • Open file descriptors
+    • Last N audit entries (for verification)
+
+11.9 Health Scoring
+-------------------
+    Device health score algorithm:
+    Base: 100 points
+    Deductions:
+    • CPU > 80%: -10 points
+    • RAM > 80%: -10 points
+    • Disk > 80%: -10 points (per disk, max -20)
+    • Temperature > 75°C: -15 points
+    • Offline > 5m: -20 points
+    • Offline > 1h: -40 points
+    • Unusual process count (>2σ from baseline): -10 points
+    • Failed commands this hour (per failed): -5
+
+    Minimum score: 0.
+
+    Display: green (90-100), yellow (70-89), red (<70).
+
+================================================================================
+CHAPTER 12 — TESTING STRATEGY
+================================================================================
+
+12.1 Test Pyramid
+-----------------
+    ┌──────────────────────────┐
+    │    E2E (5%)              │  Playwright (frontend)
+    │  Integration (25%)       │  testcontainers-go (backend)
+    │  Unit (70%)              │  Go stdlib testing + Rust cargo test
+    └──────────────────────────┘
+
+12.2 Unit Testing
+-----------------
+    Go:
+    • Standard library `testing` + `testify/assert`.
+    • All exposed functions tested.
+    • Mock interfaces for external dependencies (database, NATS, AI).
+    • Mock generation: mockgen (Go) or manual interface mocks.
+    • Table-driven tests for logic-heavy functions.
+    • Test coverage target: 80%+ for internal packages.
+
+    Rust:
+    • `#[cfg(test)] mod tests` in every module.
+    • Integration tests in `/tests/` directory.
+    • Property-based testing with `proptest` for critical parsers.
+    • Test coverage target: 85%+ for core modules.
+
+    Frontend:
+    • vitest + @testing-library/react for component tests.
+    • MSW (Mock Service Worker) for API mocking.
+    • Storybook for visual regression testing (chromatic).
+
+12.3 Integration Testing
+------------------------
+    Go (testcontainers-go):
+    • Spins up PostgreSQL, Redis, NATS containers.
+    • Tests against real dependencies.
+    • API integration tests: start Core, call REST endpoints, verify
+      database state.
+
+    Rust:
+    • Integration tests connect to a test Core instance.
+    • Tests for enrollment flow, heartbeat, command execution.
+
+    Frontend:
+    • Cypress/Playwright component tests.
+    • MSW for API mocking.
+
+12.4 End-to-End Testing
+------------------------
+    Playwright:
+    • Full flow: setup → login → enroll device → execute command →
+      view logs.
+    • AI chat flow: send message → see plan → approve → see result.
+    • Workflow flow: create workflow → trigger → view execution.
+    • Cross-browser: Chromium, Firefox, WebKit.
+    • Mobile viewport testing.
+
+    Test infrastructure:
+    • Docker Compose with test fixtures.
+    • One-time enrollment token pre-seeded.
+    • Test agent container (lightweight RenAgent in Docker).
+
+12.5 Performance Testing
+-------------------------
+    k6 (Grafana k6):
+    • API load test: 100 concurrent users, mixed read/write.
+    • WebSocket test: 500 concurrent connections.
+    • Command dispatch test: 50 commands/second to 100 agents.
+    • Workflow execution test: 10 parallel workflows, 20 nodes each.
+    • AI chat test: 10 concurrent chat sessions.
+
+    Targets:
+    • p95 API latency < 200ms.
+    • WebSocket reconnection < 1s.
+    • Command dispatch latency < 100ms (Core to agent).
+    • Workflow node overhead < 50ms.
+
+12.6 Load Testing
+-----------------
+    • Long-duration tests (4h) with steady load to detect memory leaks.
+    • Stress test: 10x normal load for 15 minutes.
+    • Soak test: sustained load for 24h.
+    • Metrics: CPU, RAM, goroutine count, open connections, GC pressure.
+
+12.7 Chaos Testing
+------------------
+    • Kill Core process → verify agent reconnects, queued commands
+      execute.
+    • Kill database → verify graceful degradation (cached responses).
+    • Kill NATS → verify in-flight commands complete, queue rebuilds.
+    • Network partition → verify agents go offline, recover when
+      network restored.
+    • Random agent crash → verify auto-restart, no duplicate commands.
+
+    Tool: Chaos Mesh (Kubernetes) or custom shell scripts (Docker).
+
+12.8 Security Testing
+---------------------
+    • Static analysis: Semgrep (CI), CodeQL (GitHub).
+    • Dependency scanning: Dependabot + Trivy.
+    • Secrets scanning: GitLeaks (pre-commit hook).
+    • Dynamic analysis (v2.0+): OWASP ZAP against test deployment.
+    • Penetration testing (pre-v1.0): external security audit.
+
+    Monthly dependency audit for critical vulnerabilities.
+
+12.9 CI Validation
+------------------
+    Every PR:
+    1. Lint (golangci-lint, clippy, eslint).
+    2. TypeScript type check (tsc --noEmit).
+    3. Unit tests (go test, cargo test, vitest).
+    4. Build (go build, cargo build, next build).
+    5. Security scan (Trivy on dependencies).
+    6. Docker image build.
+
+    On merge to dev:
+    1. All of above.
+    2. Integration tests with testcontainers.
+    3. E2E tests (Playwright).
+    4. Performance regression check (k6 baseline comparison).
+
+    On release tag:
+    1. All of above.
+    2. Full E2E test suite.
+    3. Load test.
+    4. Security scan (full Trivy + CodeQL).
+    5. Image signing (cosign).
+
+================================================================================
+CHAPTER 13 — CI/CD
+================================================================================
+
+13.1 GitHub Actions
+-------------------
+    Workflows in .github/workflows/:
+
+    ci.yml — PR validation (lint, test, build, security)
+    integration.yml — Integration tests on merge to dev
+    e2e.yml — E2E tests on merge to dev
+    performance.yml — Performance regression on merge to dev
+    release.yml — Release pipeline on tag push
+    nightly.yml — Nightly full test suite + load test
+    security.yml — Weekly dependency scan
+
+13.2 Docker Builds
+-------------------
+    Multi-stage builds for each component:
+
+    Core (Go):
+    ```
+    # Build stage
+    FROM golang:1.23-alpine AS builder
+    WORKDIR /src
+    COPY core/ .
+    RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o renos-core ./cmd/renos-core
+
+    # Runtime stage
+    FROM alpine:3.20
+    RUN apk add --no-cache ca-certificates tzdata
+    COPY --from=builder /src/renos-core /usr/local/bin/
+    EXPOSE 8443
+    ENTRYPOINT ["renos-core"]
+    ```
+
+    Agent (Rust):
+    ```
+    FROM rust:1.80-alpine AS builder
+    WORKDIR /src
+    COPY agent/ .
+    RUN cargo build --release --target x86_64-unknown-linux-musl
+
+    FROM alpine:3.20
+    COPY --from=builder /src/target/x86_64-unknown-linux-musl/release/renos-agent /usr/local/bin/
+    ENTRYPOINT ["renos-agent"]
+    ```
+
+    Hub (Next.js):
+    Standard Next.js Dockerfile with standalone output mode.
+
+    Images tagged:
+    • ghcr.io/renos-project/renos-core:latest
+    • ghcr.io/renos-project/renos-core:v0.1.0
+    • ghcr.io/renos-project/renos-core:sha-abc1234
+
+13.3 Linting
+------------
+    Go: golangci-lint (goconfig, errcheck, govet, staticcheck, revive)
+    Rust: clippy (warnings as errors)
+    TypeScript/React: eslint + prettier + @typescript-eslint
+    All: editorconfig
+
+    Config files at repository root:
+    .golangci.yml, .clippy.toml, .eslintrc.json, .prettierrc, .editorconfig
+
+13.4 Formatting
+---------------
+    Go: gofmt (enforced in CI — PR fails if not formatted)
+    Rust: rustfmt (enforced)
+    TypeScript: prettier (enforced)
+    SQL: pg_format (recommended, not enforced)
+    YAML: yamllint
+
+13.5 Static Analysis
+--------------------
+    Go: go vet, staticcheck
+    Rust: cargo check, cargo clippy
+    TypeScript: tsc --noEmit
+    All: Semgrep rules in .semgrep/
+
+13.6 Dependency Scanning
+------------------------
+    • Dependabot (GitHub native) for Go, Rust, npm.
+    • Trivy in CI for container image scanning.
+    • Schedules: daily for critical, weekly for all.
+    • Auto-approve patch-level updates (minor and major require human
+      review).
+
+13.7 Release Pipeline
+----------------------
+    On tag v*:
+    1. Run full CI suite.
+    2. Build all Docker images.
+    3. Sign images with cosign (keyless via GitHub OIDC).
+    4. Push to GitHub Container Registry.
+    5. Generate release notes from conventional commits.
+    6. Create GitHub Release.
+    7. Deploy to staging for smoke tests.
+    8. Mark release as "ready" in GitHub UI.
+
+    Release candidates: tagged as v0.1.0-rc.1 (skip deployment).
+
+13.8 Automatic Changelogs
+--------------------------
+    Generated from conventional commits using git-cliff or
+    github-changelog-generator.
+
+    Format:
+    ```
+    # v0.1.0 — "Nova"
+
+    ## Features
+    - feat(core): device enrollment with mTLS (#42)
+    - feat(agent): command execution with streaming output (#38)
+
+    ## Bug Fixes
+    - fix(agent): reconnect backoff jitter (#45)
+
+    ## Breaking Changes
+    - None
+
+    ## What's Changed
+    Full changelog: v0.0.1...v0.1.0
+    ```
+
+13.9 Container Publishing
+--------------------------
+    • GitHub Container Registry (ghcr.io).
+    • Images signed with cosign.
+    • SBOM generated with syft (attached to release).
+    • Vulnerability scan results published alongside images.
+
+================================================================================
+CHAPTER 14 — CODING STANDARDS
+================================================================================
+
+14.1 Naming Conventions
+-----------------------
+    Go:
+    • Packages: lowercase, single word. No underscores. No mixed caps.
+      (e.g., `auth`, `device`, `renflow`)
+    • Files: snake_case.go (e.g., `device_registry.go`)
+    • Types: PascalCase (e.g., `DeviceRegistry`)
+    • Functions: camelCase for private, PascalCase for exported
+    • Constants: PascalCase (e.g., `DefaultTimeout`)
+    • Variables: camelCase (e.g., `deviceCount`); single-letter only in
+      tight loops
+    • Interfaces: end with -er when possible (e.g., `Storer`, `Logger`)
+
+    Rust:
+    • Files: snake_case.rs
+    • Types: PascalCase
+    • Functions: snake_case
+    • Constants: SCREAMING_SNAKE_CASE
+    • Variables: snake_case
+
+    TypeScript/React:
+    • Files: kebab-case.tsx (components), kebab-case.ts (utilities)
+    • Components: PascalCase
+    • Hooks: useCamelCase
+    • Functions: camelCase
+    • Constants: SCREAMING_SNAKE_CASE
+    • Types/Interfaces: PascalCase (prefix interfaces with I? No — do not
+      use I-prefix. `UserResponse` not `IUserResponse`)
+
+    SQL:
+    • Tables: snake_case, plural (e.g., `users`, `device_tags`)
+    • Columns: snake_case, singular (e.g., `device_id`, `created_at`)
+    • Indexes: idx_{table}_{column(s)}
+    • Constraints: chk_{table}_{description}
+    • Foreign keys: fk_{child}_{parent}
+
+14.2 Folder Conventions
+-----------------------
+    Go:
+    • `internal/` — not importable by external modules
+    • `pkg/` — importable, only if external consumers need it
+    • `cmd/` — binary entrypoints (one subdirectory per binary)
+    • One package per directory. No nested packages in the same
+      directory.
+
+    Rust:
+    • `src/` — library crate
+    • `src/bin/` — multiple binary entrypoints
+    • `src/main.rs` — single binary entrypoint
+    • Tests in `tests/` for integration tests.
+
+    Next.js:
+    • `app/` — App Router pages
+    • `components/` — all React components
+    • `lib/` — non-React code (API client, utils)
+    • `hooks/` — custom React hooks
+    • `stores/` — Zustand stores
+    • `types/` — shared TypeScript types
+
+14.3 Comments
+-------------
+    Go:
+    • Every exported type, function, constant, and variable MUST have a
+      doc comment.
+    • Doc comments are complete sentences ending with period.
+    • "Why" comments for non-obvious logic. NOT "what" comments (the
+      code says what).
+    • No commented-out code.
+
+    Rust:
+    • `///` doc comments on all public items.
+    • `//` inline comments for non-obvious logic.
+
+    TypeScript:
+    • JSDoc for exported functions and complex types.
+    • Inline comments for non-obvious logic.
+
+14.4 Documentation
+------------------
+    • Every public API endpoint documented in docs/api/.
+    • Every database migration documented with purpose in comment at top
+      of SQL file.
+    • Architecture Decision Records (ADRs) in docs/architecture/ for any
+      significant decision.
+    • README.md at repository root with: what, why, how to run, how to
+      contribute.
+
+14.5 Commit Message Format
+---------------------------
+    ```
+    type(scope): description
+
+    [optional body explaining WHY]
+
+    [optional footer: BREAKING CHANGE, Closes #123]
+    ```
+
+    Types: feat, fix, refactor, test, docs, chore, security, perf
+    Scope: core, agent, hub, proto, ci, deps
+
+    Examples:
+    ```
+    feat(core): add device enrollment with mTLS support
+
+    Devices now enroll via a one-time token that triggers CSR generation
+    and certificate signing. Closes #42.
+
+    feat(agent): implement command execution with streaming output
+
+    fix(agent): correct reconnect backoff jitter calculation
+
+    docs: add ADR-007 for plugin sandbox architecture
+    ```
+
+14.6 Pull Request Requirements
+-------------------------------
+    • Title follows conventional commit format.
+    • Description explains WHAT and WHY (not HOW).
+    • References related issues: "Closes #123".
+    • Screenshots for UI changes.
+    • Checklist:
+      - [ ] Tests added/updated
+      - [ ] Documentation updated
+      - [ ] Changelog entry added
+      - [ ] Breaking changes noted
+    • At least 1 approval from CODEOWNERS.
+    • All CI checks pass.
+
+    PR size limit: prefer <400 lines changed. Large changes should be
+    split into stacked PRs.
+
+14.7 Architecture Decision Records (ADR)
+-----------------------------------------
+    Stored in docs/architecture/ as numbered markdown files:
+
+    ```
+    001-adopt-go-for-core.md
+    002-adopt-rust-for-agent.md
+    003-monorepo-decision.md
+    ```
+
+    Template:
+    ```markdown
+    # ADR-001: Adopt Go for RenOS Core
+
+    ## Status
+    Accepted
+
+    ## Context
+    [Why this decision was needed]
+
+    ## Decision
+    [What was decided]
+
+    ## Consequences
+    [Trade-offs, what becomes easier, what becomes harder]
+
+    ## Alternatives Considered
+    [Rust, TypeScript, C# — with brief reasoning for rejection]
+    ```
+
+    ADRs are used for any decision that:
+    • Has significant architectural impact
+    • Is irreversible or costly to reverse
+    • Has meaningful trade-offs worth recording
+
+14.8 Code Review Process
+-------------------------
+    1. Author opens PR.
+    2. CI runs automatically.
+    3. Author assigns reviewers (from CODEOWNERS).
+    4. Reviewers read code, leave comments.
+    5. Author addresses comments (push changes or reply with rationale).
+    6. All threads resolved.
+    7. Reviewer approves.
+    8. Author merges (squash-merge to dev).
+
+    Review expectations:
+    • Review within 24 hours (core hours).
+    • Focus on correctness, security, maintainability.
+    • Style nits use a bot (golangci-lint, prettier) — not humans.
+    • Be respectful. Question assumptions, not people.
+
+================================================================================
+CHAPTER 15 — FUTURE EVOLUTION
+================================================================================
+
+15.1 Desktop Environment (Future)
+---------------------------------
+    RenOS can evolve into a desktop environment by:
+
+    • RenAgent becomes a system daemon (replacing dbus/systemd user
+      services for device management).
+    • RenHub runs as a native desktop app (Tauri wrapper around PWA)
+      with system tray integration, global shortcuts, native
+      notifications.
+    • AI assistant becomes a desktop overlay (Raycast-like global
+      search that works system-wide).
+    • Device management becomes part of the OS settings panel.
+
+    Required changes to today's architecture:
+    • Agent needs display server integration (wayland protocol
+      extensions or X11).
+    • Core needs to run as a user service (not just Docker).
+    • No architectural rewrite — additive.
+
+15.2 Installable Linux Distribution (Future)
+--------------------------------------------
+    RenOS Linux: An immutable Linux distribution where:
+
+    • RenOS Core IS the package manager (declarative system config).
+    • RenAgent IS the device management daemon (built-in, not installed).
+    • File system: read-only root (ostree + squashfs), writable
+      /var and /etc.
+    • A/B partition scheme for atomic updates.
+    • System image built with mkosi or Image Builder.
+
+    Current architecture readiness:
+    • The gRPC agent protocol already supports self-update and
+      configuration management.
+    • The plugin system would become the native app installation
+      mechanism (snap/flatpak alternative).
+    • RenFlow would become the system automation layer (replace cron,
+      systemd timers, anacron).
+    • The declarative config model extends naturally to OS-level config
+      (users, network, services).
+
+    New components needed:
+    • Image build pipeline (custom Linux kernel + initramfs + Core).
+    • First-boot wizard (already partially exists in account setup).
+    • Hardware detection / driver management.
+
+15.3 Operating System (Bare Metal + Kernel Level)
+--------------------------------------------------
+    RenOS could eventually include kernel-level features:
+
+    • Custom Linux kernel with RenOS-specific drivers.
+    • eBPF programs for kernel-level device monitoring (Agent collects
+      eBPF metrics).
+    • Measured boot with TPM 2.0 integration (attestation of device
+      identity at kernel level).
+    • Kernel lockdown mode.
+
+    Current architecture readiness:
+    • The agent's Rust codebase can interface with eBPF via
+      libbpf-rs or aya.
+    • The attestation model (signed audit chain) extends to kernel
+      boot measurements.
+    • The plugin system's WASM sandbox could extend to kernel modules.
+
+15.4 Enterprise Platform (Future)
+---------------------------------
+    RenOS for enterprise:
+
+    • Multi-team / organization support (already designed in RBAC).
+    • SCIM provisioning (Okta, Azure AD).
+    • SIEM integration (Splunk, Datadog, Elastic).
+    • Compliance reporting (SOC2, HIPAA, FedRAMP).
+    • SLA monitoring and uptime reporting.
+    • Billing and usage metering (SaaS offering).
+
+    Current architecture readiness:
+    • Modular monolith separates cleanly into microservices.
+    • NATS for event-driven integration with external systems.
+    • Hash-chain audit log meets compliance requirements.
+    • Plugin system allows custom integration modules.
+
+15.5 Cloud Platform (Future)
+----------------------------
+    RenOS Cloud:
+
+    • Managed RenOS offering (SaaS).
+    • Edge device mesh spanning multiple datacenters.
+    • Device management at scale (10,000+ devices).
+    • Multi-region Core deployment with NATS super-cluster.
+    • Global agent routing.
+
+    Current architecture readiness:
+    • NATS super-cluster supports multi-region out of the box.
+    • The device registry schema supports organization scoping.
+    • The gRPC agent protocol is efficient enough for WAN links.
+    • The AI provider layer supports cloud-native AI.
+
+15.6 What Does NOT Need to Change
+----------------------------------
+    These decisions survive all future evolutions:
+
+    • gRPC agent protocol (mTLS, bidirectional streaming).
+    • Hash-chain audit log.
+    • RBAC + Casbin policy model.
+    • Plugin format (.rpk with manifest + signature).
+    • NATS event bus.
+    • PostgreSQL as source of truth.
+    • AI provider abstraction layer.
+    • Workflow DAG model (RenFlow).
+
+    The team in 10 years should be able to read today's specification
+    and recognize the same architectural bones.
+
+================================================================================
+END OF ENGINEERING SPECIFICATION
+================================================================================
