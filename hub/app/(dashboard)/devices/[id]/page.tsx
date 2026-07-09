@@ -3,11 +3,16 @@
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useDevice } from "@/hooks/use-devices";
+import { useContainers } from "@/hooks/use-containers";
 import { HealthScore } from "@/components/devices/health-score";
 import { DeviceMetrics } from "@/components/devices/device-metrics";
 import { SafeCommands } from "@/components/devices/safe-commands";
 import { CommandHistory } from "@/components/devices/command-history";
 import { DeviceContainers } from "@/components/devices/device-containers";
+import { DockerSummaryCard } from "@/components/devices/device-docker-summary";
+import { DockerImages } from "@/components/devices/device-docker-images";
+import { DockerVolumes } from "@/components/devices/device-docker-volumes";
+import { DockerNetworks } from "@/components/devices/device-docker-networks";
 import { EmptyState } from "@/components/devices/empty-state";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
@@ -16,6 +21,10 @@ export default function DeviceDetailPage() {
   const router = useRouter();
   const { data, isLoading, error } = useDevice(id);
   const device = data?.device ?? null;
+  const { data: containersData } = useContainers(id);
+  const containers = containersData?.containers ?? [];
+  const containerCount = containers.length;
+  const runningCount = containers.filter(c => c.state === "running").length;
 
   if (isLoading) {
     return (
@@ -101,6 +110,10 @@ export default function DeviceDetailPage() {
 
           <DeviceContainers deviceId={device.id} />
 
+          <DockerImages deviceId={device.id} />
+          <DockerVolumes deviceId={device.id} />
+          <DockerNetworks deviceId={device.id} />
+
           {device.status === "online" && (
             <SafeCommands deviceId={device.id} />
           )}
@@ -130,6 +143,14 @@ export default function DeviceDetailPage() {
         </div>
 
         <div className="space-y-4">
+          <DockerSummaryCard
+            containerCount={containerCount}
+            runningCount={runningCount}
+            imageCount={0}
+            volumeCount={0}
+            networkCount={0}
+          />
+
           <div className="card">
             <h2 className="text-headline-4 text-[var(--color-text-primary)] mb-3">Health Score</h2>
             <div className="flex items-center justify-center py-4">

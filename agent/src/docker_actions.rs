@@ -103,31 +103,29 @@ pub async fn submit_result(
     Ok(())
 }
 
-pub fn execute_action(action: &str, container_id: &str) -> (i32, String, String) {
-    if !docker::is_installed() {
-        return (1, String::new(), "docker not installed on this device".to_string());
-    }
-
-    let result = match action {
-        "start" => Command::new("docker")
-            .args(["start", container_id])
-            .output(),
-        "stop" => Command::new("docker")
-            .args(["stop", container_id])
-            .output(),
-        "restart" => Command::new("docker")
-            .args(["restart", container_id])
-            .output(),
-        _ => return (1, String::new(), format!("unknown action: {action}")),
-    };
-
-    match result {
+fn run_docker_command(args: &[&str]) -> (i32, String, String) {
+    match Command::new("docker").args(args).output() {
         Ok(output) => {
             let exit_code = output.status.code().unwrap_or(1);
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             (exit_code, stdout, stderr)
         }
-        Err(e) => (1, String::new(), format!("failed to execute docker {action}: {e}")),
+        Err(e) => (1, String::new(), format!("failed to execute docker: {e}")),
+    }
+}
+
+pub fn execute_action(action: &str, container_id: &str) -> (i32, String, String) {
+    if !docker::is_installed() {
+        return (1, String::new(), "docker not installed on this device".to_string());
+    }
+
+    match action {
+        "start" => run_docker_command(&["start", container_id]),
+        "stop" => run_docker_command(&["stop", container_id]),
+        "restart" => run_docker_command(&["restart", container_id]),
+        "logs" => run_docker_command(&["logs", "--tail", "200", container_id]),
+        "stats" => run_docker_command(&["stats", "--no-stream", "--no-trunc", container_id]),
+        _ => (1, String::new(), format!("unknown action: {action}")),
     }
 }

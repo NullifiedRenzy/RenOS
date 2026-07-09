@@ -1,4 +1,10 @@
-import type { LoginResponse, ListDevicesResponse, DeviceDetailResponse, CommandResponse, ListCommandsResponse, ListContainersResponse, ContainerActionResponse, ApiErrorBody } from "@/lib/types";
+import type {
+  LoginResponse, ListDevicesResponse, DeviceDetailResponse,
+  CommandResponse, ListCommandsResponse,
+  ListContainersResponse, ContainerActionResponse,
+  ListDockerImagesResponse, ListDockerVolumesResponse, ListDockerNetworksResponse,
+  ApiErrorBody,
+} from "@/lib/types";
 
 const API_BASE = "/api/v1";
 
@@ -105,6 +111,18 @@ class ApiClient {
 
   async requestContainerAction(deviceId: string, containerId: string, action: string): Promise<ContainerActionResponse> {
     return this.request<ContainerActionResponse>("POST", `/devices/${deviceId}/containers/${containerId}/${action}`);
+  }
+
+  async listDockerImages(deviceId: string): Promise<ListDockerImagesResponse> {
+    return this.request<ListDockerImagesResponse>("GET", `/devices/${deviceId}/docker-images`);
+  }
+
+  async listDockerVolumes(deviceId: string): Promise<ListDockerVolumesResponse> {
+    return this.request<ListDockerVolumesResponse>("GET", `/devices/${deviceId}/docker-volumes`);
+  }
+
+  async listDockerNetworks(deviceId: string): Promise<ListDockerNetworksResponse> {
+    return this.request<ListDockerNetworksResponse>("GET", `/devices/${deviceId}/docker-networks`);
   }
 }
 

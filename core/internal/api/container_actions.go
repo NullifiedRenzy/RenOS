@@ -20,8 +20,8 @@ func requestContainerActionHandler(actions *db.ContainerActionRepository, device
 			return
 		}
 
-		if action != "start" && action != "stop" && action != "restart" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "action must be start, stop, or restart")
+		if action != "start" && action != "stop" && action != "restart" && action != "logs" && action != "stats" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "action must be start, stop, restart, logs, or stats")
 			return
 		}
 

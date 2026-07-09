@@ -24,6 +24,9 @@ type Dependencies struct {
 	Commands         *db.CommandRepository
 	Containers       *db.ContainerRepository
 	ContainerActions *db.ContainerActionRepository
+	DockerImages     *db.DockerImageRepository
+	DockerVolumes    *db.DockerVolumeRepository
+	DockerNetworks   *db.DockerNetworkRepository
 	Audits           *db.AuditRepository
 	AdminID          string
 	Hub              *ws.Hub
@@ -53,6 +56,9 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/commands/pending", pendingCommandsHandler(deps.Commands, deps.Devices))
 		r.Post("/commands/{cmdId}/result", submitResultHandler(deps.Commands, deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/devices/{id}/containers", syncContainersHandler(deps.Containers, deps.Devices))
+		r.Post("/devices/{id}/docker-images", syncDockerImagesHandler(deps.DockerImages, deps.Devices))
+		r.Post("/devices/{id}/docker-volumes", syncDockerVolumesHandler(deps.DockerVolumes, deps.Devices))
+		r.Post("/devices/{id}/docker-networks", syncDockerNetworksHandler(deps.DockerNetworks, deps.Devices))
 		r.Post("/container-actions/pending", pendingContainerActionsHandler(deps.ContainerActions, deps.Devices))
 		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 
@@ -68,6 +74,9 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 				r.Get("/{cmdId}", getCommandHandler(deps.Commands))
 			})
 			r.Get("/{id}/containers", listContainersHandler(deps.Containers))
+			r.Get("/{id}/docker-images", listDockerImagesHandler(deps.DockerImages))
+			r.Get("/{id}/docker-volumes", listDockerVolumesHandler(deps.DockerVolumes))
+			r.Get("/{id}/docker-networks", listDockerNetworksHandler(deps.DockerNetworks))
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		})
 	})

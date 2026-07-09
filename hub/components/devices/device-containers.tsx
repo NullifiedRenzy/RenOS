@@ -36,6 +36,65 @@ function RefreshIcon() {
   );
 }
 
+function formatPorts(ports: string): string {
+  if (!ports || ports === "—") return "—";
+  return ports.split(", ").join(", ");
+}
+
+interface PortsPopupProps {
+  ports: string;
+}
+
+function PortsDisplay({ ports }: PortsPopupProps) {
+  if (!ports || ports === "—") return <span className="text-body-small text-[var(--color-text-tertiary)]">—</span>;
+
+  const entries = ports.split(", ").filter(Boolean);
+  if (entries.length === 0) return <span className="text-body-small text-[var(--color-text-tertiary)]">—</span>;
+
+  return (
+    <div className="text-body-small text-[var(--color-text-secondary)]">
+      {entries.length <= 2 ? (
+        formatPorts(ports)
+      ) : (
+        <span title={entries.join(", ")}>
+          {entries[0]}, {entries[1]}, +{entries.length - 2} more
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface ActionOutputModalProps {
+  title: string;
+  output: string;
+  error: string;
+  exitCode: number | null;
+  onClose: () => void;
+}
+
+function ActionOutputModal({ title, output, error, exitCode, onClose }: ActionOutputModalProps) {
+  const isError = exitCode !== 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-[var(--color-surface)] rounded-md shadow-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
+          <h3 className="text-body font-medium text-[var(--color-text-primary)]">{title}</h3>
+          <button className="btn-ghost p-1 text-body-small" onClick={onClose}>&#10005;</button>
+        </div>
+        <pre className="p-4 overflow-auto text-body-small font-mono text-[var(--color-text-primary)] whitespace-pre-wrap flex-1">
+          {isError && error ? error : output || "(empty output)"}
+        </pre>
+        {exitCode !== null && (
+          <div className="px-4 pb-3 text-caption text-[var(--color-text-tertiary)]">
+            Exit code: {exitCode}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface DeviceContainersProps {
   deviceId: string;
 }
@@ -47,6 +106,7 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
 
   const [pendingStopCheck, setPendingStopCheck] = useState<string | null>(null);
   const [restartWarning, setRestartWarning] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{ title: string; output: string; error: string; exitCode: number | null } | null>(null);
 
   const isActionPending = action.isPending;
   const actionTarget = action.variables ?? null;
@@ -54,6 +114,8 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
   const canStart = (state: string) => ["exited", "created", "paused"].includes(state.toLowerCase());
   const canStop = (state: string) => ["running"].includes(state.toLowerCase());
   const canRestart = (state: string) => ["running"].includes(state.toLowerCase());
+  const canLogs = (state: string) => ["running", "exited"].includes(state.toLowerCase());
+  const canStats = (state: string) => ["running"].includes(state.toLowerCase());
 
   useEffect(() => {
     if (!pendingStopCheck) return;
@@ -66,14 +128,24 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
     setPendingStopCheck(null);
   }, [data, pendingStopCheck]);
 
-  const handleAction = (containerId: string, actionType: string) => {
+  const handleAction = (containerId: string, actionType: string, containerName: string) => {
     setRestartWarning(null);
+    setActionResult(null);
     action.mutate(
       { containerId, action: actionType },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           if (actionType === "stop") {
             setPendingStopCheck(containerId);
+          }
+          if (actionType === "logs" || actionType === "stats") {
+            const act = result.container_action;
+            setActionResult({
+              title: `${actionType === "logs" ? "Logs" : "Stats"} — ${containerName}`,
+              output: act.output ?? "",
+              error: act.error ?? "",
+              exitCode: act.exit_code,
+            });
           }
         },
       },
@@ -128,7 +200,7 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
         </p>
       )}
 
-      {action.isSuccess && !restartWarning && (
+      {action.isSuccess && !restartWarning && !actionResult && (
         <p className="text-body-small text-[var(--color-success)] mb-3">
           Action completed successfully.
         </p>
@@ -154,14 +226,18 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
             </thead>
             <tbody>
               {containers.map((c: Container) => {
-                const isLoadingContainer =
+                const isPerformingAction =
                   isActionPending && actionTarget?.containerId === c.container_id;
                 const isStopping =
-                  isLoadingContainer && actionTarget?.action === "stop";
+                  isPerformingAction && actionTarget?.action === "stop";
                 const isStarting =
-                  isLoadingContainer && actionTarget?.action === "start";
+                  isPerformingAction && actionTarget?.action === "start";
                 const isRestarting =
-                  isLoadingContainer && actionTarget?.action === "restart";
+                  isPerformingAction && actionTarget?.action === "restart";
+                const isFetchingLogs =
+                  isPerformingAction && actionTarget?.action === "logs";
+                const isFetchingStats =
+                  isPerformingAction && actionTarget?.action === "stats";
 
                 return (
                   <tr key={c.id} className="border-b border-[var(--color-border)] last:border-b-0">
@@ -179,8 +255,8 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
                         </span>
                       </span>
                     </td>
-                    <td className="py-2 pr-3 text-body-small text-[var(--color-text-secondary)] hidden md:table-cell">
-                      {c.ports || "—"}
+                    <td className="py-2 pr-3 text-body-small hidden md:table-cell">
+                      <PortsDisplay ports={c.ports} />
                     </td>
                     <td className="py-2 text-body-small">
                       <span className="inline-flex items-center gap-1">
@@ -188,7 +264,7 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
                           <button
                             className="btn-ghost text-caption px-2 py-0.5"
                             disabled={isActionPending}
-                            onClick={() => handleAction(c.container_id, "start")}
+                            onClick={() => handleAction(c.container_id, "start", c.name)}
                           >
                             {isStarting ? "Starting…" : "Start"}
                           </button>
@@ -197,7 +273,7 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
                           <button
                             className="btn-ghost text-caption px-2 py-0.5 text-[var(--color-error)]"
                             disabled={isActionPending}
-                            onClick={() => handleAction(c.container_id, "stop")}
+                            onClick={() => handleAction(c.container_id, "stop", c.name)}
                           >
                             {isStopping ? "Stopping…" : "Stop"}
                           </button>
@@ -206,12 +282,30 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
                           <button
                             className="btn-ghost text-caption px-2 py-0.5"
                             disabled={isActionPending}
-                            onClick={() => handleAction(c.container_id, "restart")}
+                            onClick={() => handleAction(c.container_id, "restart", c.name)}
                           >
                             {isRestarting ? "Restarting…" : "Restart"}
                           </button>
                         )}
-                        {!canStart(c.state) && !canStop(c.state) && !canRestart(c.state) && (
+                        {canLogs(c.state) && (
+                          <button
+                            className="btn-ghost text-caption px-2 py-0.5"
+                            disabled={isActionPending}
+                            onClick={() => handleAction(c.container_id, "logs", c.name)}
+                          >
+                            {isFetchingLogs ? "Fetching…" : "Logs"}
+                          </button>
+                        )}
+                        {canStats(c.state) && (
+                          <button
+                            className="btn-ghost text-caption px-2 py-0.5"
+                            disabled={isActionPending}
+                            onClick={() => handleAction(c.container_id, "stats", c.name)}
+                          >
+                            {isFetchingStats ? "Fetching…" : "Stats"}
+                          </button>
+                        )}
+                        {!canStart(c.state) && !canStop(c.state) && !canRestart(c.state) && !canLogs(c.state) && !canStats(c.state) && (
                           <span className="text-caption text-[var(--color-text-tertiary)]">—</span>
                         )}
                       </span>
@@ -222,6 +316,16 @@ export function DeviceContainers({ deviceId }: DeviceContainersProps) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {actionResult && (
+        <ActionOutputModal
+          title={actionResult.title}
+          output={actionResult.output}
+          error={actionResult.error}
+          exitCode={actionResult.exitCode}
+          onClose={() => setActionResult(null)}
+        />
       )}
     </div>
   );

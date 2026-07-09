@@ -94,7 +94,7 @@ export interface ContainerAction {
   device_id: string;
   user_id: string;
   container_id: string;
-  action: "start" | "stop" | "restart";
+  action: "start" | "stop" | "restart" | "logs" | "stats";
   status: "pending" | "running" | "completed" | "failed";
   exit_code: number | null;
   output: string | null;
@@ -108,6 +108,51 @@ export interface ContainerAction {
 
 export interface ContainerActionResponse {
   container_action: ContainerAction;
+}
+
+export interface DockerImage {
+  id: string;
+  device_id: string;
+  image_id: string;
+  repository: string;
+  tag: string;
+  size: string;
+  created: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDockerImagesResponse {
+  images: DockerImage[];
+}
+
+export interface DockerVolume {
+  id: string;
+  device_id: string;
+  name: string;
+  driver: string;
+  mountpoint: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDockerVolumesResponse {
+  volumes: DockerVolume[];
+}
+
+export interface DockerNetwork {
+  id: string;
+  device_id: string;
+  network_id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListDockerNetworksResponse {
+  networks: DockerNetwork[];
 }
 
 export interface ApiErrorBody {

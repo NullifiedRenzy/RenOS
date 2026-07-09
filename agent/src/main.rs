@@ -2,6 +2,9 @@ mod commands;
 mod config;
 mod docker;
 mod docker_actions;
+mod docker_images;
+mod docker_networks;
+mod docker_volumes;
 mod enroll;
 mod grpc_client;
 mod health;
@@ -162,67 +165,140 @@ async fn main() {
 					}
 				});
 
-			let docker_api_url = api_url.clone();
-			let docker_device_id = device_id.clone();
-			let docker_device_secret = device_secret.clone();
-			tokio::spawn(async move {
-				let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-				loop {
-					interval.tick().await;
+				// ─── Docker state sync tasks ──────────────────────────────────────
 
-					if !docker::is_installed() {
-						tracing::info!("docker not installed on this device");
-						continue;
-					}
+				// Containers (existing)
+				let docker_api_url = api_url.clone();
+				let docker_device_id = device_id.clone();
+				let docker_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+					loop {
+						interval.tick().await;
 
-					match docker::list_containers() {
-						Ok(containers) => {
-							tracing::info!("reporting {} Docker container(s)", containers.len());
-							if let Err(e) = docker::submit_containers(
-								&docker_api_url, &docker_device_id, &docker_device_secret,
-								&containers,
-							).await {
-								tracing::warn!("failed to submit containers: {}", e);
-							}
+						if !docker::is_installed() {
+							tracing::info!("docker not installed on this device");
+							continue;
 						}
-						Err(e) => tracing::warn!("failed to list Docker containers: {}", e),
-					}
-				}
-			});
 
-			let act_api_url = api_url.clone();
-			let act_device_id = device_id.clone();
-			let act_device_secret = device_secret.clone();
-			tokio::spawn(async move {
-				let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
-				loop {
-					interval.tick().await;
-
-					if !docker::is_installed() {
-						continue;
-					}
-
-					match docker_actions::poll(&act_api_url, &act_device_id, &act_device_secret).await {
-						Ok(pending) => {
-							for act in &pending {
-								tracing::info!("executing docker {} on container {}", act.action, act.container_id);
-								let (exit_code, stdout, stderr) = docker_actions::execute_action(&act.action, &act.container_id);
-								tracing::info!("docker action {} completed (exit={})", act.id, exit_code);
-								if !stderr.is_empty() {
-									tracing::warn!("docker action {} stderr: {}", act.id, stderr);
-								}
-								if let Err(e) = docker_actions::submit_result(
-									&act_api_url, &act_device_id, &act_device_secret,
-									&act.id, exit_code, &stdout, &stderr,
+						match docker::list_containers() {
+							Ok(containers) => {
+								tracing::info!("reporting {} Docker container(s)", containers.len());
+								if let Err(e) = docker::submit_containers(
+									&docker_api_url, &docker_device_id, &docker_device_secret,
+									&containers,
 								).await {
-									tracing::warn!("failed to submit docker action result for {}: {}", act.id, e);
+									tracing::warn!("failed to submit containers: {}", e);
 								}
 							}
+							Err(e) => tracing::warn!("failed to list Docker containers: {}", e),
 						}
-						Err(e) => tracing::warn!("docker actions poll failed: {}", e),
 					}
-				}
-			});
+				});
+
+				// Docker images
+				let img_api_url = api_url.clone();
+				let img_device_id = device_id.clone();
+				let img_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+					loop {
+						interval.tick().await;
+						if !docker::is_installed() { continue; }
+						match docker_images::list_images() {
+							Ok(images) => {
+								tracing::info!("reporting {} Docker image(s)", images.len());
+								if let Err(e) = docker_images::submit_images(
+									&img_api_url, &img_device_id, &img_device_secret, &images,
+								).await {
+									tracing::warn!("failed to submit docker images: {}", e);
+								}
+							}
+							Err(e) => tracing::warn!("failed to list Docker images: {}", e),
+						}
+					}
+				});
+
+				// Docker volumes
+				let vol_api_url = api_url.clone();
+				let vol_device_id = device_id.clone();
+				let vol_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+					loop {
+						interval.tick().await;
+						if !docker::is_installed() { continue; }
+						match docker_volumes::list_volumes() {
+							Ok(volumes) => {
+								tracing::info!("reporting {} Docker volume(s)", volumes.len());
+								if let Err(e) = docker_volumes::submit_volumes(
+									&vol_api_url, &vol_device_id, &vol_device_secret, &volumes,
+								).await {
+									tracing::warn!("failed to submit docker volumes: {}", e);
+								}
+							}
+							Err(e) => tracing::warn!("failed to list Docker volumes: {}", e),
+						}
+					}
+				});
+
+				// Docker networks
+				let net_api_url = api_url.clone();
+				let net_device_id = device_id.clone();
+				let net_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+					loop {
+						interval.tick().await;
+						if !docker::is_installed() { continue; }
+						match docker_networks::list_networks() {
+							Ok(networks) => {
+								tracing::info!("reporting {} Docker network(s)", networks.len());
+								if let Err(e) = docker_networks::submit_networks(
+									&net_api_url, &net_device_id, &net_device_secret, &networks,
+								).await {
+									tracing::warn!("failed to submit docker networks: {}", e);
+								}
+							}
+							Err(e) => tracing::warn!("failed to list Docker networks: {}", e),
+						}
+					}
+				});
+
+				// Docker actions (existing — now also handles logs + stats)
+				let act_api_url = api_url.clone();
+				let act_device_id = device_id.clone();
+				let act_device_secret = device_secret.clone();
+				tokio::spawn(async move {
+					let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+					loop {
+						interval.tick().await;
+
+						if !docker::is_installed() {
+							continue;
+						}
+
+						match docker_actions::poll(&act_api_url, &act_device_id, &act_device_secret).await {
+							Ok(pending) => {
+								for act in &pending {
+									tracing::info!("executing docker {} on container {}", act.action, act.container_id);
+									let (exit_code, stdout, stderr) = docker_actions::execute_action(&act.action, &act.container_id);
+									tracing::info!("docker action {} completed (exit={})", act.id, exit_code);
+									if !stderr.is_empty() {
+										tracing::warn!("docker action {} stderr: {}", act.id, stderr);
+									}
+									if let Err(e) = docker_actions::submit_result(
+										&act_api_url, &act_device_id, &act_device_secret,
+										&act.id, exit_code, &stdout, &stderr,
+									).await {
+										tracing::warn!("failed to submit docker action result for {}: {}", act.id, e);
+									}
+								}
+							}
+							Err(e) => tracing::warn!("docker actions poll failed: {}", e),
+						}
+					}
+				});
 			} else {
                 tracing::warn!("device not enrolled — run `renos-agent enroll --token <token>` first");
             }

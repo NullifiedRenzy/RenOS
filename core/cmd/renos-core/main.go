@@ -96,6 +96,9 @@ func main() {
 	commands := db.NewCommandRepository(pool)
 	containers := db.NewContainerRepository(pool)
 	containerActions := db.NewContainerActionRepository(pool)
+	dockerImages := db.NewDockerImageRepository(pool)
+	dockerVolumes := db.NewDockerVolumeRepository(pool)
+	dockerNetworks := db.NewDockerNetworkRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -110,19 +113,22 @@ func main() {
 	slog.Info("WebSocket hub started")
 
 	deps := &api.Dependencies{
-		Pool:     pool,
-		NC:       nc,
-		RDB:      rdb,
-		Cfg:      cfg,
-		CA:       caInstance,
-		Users:      users,
-		Devices:    devices,
-		Commands:   commands,
-		Containers: containers,
+		Pool:             pool,
+		NC:               nc,
+		RDB:              rdb,
+		Cfg:              cfg,
+		CA:               caInstance,
+		Users:            users,
+		Devices:          devices,
+		Commands:         commands,
+		Containers:       containers,
 		ContainerActions: containerActions,
-		Audits:     audits,
-		AdminID:  adminID,
-		Hub:      eventHub,
+		DockerImages:     dockerImages,
+		DockerVolumes:    dockerVolumes,
+		DockerNetworks:   dockerNetworks,
+		Audits:           audits,
+		AdminID:          adminID,
+		Hub:              eventHub,
 	}
 
 	router := api.NewRouter(deps)
