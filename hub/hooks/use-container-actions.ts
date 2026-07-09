@@ -10,7 +10,7 @@ export function useContainerAction(deviceId: string) {
     mutationFn: ({ containerId, action }: { containerId: string; action: string }) =>
       api.requestContainerAction(deviceId, containerId, action),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["containers", deviceId] });
+      queryClient.refetchQueries({ queryKey: ["containers", deviceId] });
     },
   });
 }
