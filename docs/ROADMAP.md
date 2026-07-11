@@ -6,9 +6,14 @@
 - System Services
 - Device Management
 - Networking
+- Storage
 
 ## Remaining
-- Storage
+- Virtualization
+- Updates
+- Plugins
+- AI
+- Mobile
 - Storage
 - Virtualization
 - Updates
