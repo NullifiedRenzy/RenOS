@@ -8,9 +8,9 @@
 - Networking
 - Storage
 - Virtualization
+- Updates
 
 ## Remaining
-- Updates
 - Plugins
 - AI
 - Mobile
