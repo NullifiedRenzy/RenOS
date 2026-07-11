@@ -6,6 +6,7 @@ mod docker_images;
 mod docker_networks;
 mod docker_volumes;
 mod enroll;
+mod files;
 mod service_actions;
 mod systemd;
 mod systemd_services;
@@ -331,6 +332,39 @@ async fn main() {
 							}
 						}
 						Err(e) => tracing::warn!("service actions poll failed: {}", e),
+					}
+				}
+			});
+
+			// File actions (browse, read, search)
+			let file_api_url = api_url.clone();
+			let file_device_id = device_id.clone();
+			let file_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+				loop {
+					interval.tick().await;
+
+					match files::poll(&file_api_url, &file_device_id, &file_device_secret).await {
+						Ok(pending) => {
+							for act in &pending {
+								tracing::info!("executing file {} on {}", act.action_type, act.path);
+								let (exit_code, stdout, stderr, result_json) = files::execute_action(
+									&act.action_type, &act.path, &act.query,
+								);
+								tracing::info!("file action {} completed (exit={})", act.id, exit_code);
+								if !stderr.is_empty() {
+									tracing::warn!("file action {} stderr: {}", act.id, stderr);
+								}
+								if let Err(e) = files::submit_result(
+									&file_api_url, &file_device_id, &file_device_secret,
+									&act.id, exit_code, &stdout, &stderr, &result_json,
+								).await {
+									tracing::warn!("failed to submit file action result for {}: {}", act.id, e);
+								}
+							}
+						}
+						Err(e) => tracing::warn!("file actions poll failed: {}", e),
 					}
 				}
 			});

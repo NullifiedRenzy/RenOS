@@ -4,6 +4,7 @@ import type {
   ListContainersResponse, ContainerActionResponse,
   ListDockerImagesResponse, ListDockerVolumesResponse, ListDockerNetworksResponse,
   ListSystemdServicesResponse, ServiceActionResponse,
+  FileActionResponse,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -132,6 +133,14 @@ class ApiClient {
 
   async requestServiceAction(deviceId: string, unitName: string, action: string): Promise<ServiceActionResponse> {
     return this.request<ServiceActionResponse>("POST", `/devices/${deviceId}/services/${encodeURIComponent(unitName)}/${action}`);
+  }
+
+  async requestFileAction(deviceId: string, actionType: string, path: string, query?: string): Promise<FileActionResponse> {
+    return this.request<FileActionResponse>("POST", `/devices/${deviceId}/files/${actionType}`, { path, query });
+  }
+
+  async getFileAction(actionId: string): Promise<FileActionResponse> {
+    return this.request<FileActionResponse>("GET", `/devices/file-actions/${actionId}`);
   }
 }
 

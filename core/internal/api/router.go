@@ -29,6 +29,7 @@ type Dependencies struct {
 	DockerNetworks   *db.DockerNetworkRepository
 	SystemdServices  *db.SystemdServiceRepository
 	ServiceActions   *db.ServiceActionRepository
+	FileActions      *db.FileActionRepository
 	Audits           *db.AuditRepository
 	AdminID          string
 	Hub              *ws.Hub
@@ -66,6 +67,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/service-actions/pending", pendingServiceActionsHandler(deps.ServiceActions, deps.Devices))
 		r.Post("/service-actions/{actionId}/result", submitServiceActionResultHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
+		r.Post("/file-actions/pending", pendingFileActionsHandler(deps.FileActions, deps.Devices))
+		r.Post("/file-actions/{actionId}/result", submitFileActionResultHandler(deps.FileActions, deps.Devices, deps.Audits, deps.Hub))
 
 		// Admin-facing — requires JWT auth
 		r.Route("/devices", func(r chi.Router) {
@@ -85,6 +88,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Get("/{id}/systemd-services", listSystemdServicesHandler(deps.SystemdServices))
 			r.Post("/{id}/services/{unitName}/{action}", requestServiceActionHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
+			r.Post("/{id}/files/{actionType}", requestFileActionHandler(deps.FileActions, deps.Devices, deps.Audits, deps.Hub))
+			r.Get("/file-actions/{actionId}", getFileActionResultHandler(deps.FileActions))
 		})
 	})
 

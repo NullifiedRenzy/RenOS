@@ -191,6 +191,38 @@ export interface ServiceActionResponse {
   service_action: ServiceAction;
 }
 
+export interface FileEntry {
+  name: string;
+  path: string;
+  size: number;
+  file_type: "file" | "dir" | "symlink";
+  permissions: string;
+  modified: string;
+}
+
+export interface FileAction {
+  id: string;
+  device_id: string;
+  user_id: string;
+  action_type: "list_directory" | "read_file" | "search_files";
+  path: string;
+  query: string;
+  status: "pending" | "running" | "completed" | "failed";
+  exit_code: number | null;
+  output: string | null;
+  error: string | null;
+  result_json: FileEntry[] | { content: string; size: number; path: string } | null;
+  requested_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileActionResponse {
+  file_action: FileAction;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;
