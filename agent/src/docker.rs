@@ -36,7 +36,8 @@ pub fn is_installed() -> bool {
 pub fn list_containers() -> Result<Vec<ContainerInfo>, DockerError> {
     let output = Command::new("docker")
         .args([
-            "ps", "-a",
+            "ps",
+            "-a",
             "--no-trunc",
             "--format",
             "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}",
@@ -100,7 +101,11 @@ pub async fn submit_containers(
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, containers })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            containers,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await

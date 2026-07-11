@@ -143,8 +143,8 @@ fn read_interface_speed(name: &str) -> i64 {
 
 pub fn list_interfaces() -> Result<Vec<InterfaceInfo>, NetworkError> {
     let json_output = run_ip(&["-j", "addr"])?;
-    let entries: Vec<IpAddrEntry> = serde_json::from_str(&json_output)
-        .map_err(|e| NetworkError::Parse(e.to_string()))?;
+    let entries: Vec<IpAddrEntry> =
+        serde_json::from_str(&json_output).map_err(|e| NetworkError::Parse(e.to_string()))?;
 
     // Determine default gateway interface
     let mut default_gateways: Vec<String> = Vec::new();
@@ -192,8 +192,16 @@ pub fn list_interfaces() -> Result<Vec<InterfaceInfo>, NetworkError> {
                 mac_address: entry.address.clone(),
                 ipv4,
                 ipv6,
-                status: if is_up { "up".to_string() } else { "down".to_string() },
-                speed: if !is_loopback { read_interface_speed(&entry.ifname) } else { 0 },
+                status: if is_up {
+                    "up".to_string()
+                } else {
+                    "down".to_string()
+                },
+                speed: if !is_loopback {
+                    read_interface_speed(&entry.ifname)
+                } else {
+                    0
+                },
                 interface_type: if is_loopback {
                     "loopback".to_string()
                 } else {
@@ -216,7 +224,9 @@ pub fn list_interfaces() -> Result<Vec<InterfaceInfo>, NetworkError> {
 pub fn send_wol(mac: &str) -> Result<String, NetworkError> {
     let mac_clean: String = mac.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     if mac_clean.len() != 12 {
-        return Err(NetworkError::CommandFailed(format!("invalid MAC address: {mac}")));
+        return Err(NetworkError::CommandFailed(format!(
+            "invalid MAC address: {mac}"
+        )));
     }
 
     let mac_bytes: Vec<u8> = (0..6)
@@ -233,10 +243,12 @@ pub fn send_wol(mac: &str) -> Result<String, NetworkError> {
     let socket = UdpSocket::bind("0.0.0.0:0")
         .map_err(|e| NetworkError::CommandFailed(format!("bind socket: {e}")))?;
 
-    socket.set_broadcast(true)
+    socket
+        .set_broadcast(true)
         .map_err(|e| NetworkError::CommandFailed(format!("set broadcast: {e}")))?;
 
-    socket.send_to(&packet, "255.255.255.255:9")
+    socket
+        .send_to(&packet, "255.255.255.255:9")
         .map_err(|e| NetworkError::CommandFailed(format!("send WOL packet: {e}")))?;
 
     Ok(format!("WOL packet sent to {mac}"))
@@ -256,11 +268,18 @@ pub async fn submit_interfaces(
     interfaces: &[InterfaceInfo],
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/api/v1/devices/{}/network-interfaces", api_url, device_id);
+    let url = format!(
+        "{}/api/v1/devices/{}/network-interfaces",
+        api_url, device_id
+    );
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, interfaces })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            interfaces,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -299,8 +318,17 @@ mod tests {
         if let Ok(interfaces) = list_interfaces() {
             for iface in &interfaces {
                 if !iface.mac_address.is_empty() && iface.interface_type != "loopback" {
-                    let clean: String = iface.mac_address.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-                    assert_eq!(clean.len(), 12, "MAC should be 12 hex chars: {}", iface.mac_address);
+                    let clean: String = iface
+                        .mac_address
+                        .chars()
+                        .filter(|c| c.is_ascii_hexdigit())
+                        .collect();
+                    assert_eq!(
+                        clean.len(),
+                        12,
+                        "MAC should be 12 hex chars: {}",
+                        iface.mac_address
+                    );
                 }
             }
         }

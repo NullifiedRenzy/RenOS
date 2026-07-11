@@ -45,8 +45,7 @@ pub fn list_services() -> Result<Vec<ServiceInfo>, systemd::SystemdError> {
         "--output=json",
     ])?;
 
-    let units: Vec<SystemdUnitJson> = serde_json::from_str(&units_json)
-        .unwrap_or_default();
+    let units: Vec<SystemdUnitJson> = serde_json::from_str(&units_json).unwrap_or_default();
 
     let unit_files_json = run_systemctl_json(&[
         "list-unit-files",
@@ -56,8 +55,7 @@ pub fn list_services() -> Result<Vec<ServiceInfo>, systemd::SystemdError> {
         "--output=json",
     ])?;
 
-    let unit_files: Vec<UnitFileJson> = serde_json::from_str(&unit_files_json)
-        .unwrap_or_default();
+    let unit_files: Vec<UnitFileJson> = serde_json::from_str(&unit_files_json).unwrap_or_default();
 
     let enabled_map: HashMap<String, String> = unit_files
         .into_iter()
@@ -66,10 +64,7 @@ pub fn list_services() -> Result<Vec<ServiceInfo>, systemd::SystemdError> {
 
     let mut services = Vec::new();
     for u in units {
-        let enabled = enabled_map
-            .get(&u.unit)
-            .cloned()
-            .unwrap_or_default();
+        let enabled = enabled_map.get(&u.unit).cloned().unwrap_or_default();
 
         services.push(ServiceInfo {
             unit_name: u.unit,
@@ -85,16 +80,13 @@ pub fn list_services() -> Result<Vec<ServiceInfo>, systemd::SystemdError> {
 }
 
 fn run_systemctl_json(args: &[&str]) -> Result<String, systemd::SystemdError> {
-    let output = Command::new("systemctl")
-        .args(args)
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                systemd::SystemdError::NotInstalled
-            } else {
-                systemd::SystemdError::Execution(e.to_string())
-            }
-        })?;
+    let output = Command::new("systemctl").args(args).output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            systemd::SystemdError::NotInstalled
+        } else {
+            systemd::SystemdError::Execution(e.to_string())
+        }
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -122,7 +114,11 @@ pub async fn submit_services(
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, services })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            services,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -131,7 +127,10 @@ pub async fn submit_services(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!("sync systemd services rejected ({}): {}", status, body));
+        return Err(format!(
+            "sync systemd services rejected ({}): {}",
+            status, body
+        ));
     }
 
     Ok(())

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 use crate::platform;
 
@@ -40,7 +40,10 @@ fn generate_keypair(private_key_path: &PathBuf) -> KeyMaterial {
     }
 
     let b64 = base64_encode(&seed);
-    let pem = format!("-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----", b64);
+    let pem = format!(
+        "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
+        b64
+    );
     let _ = std::fs::write(private_key_path, &pem);
 
     KeyMaterial {
@@ -53,11 +56,15 @@ fn load_key(private_key_path: &PathBuf) -> Option<KeyMaterial> {
     let content = std::fs::read_to_string(private_key_path).ok()?;
     let mut b64 = String::new();
     for line in content.lines() {
-        if line.starts_with("-----") { continue; }
+        if line.starts_with("-----") {
+            continue;
+        }
         b64.push_str(line.trim());
     }
     let der = base64_decode(&b64);
-    if der.len() != 32 { return None; }
+    if der.len() != 32 {
+        return None;
+    }
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&der);
@@ -78,9 +85,10 @@ pub fn load_or_generate() -> (DeviceIdentity, KeyMaterial) {
     let cert_path = PathBuf::from(&data_dir).join("device-cert.pem");
 
     let identity = if identity_path.exists() {
-        match std::fs::read_to_string(&identity_path)
-            .and_then(|s| serde_json::from_str::<DeviceIdentity>(&s).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
-        {
+        match std::fs::read_to_string(&identity_path).and_then(|s| {
+            serde_json::from_str::<DeviceIdentity>(&s)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        }) {
             Ok(id) => id,
             Err(e) => {
                 tracing::warn!("failed to parse identity, generating new: {e}");
@@ -106,7 +114,11 @@ pub fn load_or_generate() -> (DeviceIdentity, KeyMaterial) {
         tracing::info!("device is enrolled: {}", id.device_id);
         (id, key)
     } else {
-        tracing::info!("device identity: {} (enrolled: {})", identity.device_id, identity.is_enrolled);
+        tracing::info!(
+            "device identity: {} (enrolled: {})",
+            identity.device_id,
+            identity.is_enrolled
+        );
         (identity, key)
     }
 }
@@ -162,7 +174,7 @@ fn base64_decode(input: &str) -> Vec<u8> {
     let chars: Vec<u8> = input.bytes().collect();
     let mut i = 0;
     for &c in &chars {
-        if c == b'=' { }
+        if c == b'=' {}
     }
     while i + 4 <= chars.len() {
         let mut vals = [0u32; 4];
@@ -179,8 +191,12 @@ fn base64_decode(input: &str) -> Vec<u8> {
         }
         let triplet = (vals[0] << 18) | (vals[1] << 12) | (vals[2] << 6) | vals[3];
         result.push((triplet >> 16) as u8);
-        if chars[i + 2] != b'=' { result.push((triplet >> 8) as u8); }
-        if chars[i + 3] != b'=' { result.push(triplet as u8); }
+        if chars[i + 2] != b'=' {
+            result.push((triplet >> 8) as u8);
+        }
+        if chars[i + 3] != b'=' {
+            result.push(triplet as u8);
+        }
         i += 4;
     }
     result

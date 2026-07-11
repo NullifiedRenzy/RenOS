@@ -75,7 +75,11 @@ pub async fn submit_networks(
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, networks })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            networks,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await

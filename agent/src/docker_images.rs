@@ -77,7 +77,11 @@ pub async fn submit_images(
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, images })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            images,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await

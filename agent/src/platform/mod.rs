@@ -35,11 +35,17 @@ mod windows;
 
 pub fn data_dir() -> &'static str {
     #[cfg(target_os = "linux")]
-    { linux::data_dir() }
+    {
+        linux::data_dir()
+    }
     #[cfg(target_os = "macos")]
-    { macos::data_dir() }
+    {
+        macos::data_dir()
+    }
     #[cfg(target_os = "windows")]
-    { windows::data_dir() }
+    {
+        windows::data_dir()
+    }
 }
 
 pub fn resolve_data_dir() -> String {

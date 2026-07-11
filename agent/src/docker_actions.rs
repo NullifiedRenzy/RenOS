@@ -54,7 +54,10 @@ pub async fn poll(
 
     let resp = client
         .post(&url)
-        .json(&PendingRequestBody { device_id, device_secret })
+        .json(&PendingRequestBody {
+            device_id,
+            device_secret,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -63,7 +66,10 @@ pub async fn poll(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("poll rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "poll rejected ({}): {}",
+            status, body
+        )));
     }
 
     let data: PendingActionsResponse = resp
@@ -88,7 +94,13 @@ pub async fn submit_result(
 
     let resp = client
         .post(&url)
-        .json(&SubmitBody { device_id, device_secret, exit_code, output, error })
+        .json(&SubmitBody {
+            device_id,
+            device_secret,
+            exit_code,
+            output,
+            error,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -97,7 +109,10 @@ pub async fn submit_result(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("submit rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "submit rejected ({}): {}",
+            status, body
+        )));
     }
 
     Ok(())
@@ -117,7 +132,11 @@ fn run_docker_command(args: &[&str]) -> (i32, String, String) {
 
 pub fn execute_action(action: &str, container_id: &str) -> (i32, String, String) {
     if !docker::is_installed() {
-        return (1, String::new(), "docker not installed on this device".to_string());
+        return (
+            1,
+            String::new(),
+            "docker not installed on this device".to_string(),
+        );
     }
 
     match action {

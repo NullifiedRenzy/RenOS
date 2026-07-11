@@ -266,6 +266,27 @@ export interface ListStorageDevicesResponse {
   devices: StorageDevice[];
 }
 
+export interface VirtualMachine {
+  id: string;
+  device_id: string;
+  domain_name: string;
+  uuid: string;
+  state: string;
+  vcpu_max: number;
+  vcpu_current: number;
+  memory_max_bytes: number;
+  memory_current_bytes: number;
+  os_type: string;
+  autostart: boolean;
+  persistent: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListVirtualMachinesResponse {
+  vms: VirtualMachine[];
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

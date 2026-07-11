@@ -67,7 +67,10 @@ pub async fn poll(
 
     let resp = client
         .post(&url)
-        .json(&PendingRequestBody { device_id, device_secret })
+        .json(&PendingRequestBody {
+            device_id,
+            device_secret,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -76,7 +79,10 @@ pub async fn poll(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("poll rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "poll rejected ({}): {}",
+            status, body
+        )));
     }
 
     let data: PendingActionsResponse = resp
@@ -103,7 +109,14 @@ pub async fn submit_result(
 
     let resp = client
         .post(&url)
-        .json(&SubmitBody { device_id, device_secret, exit_code, output, error, result_json })
+        .json(&SubmitBody {
+            device_id,
+            device_secret,
+            exit_code,
+            output,
+            error,
+            result_json,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -112,7 +125,10 @@ pub async fn submit_result(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("submit rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "submit rejected ({}): {}",
+            status, body
+        )));
     }
 
     Ok(())
@@ -177,7 +193,12 @@ fn list_directory(path: &str) -> (i32, String, String, String) {
     let dir = match std::fs::read_dir(path) {
         Ok(d) => d,
         Err(e) => {
-            return (1, String::new(), format!("failed to read directory: {e}"), "[]".to_string());
+            return (
+                1,
+                String::new(),
+                format!("failed to read directory: {e}"),
+                "[]".to_string(),
+            );
         }
     };
 
@@ -234,25 +255,47 @@ fn list_directory(path: &str) -> (i32, String, String, String) {
 fn read_file(path: &str) -> (i32, String, String, String) {
     let metadata = match std::fs::metadata(path) {
         Ok(m) => m,
-        Err(e) => return (1, String::new(), format!("failed to access file: {e}"), "null".to_string()),
+        Err(e) => {
+            return (
+                1,
+                String::new(),
+                format!("failed to access file: {e}"),
+                "null".to_string(),
+            )
+        }
     };
 
     if metadata.is_dir() {
-        return (1, String::new(), "path is a directory, not a file".to_string(), "null".to_string());
+        return (
+            1,
+            String::new(),
+            "path is a directory, not a file".to_string(),
+            "null".to_string(),
+        );
     }
 
     if metadata.len() > MAX_READ_SIZE {
         return (
             1,
             String::new(),
-            format!("file too large ({} bytes, max {MAX_READ_SIZE})", metadata.len()),
+            format!(
+                "file too large ({} bytes, max {MAX_READ_SIZE})",
+                metadata.len()
+            ),
             "null".to_string(),
         );
     }
 
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
-        Err(e) => return (1, String::new(), format!("failed to read file: {e}"), "null".to_string()),
+        Err(e) => {
+            return (
+                1,
+                String::new(),
+                format!("failed to read file: {e}"),
+                "null".to_string(),
+            )
+        }
     };
 
     let json = format!(
@@ -346,7 +389,12 @@ pub fn execute_action(action_type: &str, path: &str, query: &str) -> (i32, Strin
         "list_directory" => list_directory(path),
         "read_file" => read_file(path),
         "search_files" => search_files(path, query),
-        _ => (1, String::new(), format!("unknown action type: {action_type}"), "null".to_string()),
+        _ => (
+            1,
+            String::new(),
+            format!("unknown action type: {action_type}"),
+            "null".to_string(),
+        ),
     }
 }
 

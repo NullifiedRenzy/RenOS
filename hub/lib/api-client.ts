@@ -5,7 +5,7 @@ import type {
   ListDockerImagesResponse, ListDockerVolumesResponse, ListDockerNetworksResponse,
   ListSystemdServicesResponse, ServiceActionResponse,
   FileActionResponse, ListNetworkInterfacesResponse,
-  ListStorageDevicesResponse,
+  ListStorageDevicesResponse, ListVirtualMachinesResponse,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -142,6 +142,14 @@ class ApiClient {
 
   async listStorageDevices(deviceId: string): Promise<ListStorageDevicesResponse> {
     return this.request<ListStorageDevicesResponse>("GET", `/devices/${deviceId}/storage-devices`);
+  }
+
+  async listVirtualMachines(deviceId: string): Promise<ListVirtualMachinesResponse> {
+    return this.request<ListVirtualMachinesResponse>("GET", `/devices/${deviceId}/virtual-machines`);
+  }
+
+  async requestVMAction(deviceId: string, domainName: string, action: string): Promise<unknown> {
+    return this.request("POST", `/devices/${deviceId}/vms/${encodeURIComponent(domainName)}/${action}`);
   }
 
   async requestFileAction(deviceId: string, actionType: string, path: string, query?: string): Promise<FileActionResponse> {

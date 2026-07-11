@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::Deserialize;
+use std::path::PathBuf;
 
 use crate::platform;
 
@@ -129,7 +129,11 @@ pub fn load() -> Config {
     }
 
     if let Ok(v) = std::env::var("RENOS_PROTECTED_SERVICES") {
-        let list: Vec<String> = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        let list: Vec<String> = v
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
         if !list.is_empty() {
             cfg.protected_services = list;
         }

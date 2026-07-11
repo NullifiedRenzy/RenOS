@@ -55,7 +55,12 @@ struct LsblkEntry {
 
 pub fn list_storage_devices() -> Result<Vec<StorageDeviceInfo>, StorageError> {
     let output = Command::new("lsblk")
-        .args(["-J", "-b", "-o", "NAME,SIZE,TYPE,MODEL,MOUNTPOINT,FSTYPE,UUID,RO,RM"])
+        .args([
+            "-J",
+            "-b",
+            "-o",
+            "NAME,SIZE,TYPE,MODEL,MOUNTPOINT,FSTYPE,UUID,RO,RM",
+        ])
         .output()
         .map_err(|e| StorageError::CommandFailed(e.to_string()))?;
 
@@ -65,8 +70,8 @@ pub fn list_storage_devices() -> Result<Vec<StorageDeviceInfo>, StorageError> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parsed: LsblkOutput = serde_json::from_str(&stdout)
-        .map_err(|e| StorageError::Parse(e.to_string()))?;
+    let parsed: LsblkOutput =
+        serde_json::from_str(&stdout).map_err(|e| StorageError::Parse(e.to_string()))?;
 
     // Get filesystem usage via df
     let df_map = get_df_usage();
@@ -178,7 +183,11 @@ pub async fn submit_storage_devices(
 
     let resp = client
         .post(&url)
-        .json(&SyncRequest { device_id, device_secret, devices })
+        .json(&SyncRequest {
+            device_id,
+            device_secret,
+            devices,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -187,7 +196,10 @@ pub async fn submit_storage_devices(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!("sync storage devices rejected ({}): {}", status, body));
+        return Err(format!(
+            "sync storage devices rejected ({}): {}",
+            status, body
+        ));
     }
 
     Ok(())

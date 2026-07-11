@@ -54,7 +54,10 @@ pub async fn poll(
 
     let resp = client
         .post(&url)
-        .json(&PendingRequestBody { device_id, device_secret })
+        .json(&PendingRequestBody {
+            device_id,
+            device_secret,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -63,7 +66,10 @@ pub async fn poll(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("poll rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "poll rejected ({}): {}",
+            status, body
+        )));
     }
 
     let data: PendingActionsResponse = resp
@@ -88,7 +94,13 @@ pub async fn submit_result(
 
     let resp = client
         .post(&url)
-        .json(&SubmitBody { device_id, device_secret, exit_code, output, error })
+        .json(&SubmitBody {
+            device_id,
+            device_secret,
+            exit_code,
+            output,
+            error,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -97,7 +109,10 @@ pub async fn submit_result(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("submit rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "submit rejected ({}): {}",
+            status, body
+        )));
     }
 
     Ok(())
@@ -117,7 +132,9 @@ pub fn validate_unit_name(unit_name: &str) -> Result<(), String> {
         match ch {
             'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '-' | '_' | '@' | ':' | '\\' => {}
             _ => {
-                return Err(format!("unit name contains invalid character {ch:?}: {unit_name}"));
+                return Err(format!(
+                    "unit name contains invalid character {ch:?}: {unit_name}"
+                ));
             }
         }
     }
@@ -141,13 +158,25 @@ fn run_systemctl(args: &[&str]) -> (i32, String, String) {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             (exit_code, stdout, stderr)
         }
-        Err(e) => (1, String::new(), format!("failed to execute systemctl: {e}")),
+        Err(e) => (
+            1,
+            String::new(),
+            format!("failed to execute systemctl: {e}"),
+        ),
     }
 }
 
-pub fn execute_action(action: &str, unit_name: &str, protected_list: &[String]) -> (i32, String, String) {
+pub fn execute_action(
+    action: &str,
+    unit_name: &str,
+    protected_list: &[String],
+) -> (i32, String, String) {
     if !systemd::is_available() {
-        return (1, String::new(), "systemd not available on this device".to_string());
+        return (
+            1,
+            String::new(),
+            "systemd not available on this device".to_string(),
+        );
     }
 
     if let Err(e) = validate_unit_name(unit_name) {
@@ -155,7 +184,11 @@ pub fn execute_action(action: &str, unit_name: &str, protected_list: &[String]) 
     }
 
     if is_protected(unit_name, protected_list) {
-        return (1, String::new(), format!("action rejected: {unit_name} is protected"));
+        return (
+            1,
+            String::new(),
+            format!("action rejected: {unit_name} is protected"),
+        );
     }
 
     match action {
@@ -175,16 +208,24 @@ mod tests {
         assert!(validate_unit_name("cups.service").is_ok());
         assert!(validate_unit_name("systemd-journald.service").is_ok());
         assert!(validate_unit_name("sshd-keygen@ecdsa.service").is_ok());
-        assert!(validate_unit_name("systemd-fsck@dev-disk-by\\x2duuid-E1E4\\x2d8C1A.service").is_ok());
+        assert!(
+            validate_unit_name("systemd-fsck@dev-disk-by\\x2duuid-E1E4\\x2d8C1A.service").is_ok()
+        );
     }
 
     #[test]
     fn test_validate_unit_name_rejects_bad_names() {
         assert!(validate_unit_name("cups").is_err(), "must end in .service");
-        assert!(validate_unit_name(" cups.service").is_err(), "no leading spaces");
+        assert!(
+            validate_unit_name(" cups.service").is_err(),
+            "no leading spaces"
+        );
         assert!(validate_unit_name("cups .service").is_err(), "no spaces");
         assert!(validate_unit_name("cups/.service").is_err(), "no slashes");
-        assert!(validate_unit_name("cups;rm -rf /.service").is_err(), "no shell chars");
+        assert!(
+            validate_unit_name("cups;rm -rf /.service").is_err(),
+            "no shell chars"
+        );
         assert!(validate_unit_name("cups|service").is_err(), "no pipe");
         assert!(validate_unit_name("").is_err(), "empty");
     }
@@ -219,7 +260,8 @@ mod tests {
 
     #[test]
     fn test_execute_action_rejects_protected_service() {
-        let (code, _stdout, stderr) = execute_action("start", "sshd.service", &["sshd.service".to_string()]);
+        let (code, _stdout, stderr) =
+            execute_action("start", "sshd.service", &["sshd.service".to_string()]);
         assert_ne!(code, 0);
         assert!(stderr.contains("protected"));
     }

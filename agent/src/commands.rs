@@ -66,7 +66,10 @@ pub async fn poll(
 
     let resp = client
         .post(&url)
-        .json(&PendingRequestBody { device_id, device_secret })
+        .json(&PendingRequestBody {
+            device_id,
+            device_secret,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -75,7 +78,10 @@ pub async fn poll(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("poll rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "poll rejected ({}): {}",
+            status, body
+        )));
     }
 
     let data: PendingResponse = resp
@@ -100,7 +106,13 @@ pub async fn submit_result(
 
     let resp = client
         .post(&url)
-        .json(&SubmitBody { device_id, device_secret, exit_code, output, error })
+        .json(&SubmitBody {
+            device_id,
+            device_secret,
+            exit_code,
+            output,
+            error,
+        })
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -109,7 +121,10 @@ pub async fn submit_result(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!("submit rejected ({}): {}", status, body)));
+        return Err(Error::Rejected(format!(
+            "submit rejected ({}): {}",
+            status, body
+        )));
     }
 
     Ok(())
@@ -117,7 +132,11 @@ pub async fn submit_result(
 
 pub fn execute(cmd_str: &str) -> (i32, String, String) {
     if !is_allowed(cmd_str) {
-        return (1, String::new(), format!("command not in allowlist: {cmd_str}"));
+        return (
+            1,
+            String::new(),
+            format!("command not in allowlist: {cmd_str}"),
+        );
     }
 
     let parts: Vec<&str> = cmd_str.split_whitespace().collect();
@@ -203,7 +222,10 @@ mod tests {
         assert_ne!(code, 0, "disallowed command should return non-zero");
         assert!(stdout.is_empty());
         assert!(!stderr.is_empty(), "should have error message");
-        assert!(stderr.contains("not in allowlist"), "error should mention allowlist");
+        assert!(
+            stderr.contains("not in allowlist"),
+            "error should mention allowlist"
+        );
     }
 
     #[test]
