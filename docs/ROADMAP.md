@@ -4,9 +4,9 @@
 - Foundation
 - Docker
 - System Services
+- Device Management
 
 ## Remaining
-- Device Management
 - Networking
 - Storage
 - Virtualization
