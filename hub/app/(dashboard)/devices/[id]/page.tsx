@@ -16,6 +16,7 @@ import { DockerVolumes } from "@/components/devices/device-docker-volumes";
 import { DockerNetworks } from "@/components/devices/device-docker-networks";
 import { SystemdServices } from "@/components/devices/device-systemd-services";
 import { FileBrowser } from "@/components/devices/device-file-browser";
+import { NetworkInfo } from "@/components/devices/device-network";
 import { EmptyState } from "@/components/devices/empty-state";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
@@ -122,6 +123,8 @@ export default function DeviceDetailPage() {
           <SystemdServices deviceId={device.id} />
 
           <FileBrowser deviceId={device.id} />
+
+          <NetworkInfo deviceId={device.id} />
 
           {device.status === "online" && (
             <SafeCommands deviceId={device.id} />

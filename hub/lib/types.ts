@@ -223,6 +223,27 @@ export interface FileActionResponse {
   file_action: FileAction;
 }
 
+export interface NetworkInterface {
+  id: string;
+  device_id: string;
+  name: string;
+  mac_address: string;
+  ipv4: string[];
+  ipv6: string[];
+  status: "up" | "down";
+  speed: number;
+  interface_type: string;
+  is_default_gateway: boolean;
+  dns_servers: string[];
+  mtu: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListNetworkInterfacesResponse {
+  interfaces: NetworkInterface[];
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

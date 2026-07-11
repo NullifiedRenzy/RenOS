@@ -13,6 +13,7 @@ mod systemd_services;
 mod grpc_client;
 mod health;
 mod identity;
+mod network;
 mod platform;
 mod proto;
 
@@ -294,6 +295,28 @@ async fn main() {
 							}
 						}
 						Err(e) => tracing::warn!("failed to list systemd services: {}", e),
+					}
+				}
+			});
+
+			// Network interface sync
+			let netif_api_url = api_url.clone();
+			let netif_device_id = device_id.clone();
+			let netif_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+				loop {
+					interval.tick().await;
+					match network::list_interfaces() {
+						Ok(interfaces) => {
+							tracing::info!("reporting {} network interface(s)", interfaces.len());
+							if let Err(e) = network::submit_interfaces(
+								&netif_api_url, &netif_device_id, &netif_device_secret, &interfaces,
+							).await {
+								tracing::warn!("failed to submit network interfaces: {}", e);
+							}
+						}
+						Err(e) => tracing::warn!("failed to list network interfaces: {}", e),
 					}
 				}
 			});
