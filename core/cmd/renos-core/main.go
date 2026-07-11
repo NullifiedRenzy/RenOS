@@ -105,6 +105,7 @@ func main() {
 	networkInterfaces := db.NewNetworkInterfaceRepository(pool)
 	storageDevices := db.NewStorageDeviceRepository(pool)
 	virtualMachines := db.NewVirtualMachineRepository(pool)
+	updateStatus := db.NewUpdateStatusRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -138,6 +139,7 @@ func main() {
 		NetworkInterfaces:    networkInterfaces,
 		StorageDevices:       storageDevices,
 		VirtualMachines:      virtualMachines,
+		UpdateStatus:         updateStatus,
 		Audits:           audits,
 		AdminID:          adminID,
 		Hub:              eventHub,

@@ -283,6 +283,22 @@ export interface VirtualMachine {
   updated_at: string;
 }
 
+export interface UpdateStatus {
+  id: string;
+  device_id: string;
+  package_name: string;
+  current_version: string;
+  available_version: string;
+  severity: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListUpdatesResponse {
+  updates: UpdateStatus[];
+}
+
 export interface ListVirtualMachinesResponse {
   vms: VirtualMachine[];
 }

@@ -17,6 +17,7 @@ mod service_actions;
 mod storage;
 mod systemd;
 mod systemd_services;
+mod updates;
 mod virtualization;
 
 use std::path::PathBuf;
@@ -452,6 +453,36 @@ async fn main() {
                                 }
                             }
                             Err(e) => tracing::warn!("failed to list VMs: {}", e),
+                        }
+                    }
+                });
+
+                // Update sync
+                let upd_api_url = api_url.clone();
+                let upd_device_id = device_id.clone();
+                let upd_device_secret = device_secret.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+                    loop {
+                        interval.tick().await;
+                        if !updates::is_available() {
+                            continue;
+                        }
+                        match updates::list_updates() {
+                            Ok(packages) => {
+                                tracing::info!("reporting {} package update(s)", packages.len());
+                                if let Err(e) = updates::submit_updates(
+                                    &upd_api_url,
+                                    &upd_device_id,
+                                    &upd_device_secret,
+                                    &packages,
+                                )
+                                .await
+                                {
+                                    tracing::warn!("failed to submit updates: {}", e);
+                                }
+                            }
+                            Err(e) => tracing::warn!("failed to list updates: {}", e),
                         }
                     }
                 });
