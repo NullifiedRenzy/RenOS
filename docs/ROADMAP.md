@@ -7,15 +7,9 @@
 - Device Management
 - Networking
 - Storage
+- Virtualization
 
 ## Remaining
-- Virtualization
-- Updates
-- Plugins
-- AI
-- Mobile
-- Storage
-- Virtualization
 - Updates
 - Plugins
 - AI
