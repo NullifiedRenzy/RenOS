@@ -5,9 +5,10 @@
 - Docker
 - System Services
 - Device Management
+- Networking
 
 ## Remaining
-- Networking
+- Storage
 - Storage
 - Virtualization
 - Updates

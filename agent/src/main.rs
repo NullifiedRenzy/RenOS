@@ -8,6 +8,7 @@ mod docker_volumes;
 mod enroll;
 mod files;
 mod service_actions;
+mod storage;
 mod systemd;
 mod systemd_services;
 mod grpc_client;
@@ -317,6 +318,28 @@ async fn main() {
 							}
 						}
 						Err(e) => tracing::warn!("failed to list network interfaces: {}", e),
+					}
+				}
+			});
+
+			// Storage device sync
+			let stg_api_url = api_url.clone();
+			let stg_device_id = device_id.clone();
+			let stg_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(180));
+				loop {
+					interval.tick().await;
+					match storage::list_storage_devices() {
+						Ok(devices) => {
+							tracing::info!("reporting {} storage device(s)", devices.len());
+							if let Err(e) = storage::submit_storage_devices(
+								&stg_api_url, &stg_device_id, &stg_device_secret, &devices,
+							).await {
+								tracing::warn!("failed to submit storage devices: {}", e);
+							}
+						}
+						Err(e) => tracing::warn!("failed to list storage devices: {}", e),
 					}
 				}
 			});

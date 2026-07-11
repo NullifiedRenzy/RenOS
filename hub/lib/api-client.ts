@@ -5,6 +5,7 @@ import type {
   ListDockerImagesResponse, ListDockerVolumesResponse, ListDockerNetworksResponse,
   ListSystemdServicesResponse, ServiceActionResponse,
   FileActionResponse, ListNetworkInterfacesResponse,
+  ListStorageDevicesResponse,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -137,6 +138,10 @@ class ApiClient {
 
   async listNetworkInterfaces(deviceId: string): Promise<ListNetworkInterfacesResponse> {
     return this.request<ListNetworkInterfacesResponse>("GET", `/devices/${deviceId}/network-interfaces`);
+  }
+
+  async listStorageDevices(deviceId: string): Promise<ListStorageDevicesResponse> {
+    return this.request<ListStorageDevicesResponse>("GET", `/devices/${deviceId}/storage-devices`);
   }
 
   async requestFileAction(deviceId: string, actionType: string, path: string, query?: string): Promise<FileActionResponse> {

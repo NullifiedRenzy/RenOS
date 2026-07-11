@@ -103,6 +103,7 @@ func main() {
 	serviceActions := db.NewServiceActionRepository(pool)
 	fileActions := db.NewFileActionRepository(pool)
 	networkInterfaces := db.NewNetworkInterfaceRepository(pool)
+	storageDevices := db.NewStorageDeviceRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -134,6 +135,7 @@ func main() {
 		ServiceActions:       serviceActions,
 		FileActions:          fileActions,
 		NetworkInterfaces:    networkInterfaces,
+		StorageDevices:       storageDevices,
 		Audits:           audits,
 		AdminID:          adminID,
 		Hub:              eventHub,

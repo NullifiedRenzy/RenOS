@@ -30,6 +30,7 @@ type Dependencies struct {
 	SystemdServices      *db.SystemdServiceRepository
 	ServiceActions       *db.ServiceActionRepository
 	NetworkInterfaces    *db.NetworkInterfaceRepository
+	StorageDevices       *db.StorageDeviceRepository
 	FileActions      *db.FileActionRepository
 	Audits           *db.AuditRepository
 	AdminID          string
@@ -65,6 +66,7 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/devices/{id}/docker-networks", syncDockerNetworksHandler(deps.DockerNetworks, deps.Devices))
 		r.Post("/devices/{id}/systemd-services", syncSystemdServicesHandler(deps.SystemdServices, deps.Devices))
 		r.Post("/devices/{id}/network-interfaces", syncNetworkInterfacesHandler(deps.NetworkInterfaces, deps.Devices))
+		r.Post("/devices/{id}/storage-devices", syncStorageDevicesHandler(deps.StorageDevices, deps.Devices))
 		r.Post("/container-actions/pending", pendingContainerActionsHandler(deps.ContainerActions, deps.Devices))
 		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/service-actions/pending", pendingServiceActionsHandler(deps.ServiceActions, deps.Devices))
@@ -89,6 +91,7 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Get("/{id}/docker-networks", listDockerNetworksHandler(deps.DockerNetworks))
 			r.Get("/{id}/systemd-services", listSystemdServicesHandler(deps.SystemdServices))
 			r.Get("/{id}/network-interfaces", listNetworkInterfacesHandler(deps.NetworkInterfaces))
+			r.Get("/{id}/storage-devices", listStorageDevicesHandler(deps.StorageDevices))
 			r.Post("/{id}/services/{unitName}/{action}", requestServiceActionHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/files/{actionType}", requestFileActionHandler(deps.FileActions, deps.Devices, deps.Audits, deps.Hub))

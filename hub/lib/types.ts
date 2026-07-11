@@ -244,6 +244,28 @@ export interface ListNetworkInterfacesResponse {
   interfaces: NetworkInterface[];
 }
 
+export interface StorageDevice {
+  id: string;
+  device_id: string;
+  name: string;
+  size: number;
+  device_type: string;
+  model: string;
+  mount_point: string;
+  filesystem: string;
+  uuid: string;
+  is_removable: boolean;
+  is_readonly: boolean;
+  used_bytes: number;
+  available_bytes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListStorageDevicesResponse {
+  devices: StorageDevice[];
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;
