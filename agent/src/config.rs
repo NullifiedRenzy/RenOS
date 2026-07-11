@@ -9,6 +9,7 @@ struct ConfigFile {
     api_url: Option<String>,
     heartbeat_interval_secs: Option<u64>,
     log_level: Option<String>,
+    protected_services: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +25,7 @@ pub struct Config {
     pub cache_dir: PathBuf,
     pub heartbeat_interval_secs: u64,
     pub log_level: String,
+    pub protected_services: Vec<String>,
 }
 
 impl Default for Config {
@@ -40,6 +42,19 @@ impl Default for Config {
             cache_dir: PathBuf::from(&data).join("cache"),
             heartbeat_interval_secs: 30,
             log_level: "info".to_string(),
+            protected_services: vec![
+                "sshd.service".to_string(),
+                "ssh.service".to_string(),
+                "NetworkManager.service".to_string(),
+                "systemd-logind.service".to_string(),
+                "dbus.service".to_string(),
+                "firewalld.service".to_string(),
+                "docker.service".to_string(),
+                "containerd.service".to_string(),
+                "renos-agent.service".to_string(),
+                "renos-core.service".to_string(),
+                "renos-hub.service".to_string(),
+            ],
         }
     }
 }
@@ -104,6 +119,21 @@ pub fn load() -> Config {
     }
 
     apply_env_overrides(&mut cfg);
+
+    if let Some(file_cfg) = load_from_file() {
+        if let Some(v) = file_cfg.protected_services {
+            if !v.is_empty() {
+                cfg.protected_services = v;
+            }
+        }
+    }
+
+    if let Ok(v) = std::env::var("RENOS_PROTECTED_SERVICES") {
+        let list: Vec<String> = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        if !list.is_empty() {
+            cfg.protected_services = list;
+        }
+    }
 
     cfg
 }

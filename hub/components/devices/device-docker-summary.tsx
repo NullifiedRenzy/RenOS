@@ -6,19 +6,21 @@ interface DockerSummaryProps {
   imageCount: number;
   volumeCount: number;
   networkCount: number;
+  serviceCount?: number;
 }
 
-export function DockerSummaryCard({ containerCount, runningCount, imageCount, volumeCount, networkCount }: DockerSummaryProps) {
+export function DockerSummaryCard({ containerCount, runningCount, imageCount, volumeCount, networkCount, serviceCount }: DockerSummaryProps) {
   const items = [
     { label: "Containers", value: containerCount, sub: `${runningCount} running` },
     { label: "Images", value: imageCount },
     { label: "Volumes", value: volumeCount },
     { label: "Networks", value: networkCount },
+    ...(serviceCount !== undefined ? [{ label: "Services", value: serviceCount }] : []),
   ];
 
   return (
     <div className="card">
-      <h2 className="text-headline-4 text-[var(--color-text-primary)] mb-3">Docker Summary</h2>
+      <h2 className="text-headline-4 text-[var(--color-text-primary)] mb-3">System Summary</h2>
       <div className="grid grid-cols-2 gap-3">
         {items.map(item => (
           <div key={item.label} className="p-3 rounded-sm bg-[var(--color-surface)]">

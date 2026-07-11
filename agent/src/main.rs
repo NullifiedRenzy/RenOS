@@ -6,6 +6,9 @@ mod docker_images;
 mod docker_networks;
 mod docker_volumes;
 mod enroll;
+mod service_actions;
+mod systemd;
+mod systemd_services;
 mod grpc_client;
 mod health;
 mod identity;
@@ -114,6 +117,7 @@ async fn main() {
 
 				let device_id = identity.device_id.clone();
 				let api_url = cfg.api_url.clone();
+				let protected_services = cfg.protected_services.clone();
 
 				let mut client = grpc_client::Client::new(&cfg);
 				client.set_device_id(identity.device_id.clone());
@@ -265,7 +269,73 @@ async fn main() {
 					}
 				});
 
-				// Docker actions (existing — now also handles logs + stats)
+				// ─── Systemd state sync tasks ─────────────────────────────────────
+
+			// Systemd services
+			let sys_api_url = api_url.clone();
+			let sys_device_id = device_id.clone();
+			let sys_device_secret = device_secret.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
+				loop {
+					interval.tick().await;
+					if !systemd::is_available() {
+						tracing::info!("systemd not available on this device");
+						continue;
+					}
+					match systemd_services::list_services() {
+						Ok(services) => {
+							tracing::info!("reporting {} systemd service(s)", services.len());
+							if let Err(e) = systemd_services::submit_services(
+								&sys_api_url, &sys_device_id, &sys_device_secret, &services,
+							).await {
+								tracing::warn!("failed to submit systemd services: {}", e);
+							}
+						}
+						Err(e) => tracing::warn!("failed to list systemd services: {}", e),
+					}
+				}
+			});
+
+			// Systemd service actions
+			let svc_act_api_url = api_url.clone();
+			let svc_act_device_id = device_id.clone();
+			let svc_act_device_secret = device_secret.clone();
+			let svc_act_protected = protected_services.clone();
+			tokio::spawn(async move {
+				let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+				loop {
+					interval.tick().await;
+
+					if !systemd::is_available() {
+						continue;
+					}
+
+					match service_actions::poll(&svc_act_api_url, &svc_act_device_id, &svc_act_device_secret).await {
+						Ok(pending) => {
+							for act in &pending {
+								tracing::info!("executing systemctl {} on {}", act.action, act.unit_name);
+								let (exit_code, stdout, stderr) = service_actions::execute_action(
+									&act.action, &act.unit_name, &svc_act_protected,
+								);
+								tracing::info!("service action {} completed (exit={})", act.id, exit_code);
+								if !stderr.is_empty() {
+									tracing::warn!("service action {} stderr: {}", act.id, stderr);
+								}
+								if let Err(e) = service_actions::submit_result(
+									&svc_act_api_url, &svc_act_device_id, &svc_act_device_secret,
+									&act.id, exit_code, &stdout, &stderr,
+								).await {
+									tracing::warn!("failed to submit service action result for {}: {}", act.id, e);
+								}
+							}
+						}
+						Err(e) => tracing::warn!("service actions poll failed: {}", e),
+					}
+				}
+			});
+
+			// Docker actions (existing — now also handles logs + stats)
 				let act_api_url = api_url.clone();
 				let act_device_id = device_id.clone();
 				let act_device_secret = device_secret.clone();

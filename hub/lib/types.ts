@@ -155,6 +155,42 @@ export interface ListDockerNetworksResponse {
   networks: DockerNetwork[];
 }
 
+export interface SystemdService {
+  id: string;
+  device_id: string;
+  unit_name: string;
+  load_state: string;
+  active_state: string;
+  sub_state: string;
+  description: string;
+  enabled: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListSystemdServicesResponse {
+  services: SystemdService[];
+}
+
+export interface ServiceAction {
+  id: string;
+  device_id: string;
+  user_id: string;
+  unit_name: string;
+  action: "start" | "stop" | "restart";
+  status: "pending" | "running" | "completed" | "failed";
+  exit_code: number | null;
+  output: string | null;
+  error: string | null;
+  requested_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceActionResponse {
+  service_action: ServiceAction;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

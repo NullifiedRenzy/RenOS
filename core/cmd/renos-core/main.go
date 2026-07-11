@@ -99,6 +99,8 @@ func main() {
 	dockerImages := db.NewDockerImageRepository(pool)
 	dockerVolumes := db.NewDockerVolumeRepository(pool)
 	dockerNetworks := db.NewDockerNetworkRepository(pool)
+	systemdServices := db.NewSystemdServiceRepository(pool)
+	serviceActions := db.NewServiceActionRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -126,6 +128,8 @@ func main() {
 		DockerImages:     dockerImages,
 		DockerVolumes:    dockerVolumes,
 		DockerNetworks:   dockerNetworks,
+		SystemdServices:  systemdServices,
+		ServiceActions:   serviceActions,
 		Audits:           audits,
 		AdminID:          adminID,
 		Hub:              eventHub,

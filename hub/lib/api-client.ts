@@ -3,6 +3,7 @@ import type {
   CommandResponse, ListCommandsResponse,
   ListContainersResponse, ContainerActionResponse,
   ListDockerImagesResponse, ListDockerVolumesResponse, ListDockerNetworksResponse,
+  ListSystemdServicesResponse, ServiceActionResponse,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -123,6 +124,14 @@ class ApiClient {
 
   async listDockerNetworks(deviceId: string): Promise<ListDockerNetworksResponse> {
     return this.request<ListDockerNetworksResponse>("GET", `/devices/${deviceId}/docker-networks`);
+  }
+
+  async listSystemdServices(deviceId: string): Promise<ListSystemdServicesResponse> {
+    return this.request<ListSystemdServicesResponse>("GET", `/devices/${deviceId}/systemd-services`);
+  }
+
+  async requestServiceAction(deviceId: string, unitName: string, action: string): Promise<ServiceActionResponse> {
+    return this.request<ServiceActionResponse>("POST", `/devices/${deviceId}/services/${encodeURIComponent(unitName)}/${action}`);
   }
 }
 

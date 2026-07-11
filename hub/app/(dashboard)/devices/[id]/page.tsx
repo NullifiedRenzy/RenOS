@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useDevice } from "@/hooks/use-devices";
 import { useContainers } from "@/hooks/use-containers";
+import { useSystemdServices } from "@/hooks/use-systemd-services";
 import { HealthScore } from "@/components/devices/health-score";
 import { DeviceMetrics } from "@/components/devices/device-metrics";
 import { SafeCommands } from "@/components/devices/safe-commands";
@@ -13,6 +14,7 @@ import { DockerSummaryCard } from "@/components/devices/device-docker-summary";
 import { DockerImages } from "@/components/devices/device-docker-images";
 import { DockerVolumes } from "@/components/devices/device-docker-volumes";
 import { DockerNetworks } from "@/components/devices/device-docker-networks";
+import { SystemdServices } from "@/components/devices/device-systemd-services";
 import { EmptyState } from "@/components/devices/empty-state";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ export default function DeviceDetailPage() {
   const containers = containersData?.containers ?? [];
   const containerCount = containers.length;
   const runningCount = containers.filter(c => c.state === "running").length;
+  const { data: servicesData } = useSystemdServices(id);
+  const services = servicesData?.services ?? [];
 
   if (isLoading) {
     return (
@@ -114,6 +118,8 @@ export default function DeviceDetailPage() {
           <DockerVolumes deviceId={device.id} />
           <DockerNetworks deviceId={device.id} />
 
+          <SystemdServices deviceId={device.id} />
+
           {device.status === "online" && (
             <SafeCommands deviceId={device.id} />
           )}
@@ -149,6 +155,7 @@ export default function DeviceDetailPage() {
             imageCount={0}
             volumeCount={0}
             networkCount={0}
+            serviceCount={services.length}
           />
 
           <div className="card">

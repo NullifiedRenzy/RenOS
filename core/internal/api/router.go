@@ -27,6 +27,8 @@ type Dependencies struct {
 	DockerImages     *db.DockerImageRepository
 	DockerVolumes    *db.DockerVolumeRepository
 	DockerNetworks   *db.DockerNetworkRepository
+	SystemdServices  *db.SystemdServiceRepository
+	ServiceActions   *db.ServiceActionRepository
 	Audits           *db.AuditRepository
 	AdminID          string
 	Hub              *ws.Hub
@@ -59,8 +61,11 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/devices/{id}/docker-images", syncDockerImagesHandler(deps.DockerImages, deps.Devices))
 		r.Post("/devices/{id}/docker-volumes", syncDockerVolumesHandler(deps.DockerVolumes, deps.Devices))
 		r.Post("/devices/{id}/docker-networks", syncDockerNetworksHandler(deps.DockerNetworks, deps.Devices))
+		r.Post("/devices/{id}/systemd-services", syncSystemdServicesHandler(deps.SystemdServices, deps.Devices))
 		r.Post("/container-actions/pending", pendingContainerActionsHandler(deps.ContainerActions, deps.Devices))
 		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
+		r.Post("/service-actions/pending", pendingServiceActionsHandler(deps.ServiceActions, deps.Devices))
+		r.Post("/service-actions/{actionId}/result", submitServiceActionResultHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
 
 		// Admin-facing — requires JWT auth
 		r.Route("/devices", func(r chi.Router) {
@@ -77,6 +82,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Get("/{id}/docker-images", listDockerImagesHandler(deps.DockerImages))
 			r.Get("/{id}/docker-volumes", listDockerVolumesHandler(deps.DockerVolumes))
 			r.Get("/{id}/docker-networks", listDockerNetworksHandler(deps.DockerNetworks))
+			r.Get("/{id}/systemd-services", listSystemdServicesHandler(deps.SystemdServices))
+			r.Post("/{id}/services/{unitName}/{action}", requestServiceActionHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		})
 	})
