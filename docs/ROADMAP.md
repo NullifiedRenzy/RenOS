@@ -9,8 +9,9 @@
 - Storage
 - Virtualization
 - Updates
-
-## Remaining
 - Plugins
 - AI
 - Mobile
+
+## Remaining
+- (none — all roadmap capabilities implemented)
