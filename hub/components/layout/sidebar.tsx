@@ -19,6 +19,12 @@ const navItems = [
       { label: "All Devices", href: "/devices", icon: "\u{1F4BB}" },
     ],
   },
+  {
+    section: "AI",
+    items: [
+      { label: "AI Assistant", href: "/ai", icon: "\u{1F916}" },
+    ],
+  },
 ];
 
 export function Sidebar() {

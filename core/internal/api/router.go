@@ -34,6 +34,7 @@ type Dependencies struct {
 	VirtualMachines      *db.VirtualMachineRepository
 	UpdateStatus         *db.UpdateStatusRepository
 	Plugins              *db.PluginRepository
+	AIConversations      *db.AIConversationRepository
 	FileActions      *db.FileActionRepository
 	Audits           *db.AuditRepository
 	AdminID          string
@@ -108,6 +109,13 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/files/{actionType}", requestFileActionHandler(deps.FileActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Get("/file-actions/{actionId}", getFileActionResultHandler(deps.FileActions))
+		})
+
+		r.Route("/ai", func(r chi.Router) {
+			r.Use(authRequired(deps.Cfg.JWTSecret))
+			r.Post("/chat", chatHandler(deps.AIConversations))
+			r.Get("/conversations", listConversationsHandler(deps.AIConversations))
+			r.Get("/conversations/{id}", getConversationHandler(deps.AIConversations))
 		})
 	})
 

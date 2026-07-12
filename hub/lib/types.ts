@@ -313,6 +313,33 @@ export interface Plugin {
   updated_at: string;
 }
 
+export interface ChatMessage {
+  role: string;
+  content: string;
+}
+
+export interface ChatResponse {
+  conversation_id: string;
+  reply: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+}
+
+export interface ListConversationsResponse {
+  conversations: ConversationSummary[];
+}
+
 export interface ListPluginsResponse {
   plugins: Plugin[];
 }

@@ -107,6 +107,7 @@ func main() {
 	virtualMachines := db.NewVirtualMachineRepository(pool)
 	updateStatus := db.NewUpdateStatusRepository(pool)
 	plugins := db.NewPluginRepository(pool)
+	aiConversations := db.NewAIConversationRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -142,6 +143,7 @@ func main() {
 		VirtualMachines:      virtualMachines,
 		UpdateStatus:         updateStatus,
 		Plugins:              plugins,
+		AIConversations:      aiConversations,
 		Audits:           audits,
 		AdminID:          adminID,
 		Hub:              eventHub,

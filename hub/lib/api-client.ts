@@ -7,6 +7,7 @@ import type {
   FileActionResponse, ListNetworkInterfacesResponse,
   ListStorageDevicesResponse, ListVirtualMachinesResponse,
   ListUpdatesResponse, ListPluginsResponse,
+  ChatResponse, ListConversationsResponse, ConversationDetail,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -167,6 +168,21 @@ class ApiClient {
 
   async requestPluginAction(deviceId: string, name: string, action: string): Promise<unknown> {
     return this.request("POST", `/devices/${deviceId}/plugins/${encodeURIComponent(name)}/${action}`);
+  }
+
+  async chat(message: string, conversationId?: string): Promise<ChatResponse> {
+    return this.request<ChatResponse>("POST", "/ai/chat", {
+      conversation_id: conversationId ?? "",
+      message,
+    });
+  }
+
+  async listConversations(): Promise<ListConversationsResponse> {
+    return this.request<ListConversationsResponse>("GET", "/ai/conversations");
+  }
+
+  async getConversation(id: string): Promise<ConversationDetail> {
+    return this.request<ConversationDetail>("GET", `/ai/conversations/${id}`);
   }
 
   async requestFileAction(deviceId: string, actionType: string, path: string, query?: string): Promise<FileActionResponse> {
