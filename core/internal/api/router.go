@@ -33,6 +33,7 @@ type Dependencies struct {
 	StorageDevices       *db.StorageDeviceRepository
 	VirtualMachines      *db.VirtualMachineRepository
 	UpdateStatus         *db.UpdateStatusRepository
+	Plugins              *db.PluginRepository
 	FileActions      *db.FileActionRepository
 	Audits           *db.AuditRepository
 	AdminID          string
@@ -71,6 +72,7 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 		r.Post("/devices/{id}/storage-devices", syncStorageDevicesHandler(deps.StorageDevices, deps.Devices))
 		r.Post("/devices/{id}/virtual-machines", syncVirtualMachinesHandler(deps.VirtualMachines, deps.Devices))
 		r.Post("/devices/{id}/updates", syncUpdatesHandler(deps.UpdateStatus, deps.Devices))
+		r.Post("/devices/{id}/plugins", syncPluginsHandler(deps.Plugins, deps.Devices))
 		r.Post("/container-actions/pending", pendingContainerActionsHandler(deps.ContainerActions, deps.Devices))
 		r.Post("/container-actions/{actionId}/result", submitContainerActionResultHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 		r.Post("/service-actions/pending", pendingServiceActionsHandler(deps.ServiceActions, deps.Devices))
@@ -100,6 +102,8 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			r.Post("/{id}/vms/{domainName}/{action}", requestVMActionHandler(deps.VirtualMachines, deps.Devices, deps.Audits, deps.Hub))
 			r.Get("/{id}/updates", listUpdatesHandler(deps.UpdateStatus))
 			r.Post("/{id}/updates/{action}", requestUpdateActionHandler(deps.UpdateStatus, deps.Devices, deps.Audits, deps.Hub))
+			r.Get("/{id}/plugins", listPluginsHandler(deps.Plugins))
+			r.Post("/{id}/plugins/{name}/{action}", requestPluginActionHandler(deps.Plugins, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/services/{unitName}/{action}", requestServiceActionHandler(deps.ServiceActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/containers/{containerId}/{action}", requestContainerActionHandler(deps.ContainerActions, deps.Devices, deps.Audits, deps.Hub))
 			r.Post("/{id}/files/{actionType}", requestFileActionHandler(deps.FileActions, deps.Devices, deps.Audits, deps.Hub))

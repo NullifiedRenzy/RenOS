@@ -6,7 +6,7 @@ import type {
   ListSystemdServicesResponse, ServiceActionResponse,
   FileActionResponse, ListNetworkInterfacesResponse,
   ListStorageDevicesResponse, ListVirtualMachinesResponse,
-  ListUpdatesResponse,
+  ListUpdatesResponse, ListPluginsResponse,
   ApiErrorBody,
 } from "@/lib/types";
 
@@ -159,6 +159,14 @@ class ApiClient {
 
   async requestUpdateAction(deviceId: string, action: string): Promise<unknown> {
     return this.request("POST", `/devices/${deviceId}/updates/${action}`);
+  }
+
+  async listPlugins(deviceId: string): Promise<ListPluginsResponse> {
+    return this.request<ListPluginsResponse>("GET", `/devices/${deviceId}/plugins`);
+  }
+
+  async requestPluginAction(deviceId: string, name: string, action: string): Promise<unknown> {
+    return this.request("POST", `/devices/${deviceId}/plugins/${encodeURIComponent(name)}/${action}`);
   }
 
   async requestFileAction(deviceId: string, actionType: string, path: string, query?: string): Promise<FileActionResponse> {

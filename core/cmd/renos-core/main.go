@@ -106,6 +106,7 @@ func main() {
 	storageDevices := db.NewStorageDeviceRepository(pool)
 	virtualMachines := db.NewVirtualMachineRepository(pool)
 	updateStatus := db.NewUpdateStatusRepository(pool)
+	plugins := db.NewPluginRepository(pool)
 	audits := db.NewAuditRepository(pool)
 
 	adminID, err := seedAdmin(users, cfg)
@@ -140,6 +141,7 @@ func main() {
 		StorageDevices:       storageDevices,
 		VirtualMachines:      virtualMachines,
 		UpdateStatus:         updateStatus,
+		Plugins:              plugins,
 		Audits:           audits,
 		AdminID:          adminID,
 		Hub:              eventHub,

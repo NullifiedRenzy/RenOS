@@ -299,6 +299,24 @@ export interface ListUpdatesResponse {
   updates: UpdateStatus[];
 }
 
+export interface Plugin {
+  id: string;
+  device_id: string;
+  name: string;
+  description: string;
+  plugin_type: string;
+  status: string;
+  last_output: string;
+  last_exit_code: number;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListPluginsResponse {
+  plugins: Plugin[];
+}
+
 export interface ListVirtualMachinesResponse {
   vms: VirtualMachine[];
 }

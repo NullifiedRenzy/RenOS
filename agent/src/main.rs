@@ -19,6 +19,7 @@ mod systemd;
 mod systemd_services;
 mod updates;
 mod virtualization;
+mod plugins;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -483,6 +484,33 @@ async fn main() {
                                 }
                             }
                             Err(e) => tracing::warn!("failed to list updates: {}", e),
+                        }
+                    }
+                });
+
+                // Plugin sync
+                let plg_api_url = api_url.clone();
+                let plg_device_id = device_id.clone();
+                let plg_device_secret = device_secret.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+                    loop {
+                        interval.tick().await;
+                        match plugins::list_plugins() {
+                            Ok(list) => {
+                                tracing::info!("reporting {} plugin(s)", list.len());
+                                if let Err(e) = plugins::submit_plugins(
+                                    &plg_api_url,
+                                    &plg_device_id,
+                                    &plg_device_secret,
+                                    &list,
+                                )
+                                .await
+                                {
+                                    tracing::warn!("failed to submit plugins: {}", e);
+                                }
+                            }
+                            Err(e) => tracing::warn!("failed to list plugins: {}", e),
                         }
                     }
                 });
