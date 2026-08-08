@@ -1,0 +1,152 @@
+name: Install Test
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'installer/**'
+      - '.github/workflows/install-test.yml'
+      - 'core/**'
+      - 'hub/**'
+      - 'agent/**'
+      - 'docker-compose*.yml'
+      - 'deploy/**'
+  push:
+    branches: [dev]
+    paths:
+      - 'installer/**'
+      - '.github/workflows/install-test.yml'
+      - 'core/**'
+      - 'hub/**'
+      - 'agent/**'
+      - 'docker-compose*.yml'
+      - 'deploy/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Shell syntax + wrapper flags ─────────────────────────────────────────────
+  syntax:
+    name: Shell syntax + flags
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: bash -n on all installer scripts
+        run: |
+          bash -n installer/linux/install.sh
+          bash -n installer/linux/fresh-install-test.sh
+          bash -n installer/linux/one-command-install.sh
+          bash -n installer/linux/ci-prep.sh
+
+      - name: one-command-install.sh --help
+        run: installer/linux/one-command-install.sh --help >/dev/null
+
+      - name: one-command-install.sh --dry-run
+        run: installer/linux/one-command-install.sh --dry-run
+
+      - name: fresh-install-test.sh --help
+        run: installer/linux/fresh-install-test.sh --help >/dev/null
+
+  # ─── Fresh install end-to-end (real runners, real systemd) ──────────────────
+  fresh:
+    name: Fresh install (${{ matrix.os }})
+    needs: syntax
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build RenOS images (local tags for compose)
+        run: bash installer/linux/ci-prep.sh
+
+      - name: Run fresh install validation
+        run: sudo installer/linux/fresh-install-test.sh --ci
+
+      - name: Show results
+        run: cat /tmp/renos-install-results.txt
+
+      - name: Upload results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: fresh-results-${{ matrix.os }}
+          path: |
+            /tmp/renos-install-results.txt
+            /tmp/renos-fresh-install.log
+            /tmp/renos-admin-credentials.txt
+
+  # ─── Fresh install end-to-end (systemd-less containers) ──────────────────────
+  fresh-container:
+    name: Fresh install (${{ matrix.name }} container)
+    needs: syntax
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: fedora42
+            image: fedora:42
+          - name: debian13
+            image: debian:13
+    container:
+      image: ${{ matrix.image }}
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prep container (install + start Docker, build images)
+        run: bash installer/linux/ci-prep.sh --install-docker
+
+      - name: Run fresh install validation
+        run: bash installer/linux/fresh-install-test.sh --ci --container
+
+      - name: Show results
+        run: cat /tmp/renos-install-results.txt
+
+      - name: Upload results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: fresh-results-${{ matrix.name }}
+          path: |
+            /tmp/renos-install-results.txt
+            /tmp/renos-fresh-install.log
+            /tmp/renos-admin-credentials.txt
+
+  # ─── One-command wrapper end-to-end ──────────────────────────────────────────
+  one-command:
+    name: One-command install (Ubuntu 24.04)
+    needs: [syntax, fresh]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build RenOS images (local tags for compose)
+        run: bash installer/linux/ci-prep.sh
+
+      - name: Run one-command install
+        run: sudo env NONINTERACTIVE=1 installer/linux/one-command-install.sh --yes
+
+      - name: Verify "RenOS is ready."
+        run: |
+          grep -q "RenOS is ready." /tmp/renos-one-command-install.log
+          grep -q "| install" /tmp/renos-install-results.txt
+          echo "ONE-COMMAND INSTALL VERIFIED"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: one-command-results
+          path: |
+            /tmp/renos-install-results.txt
+            /tmp/renos-one-command-install.log
+            /tmp/renos-validation-results.txt
+            /tmp/renos-admin-credentials.txt
