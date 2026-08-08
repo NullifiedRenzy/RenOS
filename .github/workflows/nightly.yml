@@ -5,6 +5,10 @@ on:
     - cron: "0 6 * * *"  # Daily at 06:00 UTC
   workflow_dispatch:      # Allow manual trigger
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   full-test:
     name: Full Test Suite
