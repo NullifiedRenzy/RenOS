@@ -38,10 +38,10 @@ export function DockerImages({ deviceId }: DockerImagesProps) {
           <table className="w-full text-left">
             <thead>
               <tr className="text-caption text-[var(--color-text-tertiary)] border-b border-[var(--color-border)]">
-                <th className="pb-2 pr-3 font-medium">Repository</th>
-                <th className="pb-2 pr-3 font-medium">Tag</th>
-                <th className="pb-2 pr-3 font-medium">Size</th>
-                <th className="pb-2 font-medium hidden md:table-cell">Created</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Repository</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Tag</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Size</th>
+                <th scope="col" className="pb-2 font-medium hidden md:table-cell">Created</th>
               </tr>
             </thead>
             <tbody>

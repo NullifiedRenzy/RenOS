@@ -2,35 +2,92 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Activity, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useVersion } from "@/hooks/use-version";
 import { useUiStore } from "@/stores/ui-store";
+import { useLocale } from "@/lib/i18n/use-locale";
 import { cn } from "@/lib/utils";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
-const navItems = [
+interface NavItem {
+  labelKey: TranslationKey;
+  href: string;
+  icon: string | LucideIcon;
+}
+
+const navItems: { sectionKey: TranslationKey; items: NavItem[] }[] = [
   {
-    section: "Main",
+    sectionKey: "nav.main",
+    items: [{ labelKey: "nav.dashboard", href: "/dashboard", icon: "\u{1F4CA}" }],
+  },
+  {
+    sectionKey: "nav.devices",
+    items: [{ labelKey: "nav.allDevices", href: "/devices", icon: "\u{1F4BB}" }],
+  },
+  {
+    sectionKey: "nav.orchestration",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: "\u{1F4CA}" },
+      { labelKey: "nav.groups", href: "/groups", icon: "\u{1F465}" },
+      { labelKey: "nav.jobs", href: "/jobs", icon: "\u2699\uFE0F" },
+      { labelKey: "nav.schedules", href: "/schedules", icon: "\u23F0" },
     ],
   },
   {
-    section: "Devices",
+    sectionKey: "nav.ai",
+    items: [{ labelKey: "nav.aiAssistant", href: "/ai", icon: "\u{1F916}" }],
+  },
+  {
+    sectionKey: "nav.monitoring",
     items: [
-      { label: "All Devices", href: "/devices", icon: "\u{1F4BB}" },
+      { labelKey: "nav.observability", href: "/observability", icon: "\u{1F4C8}" },
+      { labelKey: "nav.health", href: "/health", icon: Activity },
+      { labelKey: "nav.logs", href: "/logs", icon: "\u{1F4DD}" },
     ],
   },
   {
-    section: "AI",
+    sectionKey: "nav.platform",
     items: [
-      { label: "AI Assistant", href: "/ai", icon: "\u{1F916}" },
+      { labelKey: "nav.cluster", href: "/cluster", icon: "\u{1F310}" },
+      { labelKey: "nav.deploy", href: "/deploy", icon: "\u{1F680}" },
+      { labelKey: "nav.updates", href: "/updates", icon: "\u2B06\uFE0F" },
+      { labelKey: "nav.vault", href: "/vault", icon: "\u{1F512}" },
+      { labelKey: "nav.notifications", href: "/notifications", icon: "\u{1F514}" },
+      { labelKey: "nav.mobile", href: "/mobile", icon: "\u{1F4F1}" },
+    ],
+  },
+  {
+    sectionKey: "nav.fleet",
+    items: [
+      { labelKey: "nav.tagsAndGroups", href: "/fleet", icon: "\u{1F465}" },
+      { labelKey: "nav.marketplace", href: "/marketplace", icon: "\u{1F6D2}" },
+    ],
+  },
+  {
+    sectionKey: "nav.security",
+    items: [
+      { labelKey: "nav.iam", href: "/iam", icon: "\u{1F510}" },
+      { labelKey: "nav.developer", href: "/developer", icon: "\u{1F4BB}" },
+    ],
+  },
+  {
+    sectionKey: "nav.administration",
+    items: [
+      { labelKey: "nav.plugins", href: "/plugins", icon: "\u{1F9E9}" },
+      { labelKey: "nav.policies", href: "/policies", icon: "\u{1F6E1}" },
+      { labelKey: "nav.users", href: "/users", icon: "\u{1F465}" },
+      { labelKey: "nav.settings", href: "/settings", icon: "\u2699\uFE0F" },
+      { labelKey: "nav.designSystem", href: "/design-system", icon: "\u{1F3A8}" },
     ],
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { t } = useLocale();
   const { sidebarOpen } = useUiStore();
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
+  const { data: version } = useVersion();
 
   const initial = user?.display_name?.charAt(0)?.toUpperCase() ?? "?";
 
@@ -45,37 +102,47 @@ export function Sidebar() {
         <span className="text-headline-4 text-[var(--color-text-primary)]">RenOS</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-        {navItems.map((section) => (
-          <div key={section.section}>
-            {sidebarOpen && (
-              <p className="text-caption text-[var(--color-text-tertiary)] px-2 pb-2 uppercase tracking-wider">
-                {section.section}
-              </p>
-            )}
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-3 px-2 h-9 rounded-sm text-body transition-colors duration-150",
-                        isActive
-                          ? "bg-[var(--color-accent-tint)] text-[var(--color-accent)] font-medium"
-                          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]",
-                      )}
-                    >
-                      <span className="text-lg w-5 text-center flex-shrink-0">{item.icon}</span>
-                      {sidebarOpen && <span>{item.label}</span>}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+      <nav aria-label={t("nav.mainNavigation")} className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+        {navItems.map((section) => {
+          if (section.sectionKey === "nav.administration" && !can("manage_roles")) return null;
+          return (
+            <div key={section.sectionKey}>
+              {sidebarOpen && (
+                <p className="text-caption text-[var(--color-text-tertiary)] px-2 pb-2 uppercase tracking-wider">
+                  {t(section.sectionKey)}
+                </p>
+              )}
+              <ul className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                        className={cn(
+                          "flex items-center gap-3 px-2 h-9 rounded-sm text-body transition-colors duration-150",
+                          isActive
+                            ? "bg-[var(--color-accent-tint)] text-[var(--color-accent)] font-medium"
+                            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]",
+                        )}
+                      >
+                        <span className="text-lg w-5 text-center flex-shrink-0">
+                          {typeof item.icon === "string" ? (
+                            item.icon
+                          ) : (
+                            <item.icon className="h-[18px] w-[18px] inline-block" />
+                          )}
+                        </span>
+                        {sidebarOpen && <span>{t(item.labelKey)}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
       <div className="border-t border-[var(--color-border)] p-3 space-y-2">
@@ -86,16 +153,23 @@ export function Sidebar() {
           {sidebarOpen && (
             <div className="flex-1 min-w-0">
               <p className="text-body-small text-[var(--color-text-primary)] truncate">
-                {user?.display_name ?? "User"}
+                {user?.display_name ?? t("common.user")}
               </p>
               <p className="text-caption text-[var(--color-text-tertiary)]">{user?.role ?? ""}</p>
             </div>
           )}
         </div>
         {sidebarOpen && (
-          <button onClick={logout} className="btn-ghost w-full justify-start text-body-small text-[var(--color-text-tertiary)]">
-            Sign out
-          </button>
+          <>
+            <button onClick={logout} className="btn-ghost w-full justify-start text-body-small text-[var(--color-text-tertiary)]">
+              {t("common.signOut")}
+            </button>
+            {version && (
+              <p className="text-caption text-[var(--color-text-tertiary)] px-2">
+                v{version.version}
+              </p>
+            )}
+          </>
         )}
       </div>
     </aside>

@@ -1,42 +1,10 @@
+@import "./tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --color-bg: #FFFFFF;
-    --color-surface: #F2F2F7;
-    --color-surface-elevated: #FFFFFF;
-    --color-border: #E5E5EA;
-    --color-text-primary: #0A0A0B;
-    --color-text-secondary: #636366;
-    --color-text-tertiary: #8E8E93;
-    --color-accent: #007AFF;
-    --color-accent-hover: #0055CC;
-    --color-success: #34C759;
-    --color-warning: #FF9500;
-    --color-error: #FF3B30;
-    --color-info: #5AC8FA;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-    --shadow-lg: 0 20px 60px rgba(0,0,0,0.12), 0 8px 20px rgba(0,0,0,0.06);
-  }
-
-  .dark {
-    --color-bg: #1C1C1E;
-    --color-surface: #2C2C2E;
-    --color-surface-elevated: #3A3A3C;
-    --color-border: #3A3A3C;
-    --color-text-primary: #FFFFFF;
-    --color-text-secondary: #E5E5EA;
-    --color-text-tertiary: #8E8E93;
-    --color-accent: #0A84FF;
-    --color-accent-hover: #409CFF;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
-  }
-
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
@@ -48,8 +16,19 @@
   }
 
   *:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-focus-ring, #6366f1);
     outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -58,14 +37,6 @@
     @apply bg-[var(--color-surface-elevated)] rounded-md p-4;
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--color-border);
-  }
-
-  .card-interactive {
-    @apply card transition-shadow duration-150 ease-out;
-  }
-
-  .card-interactive:hover {
-    box-shadow: var(--shadow-md);
   }
 
   .btn {
@@ -105,14 +76,6 @@
     color: var(--color-text-primary);
   }
 
-  .btn-destructive {
-    @apply btn-ghost text-[var(--color-error)];
-  }
-
-  .btn-destructive:hover:not(:disabled) {
-    background-color: rgba(255, 59, 48, 0.08);
-  }
-
   .input {
     @apply w-full rounded-sm px-3 h-8 text-body
            bg-[var(--color-surface)] border border-[var(--color-border)]
@@ -150,27 +113,39 @@
     color: var(--color-info);
   }
 
-  .status-dot {
-    @apply inline-block w-2 h-2 rounded-full;
+  .kbd {
+    @apply inline-flex items-center justify-center rounded-sm px-1.5 py-0.5
+           text-caption font-medium;
+    background-color: var(--color-surface);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    border-bottom-width: 2px;
   }
 
-  .status-dot-online {
-    @apply status-dot bg-[var(--color-success)];
-    animation: pulse 2s infinite;
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
-  .status-dot-offline {
-    @apply status-dot bg-[var(--color-text-tertiary)];
+  @keyframes confetti-fall {
+    0% {
+      transform: translateY(-10vh) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(110vh) rotate(720deg);
+      opacity: 0;
+    }
   }
 
-  .status-dot-degraded {
-    @apply status-dot bg-[var(--color-warning)];
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.25s ease-out both;
   }
 
   .skeleton {

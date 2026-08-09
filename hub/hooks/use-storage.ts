@@ -12,18 +12,6 @@ export function useStorageDevices(deviceId: string) {
   });
 }
 
-export function formatStorageSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-export function usagePercent(used: number, total: number): number {
-  if (total <= 0) return 0;
-  return Math.round((used / total) * 100);
-}
-
 export function getDeviceTypeIcon(type: string): string {
   const icons: Record<string, string> = {
     disk: "\uD83D\uDCBF",

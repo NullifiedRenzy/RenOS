@@ -43,10 +43,10 @@ export function Plugins({ deviceId }: PluginsProps) {
           <table className="w-full text-left">
             <thead>
               <tr className="text-caption text-[var(--color-text-tertiary)] border-b border-[var(--color-border)]">
-                <th className="pb-2 pr-3 font-medium">Name</th>
-                <th className="pb-2 pr-3 font-medium hidden md:table-cell">Description</th>
-                <th className="pb-2 pr-3 font-medium">Status</th>
-                <th className="pb-2 font-medium">Actions</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Name</th>
+                <th scope="col" className="pb-2 pr-3 font-medium hidden md:table-cell">Description</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Status</th>
+                <th scope="col" className="pb-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>

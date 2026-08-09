@@ -18,8 +18,8 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     if (!token) return;
 
-    const apiUrl = process.env.NEXT_PUBLIC_RENOS_API_URL || "http://localhost:8443";
-    const wsUrl = apiUrl.replace(/^http/, "ws") + "/api/v1/ws?token=" + encodeURIComponent(token);
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${proto}//${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -35,6 +35,14 @@ export function useWebSocket() {
           queryClient.invalidateQueries({ queryKey: ["devices"] });
           if (msg.device_id) {
             queryClient.invalidateQueries({ queryKey: ["device", msg.device_id] });
+          }
+        }
+        if (["execution.created", "execution.output", "execution.completed", "execution.cancelled"].includes(msg.type)) {
+          if (msg.device_id) {
+            queryClient.invalidateQueries({ queryKey: ["executions", msg.device_id] });
+            if (msg.data?.execution_id) {
+              queryClient.invalidateQueries({ queryKey: ["execution-output", msg.device_id, msg.data.execution_id] });
+            }
           }
         }
       } catch {

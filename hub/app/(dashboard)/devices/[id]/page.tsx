@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useDevice } from "@/hooks/use-devices";
 import { useContainers } from "@/hooks/use-containers";
 import { useSystemdServices } from "@/hooks/use-systemd-services";
+import { useDockerImages } from "@/hooks/use-docker-images";
+import { useDockerVolumes } from "@/hooks/use-docker-volumes";
+import { useDockerNetworks } from "@/hooks/use-docker-networks";
 import { HealthScore } from "@/components/devices/health-score";
 import { DeviceMetrics } from "@/components/devices/device-metrics";
-import { SafeCommands } from "@/components/devices/safe-commands";
 import { CommandHistory } from "@/components/devices/command-history";
 import { DeviceContainers } from "@/components/devices/device-containers";
 import { DockerSummaryCard } from "@/components/devices/device-docker-summary";
@@ -21,7 +23,11 @@ import { StorageExplorer } from "@/components/devices/device-storage";
 import { VirtualMachines } from "@/components/devices/device-virtual-machines";
 import { Updates } from "@/components/devices/device-updates";
 import { Plugins } from "@/components/devices/device-plugins";
-import { EmptyState } from "@/components/devices/empty-state";
+import { TerminalExecution } from "@/components/devices/terminal-execution";
+import { ProcessManager } from "@/components/devices/process-manager";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { ScreenReaderOnly } from "@/components/ui/screen-reader-only";
 import { computeHealthScore, getMetricPercent, formatDate, formatDuration, getLastHealth } from "@/lib/utils";
 
 export default function DeviceDetailPage() {
@@ -35,10 +41,13 @@ export default function DeviceDetailPage() {
   const runningCount = containers.filter(c => c.state === "running").length;
   const { data: servicesData } = useSystemdServices(id);
   const services = servicesData?.services ?? [];
+  const { data: imagesData } = useDockerImages(id);
+  const { data: volumesData } = useDockerVolumes(id);
+  const { data: networksData } = useDockerNetworks(id);
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" aria-busy="true" role="status">
         <div className="skeleton h-8 w-48" />
         <div className="grid grid-cols-3 gap-4">
           <div className="skeleton h-32 col-span-2" />
@@ -52,10 +61,7 @@ export default function DeviceDetailPage() {
     return (
       <div className="space-y-6">
         <button onClick={() => router.back()} className="btn-ghost text-body-small">&larr; Back</button>
-        <div className="card text-center py-8">
-          <p className="text-body text-[var(--color-error)]">Failed to load device</p>
-          <p className="text-body-small text-[var(--color-text-tertiary)] mt-1">{(error as Error).message}</p>
-        </div>
+        <ErrorState error={error} title="Failed to load device" />
       </div>
     );
   }
@@ -90,7 +96,11 @@ export default function DeviceDetailPage() {
           <span
             className="inline-block w-3 h-3 rounded-full flex-shrink-0"
             style={{ backgroundColor: statusColor[device.status] ?? "var(--color-text-tertiary)" }}
+            aria-hidden="true"
           />
+          <ScreenReaderOnly>
+            {device.status.charAt(0).toUpperCase() + device.status.slice(1)}
+          </ScreenReaderOnly>
           <div>
             <h1 className="text-headline-1 text-[var(--color-text-primary)]">{device.hostname}</h1>
             <p className="text-body text-[var(--color-text-secondary)] mt-1">
@@ -128,6 +138,10 @@ export default function DeviceDetailPage() {
 
           <FileBrowser deviceId={device.id} />
 
+          {device.status === "online" && (
+            <ProcessManager deviceId={device.id} />
+          )}
+
           <NetworkInfo deviceId={device.id} />
 
           <StorageExplorer deviceId={device.id} />
@@ -139,7 +153,7 @@ export default function DeviceDetailPage() {
           <Plugins deviceId={device.id} />
 
           {device.status === "online" && (
-            <SafeCommands deviceId={device.id} />
+            <TerminalExecution deviceId={device.id} />
           )}
 
           <div className="card">
@@ -148,6 +162,8 @@ export default function DeviceDetailPage() {
               {[
                 ["Device ID", device.id],
                 ["Status", device.status.charAt(0).toUpperCase() + device.status.slice(1)],
+                ["Device State", device.device_state.charAt(0).toUpperCase() + device.device_state.slice(1)],
+                ...(device.failure_count > 0 ? [["Failure Count", String(device.failure_count)]] as const : []),
                 ["Hostname", device.hostname],
                 ["OS", device.os],
                 ["Architecture", device.arch],
@@ -170,9 +186,9 @@ export default function DeviceDetailPage() {
           <DockerSummaryCard
             containerCount={containerCount}
             runningCount={runningCount}
-            imageCount={0}
-            volumeCount={0}
-            networkCount={0}
+            imageCount={imagesData?.images?.length ?? 0}
+            volumeCount={volumesData?.volumes?.length ?? 0}
+            networkCount={networksData?.networks?.length ?? 0}
             serviceCount={services.length}
           />
 

@@ -15,6 +15,8 @@ interface AuthState {
   setAuth: (user: User, token: string) => void;
   logout: () => void;
   hydrate: () => void;
+  hasRole: (role: string) => boolean;
+  can: (permission: string) => boolean;
 }
 
 function persist(user: User, token: string) {
@@ -29,7 +31,20 @@ function clear() {
   } catch { }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+function computePermissions(role: string | undefined): Set<string> {
+  switch (role) {
+    case "admin":
+      return new Set(["read", "write", "admin", "manage_roles", "manage_enroll", "manage_policies"]);
+    case "operator":
+      return new Set(["read", "write"]);
+    case "viewer":
+      return new Set(["read"]);
+    default:
+      return new Set(["read"]);
+  }
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isAuthenticated: false,
@@ -53,5 +68,16 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: stored.user, token: stored.token, isAuthenticated: true });
       }
     } catch { }
+  },
+
+  hasRole: (role: string) => {
+    const user = get().user;
+    return user?.role === role;
+  },
+
+  can: (permission: string) => {
+    const user = get().user;
+    const perms = computePermissions(user?.role);
+    return perms.has(permission);
   },
 }));

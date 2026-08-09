@@ -1,6 +1,7 @@
 "use client";
 
 import { useCommands } from "@/hooks/use-commands";
+import { formatTime } from "@/lib/format";
 import type { Command } from "@/lib/types";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -14,12 +15,6 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 function statusBadge(status: string) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, className: "badge" };
   return <span className={cfg.className}>{cfg.label}</span>;
-}
-
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleTimeString();
 }
 
 function formatOutputLine(line: string, i: number) {

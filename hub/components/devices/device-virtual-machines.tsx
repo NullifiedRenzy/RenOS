@@ -47,11 +47,11 @@ export function VirtualMachines({ deviceId }: VirtualMachinesProps) {
           <table className="w-full text-left">
             <thead>
               <tr className="text-caption text-[var(--color-text-tertiary)] border-b border-[var(--color-border)]">
-                <th className="pb-2 pr-3 font-medium">Domain</th>
-                <th className="pb-2 pr-3 font-medium">State</th>
-                <th className="pb-2 pr-3 font-medium hidden md:table-cell">vCPU</th>
-                <th className="pb-2 pr-3 font-medium hidden md:table-cell">Memory</th>
-                <th className="pb-2 font-medium">Actions</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Domain</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">State</th>
+                <th scope="col" className="pb-2 pr-3 font-medium hidden md:table-cell">vCPU</th>
+                <th scope="col" className="pb-2 pr-3 font-medium hidden md:table-cell">Memory</th>
+                <th scope="col" className="pb-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>

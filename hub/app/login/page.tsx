@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { ApiRequestError } from "@/lib/api-client";
+import { ApiRequestError, api } from "@/lib/api-client";
+import { getErrorMessage } from "@/lib/error-messages";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +13,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    emailRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .getVersion()
+      .then((v) => {
+        if (active) setVersion(v.version);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,10 +42,11 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/dashboard");
     } catch (err) {
-      if (err instanceof ApiRequestError) {
-        setError(err.message);
+      if (err instanceof ApiRequestError && (err.status === 401 || err.status === 400)) {
+        setError("Invalid email or password. Double-check your email and password.");
       } else {
-        setError("Connection error. Is the server running?");
+        const copy = getErrorMessage(err);
+        setError(copy.hint ? `${copy.message} ${copy.hint}` : copy.message);
       }
     } finally {
       setLoading(false);
@@ -44,7 +65,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-2 rounded-sm bg-[rgba(255,59,48,0.08)] text-body-small text-[var(--color-error)]">
+            <div
+              id="login-error"
+              role="alert"
+              className="flex items-center gap-2 p-2 rounded-sm bg-[rgba(255,59,48,0.08)] text-body-small text-[var(--color-error)]"
+            >
               {error}
             </div>
           )}
@@ -54,7 +79,9 @@ export default function LoginPage() {
               Email
             </label>
             <input
+              ref={emailRef}
               id="email"
+              name="email"
               type="email"
               className="input"
               placeholder="admin@renos.local"
@@ -62,6 +89,8 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              aria-required="true"
+              aria-describedby={error ? "login-error" : undefined}
             />
           </div>
 
@@ -71,6 +100,7 @@ export default function LoginPage() {
             </label>
             <input
               id="password"
+              name="password"
               type="password"
               className="input"
               placeholder="Enter your password"
@@ -78,6 +108,8 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              aria-required="true"
+              aria-describedby={error ? "login-error" : undefined}
             />
           </div>
 
@@ -87,7 +119,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-caption text-[var(--color-text-tertiary)] text-center mt-4">
-          RenOS v0.1.0
+          {version ? `RenOS v${version}` : "RenOS"}
         </p>
       </div>
     </div>

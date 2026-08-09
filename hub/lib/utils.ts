@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { Device, LastHealth } from "@/lib/types";
+import { formatRelative } from "@/lib/i18n/locale";
+import { translations } from "@/lib/i18n/translations";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,15 +17,8 @@ export function formatDuration(seconds: number): string {
 }
 
 export function formatDate(iso: string | null): string {
-  if (!iso) return "Never";
-  const date = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-
-  if (diff < 60_000) return "Just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return date.toLocaleDateString();
+  if (!iso) return translations.en.time.never;
+  return formatRelative(iso);
 }
 
 export function healthScoreColor(score: number): string {

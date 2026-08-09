@@ -1,29 +1,38 @@
 "use client";
 
+import { useMemo } from "react";
 import { useDevices } from "@/hooks/use-devices";
 import { DeviceCard } from "@/components/devices/device-card";
-import { EmptyState } from "@/components/devices/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 
 export default function DevicesPage() {
-  const { data, isLoading, error } = useDevices();
-  const devices = data?.devices ?? [];
+  const { data, isLoading, error, refetch } = useDevices();
+  const devices = useMemo(() => data?.devices ?? [], [data]);
 
-  const onlineCount = devices.filter((d) => d.status === "online").length;
-  const offlineCount = devices.filter((d) => d.status === "offline").length;
+  const { onlineCount, offlineCount } = useMemo(() => {
+    let online = 0;
+    let offline = 0;
+    for (const d of devices) {
+      if (d.status === "online") online += 1;
+      else if (d.status === "offline") offline += 1;
+    }
+    return { onlineCount: online, offlineCount: offline };
+  }, [devices]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-headline-1 text-[var(--color-text-primary)]">Devices</h1>
-          <p className="text-body text-[var(--color-text-secondary)] mt-1">
+          <p aria-live="polite" className="text-body text-[var(--color-text-secondary)] mt-1">
             {isLoading ? "Loading..." : `${devices.length} device${devices.length !== 1 ? "s" : ""} · ${onlineCount} online · ${offlineCount} offline`}
           </p>
         </div>
       </div>
 
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div aria-hidden="true" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="skeleton h-28" />
           ))}
@@ -31,12 +40,7 @@ export default function DevicesPage() {
       )}
 
       {error && !isLoading && (
-        <div className="card text-center py-8">
-          <p className="text-body text-[var(--color-error)]">Failed to load devices</p>
-          <p className="text-body-small text-[var(--color-text-tertiary)] mt-1">
-            {(error as Error).message}
-          </p>
-        </div>
+        <ErrorState error={error} onRetry={() => refetch()} title="Failed to load devices" />
       )}
 
       {!isLoading && !error && devices.length === 0 && (

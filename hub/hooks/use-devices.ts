@@ -1,12 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { api, LIST_LIMIT } from "@/lib/api-client";
 
 export function useDevices() {
   return useQuery({
     queryKey: ["devices"],
-    queryFn: () => api.listDevices(),
+    queryFn: () => api.listDevices(LIST_LIMIT),
     refetchInterval: 30_000,
     staleTime: 10_000,
   });

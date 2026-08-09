@@ -63,10 +63,10 @@ export function Updates({ deviceId }: UpdatesProps) {
           <table className="w-full text-left">
             <thead>
               <tr className="text-caption text-[var(--color-text-tertiary)] border-b border-[var(--color-border)]">
-                <th className="pb-2 pr-3 font-medium">Package</th>
-                <th className="pb-2 pr-3 font-medium">Current</th>
-                <th className="pb-2 pr-3 font-medium">Available</th>
-                <th className="pb-2 font-medium">Severity</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Package</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Current</th>
+                <th scope="col" className="pb-2 pr-3 font-medium">Available</th>
+                <th scope="col" className="pb-2 font-medium">Severity</th>
               </tr>
             </thead>
             <tbody>

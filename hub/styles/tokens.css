@@ -1,0 +1,150 @@
+/* RenOS Design Tokens (M70)
+   Imported by globals.css before Tailwind directives.
+   Semantic tokens only — components must never hard-code hex values.
+   Declared outside CSS layers so variables cascade everywhere. */
+
+:root {
+    color-scheme: light;
+
+    /* --- Color: surfaces --- */
+    --color-bg: #FFFFFF;
+    --color-bg-primary: #FFFFFF;
+    --color-bg-secondary: #F2F2F7;
+    --color-bg-tertiary: #E5E5EA;
+    --color-surface: #F2F2F7;
+    --color-surface-elevated: #FFFFFF;
+    --color-surface-hover: #E8E8ED;
+
+    /* --- Color: borders & dividers --- */
+    --color-border: #E5E5EA;
+    --color-border-strong: #C7C7CC;
+
+    /* --- Color: text --- */
+    --color-text-primary: #0A0A0B;
+    --color-text-secondary: #636366;
+    --color-text-tertiary: #8E8E93;
+    --color-text-on-accent: #FFFFFF;
+
+    /* --- Color: accent & status --- */
+    --color-accent: #007AFF;
+    --color-accent-hover: #0055CC;
+    --color-accent-pressed: #003399;
+    --color-accent-tint: rgba(0, 122, 255, 0.10);
+    --color-success: #34C759;
+    --color-success-tint: rgba(52, 199, 89, 0.12);
+    --color-warning: #FF9500;
+    --color-warning-tint: rgba(255, 149, 0, 0.12);
+    --color-error: #FF3B30;
+    --color-error-tint: rgba(255, 59, 48, 0.12);
+    --color-info: #5AC8FA;
+    --color-info-tint: rgba(90, 200, 250, 0.12);
+    --color-focus-ring: rgba(0, 122, 255, 0.45);
+    --color-overlay: rgba(0, 0, 0, 0.45);
+
+    /* --- Spacing scale (4px base) --- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* --- Radius --- */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+
+    /* --- Elevation --- */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,0.12), 0 8px 20px rgba(0,0,0,0.06);
+
+    /* --- Motion --- */
+    --duration-fast: 100ms;
+    --duration-med: 200ms;
+    --duration-slow: 400ms;
+    --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+
+    /* --- Typography scale (px sizes, line-heights, weights) --- */
+    --text-headline-1: 32px;
+    --text-headline-2: 24px;
+    --text-headline-3: 20px;
+    --text-headline-4: 18px;
+    --text-body: 15px;
+    --text-body-small: 13px;
+    --text-caption: 12px;
+
+    --leading-headline: 1.25;
+    --leading-body: 1.47;
+    --leading-caption: 1.33;
+
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    --color-bg: #1C1C1E;
+    --color-bg-primary: #1C1C1E;
+    --color-bg-secondary: #2C2C2E;
+    --color-bg-tertiary: #3A3A3C;
+    --color-surface: #2C2C2E;
+    --color-surface-elevated: #3A3A3C;
+    --color-surface-hover: #48484A;
+    --color-border: #3A3A3C;
+    --color-border-strong: #48484A;
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #E5E5EA;
+    --color-text-tertiary: #8E8E93;
+    --color-text-on-accent: #FFFFFF;
+    --color-accent: #0A84FF;
+    --color-accent-hover: #409CFF;
+    --color-accent-pressed: #5EB5FF;
+    --color-accent-tint: rgba(10, 132, 255, 0.16);
+    --color-success: #32D74B;
+    --color-success-tint: rgba(50, 215, 75, 0.16);
+    --color-warning: #FFD60A;
+    --color-warning-tint: rgba(255, 214, 10, 0.16);
+    --color-error: #FF453A;
+    --color-error-tint: rgba(255, 69, 58, 0.16);
+    --color-info: #64D2FF;
+    --color-info-tint: rgba(100, 210, 255, 0.16);
+    --color-focus-ring: rgba(10, 132, 255, 0.55);
+    --color-overlay: rgba(0, 0, 0, 0.6);
+
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  @media (prefers-contrast: more) {
+    :root {
+      --color-surface-hover: #DCDCE2;
+      --color-border: #A8A8B0;
+      --color-border-strong: #7A7A85;
+      --color-text-secondary: #3A3A3E;
+      --color-text-tertiary: #55555E;
+      --color-text-on-accent: #FFFFFF;
+      --color-focus-ring: #0055CC;
+      --color-overlay: rgba(0, 0, 0, 0.6);
+    }
+
+    .dark {
+      --color-surface-hover: #5C5C66;
+      --color-border: #6E6E78;
+      --color-border-strong: #8A8A95;
+      --color-text-secondary: #FFFFFF;
+      --color-text-tertiary: #C7C7CC;
+      --color-focus-ring: #64D2FF;
+      --color-overlay: rgba(0, 0, 0, 0.75);
+    }
+  }

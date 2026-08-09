@@ -1,6 +1,7 @@
 "use client";
 
-import { useStorageDevices, formatStorageSize, usagePercent, getDeviceTypeIcon } from "@/hooks/use-storage";
+import { useStorageDevices, getDeviceTypeIcon } from "@/hooks/use-storage";
+import { formatFileSize, usagePercent } from "@/lib/format";
 
 interface StorageExplorerProps {
   deviceId: string;
@@ -61,7 +62,7 @@ export function StorageExplorer({ deviceId }: StorageExplorerProps) {
                       )}
                     </div>
                     <span className="text-body-small text-[var(--color-text-secondary)]">
-                      {formatStorageSize(d.size)}
+                      {formatFileSize(d.size)}
                     </span>
                   </div>
                   {d.is_removable && (
@@ -103,7 +104,7 @@ export function StorageExplorer({ deviceId }: StorageExplorerProps) {
                         </span>
                       </div>
                       <span className="text-body-small text-[var(--color-text-secondary)]">
-                        {formatStorageSize(p.used_bytes)} / {formatStorageSize(p.used_bytes + p.available_bytes)}
+                        {formatFileSize(p.used_bytes)} / {formatFileSize(p.used_bytes + p.available_bytes)}
                       </span>
                     </div>
                     <div className="mt-2">
@@ -151,7 +152,7 @@ export function StorageExplorer({ deviceId }: StorageExplorerProps) {
                       )}
                     </div>
                     <span className="text-body-small text-[var(--color-text-secondary)]">
-                      {formatStorageSize(p.size)}
+                      {formatFileSize(p.size)}
                     </span>
                   </div>
                 </div>

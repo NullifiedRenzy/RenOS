@@ -7,7 +7,7 @@ import { api } from "@/lib/api-client";
 
 export function useAuth() {
   const router = useRouter();
-  const { setAuth, logout: clearAuth, isAuthenticated, user, token } = useAuthStore();
+  const { setAuth, logout: clearAuth, isAuthenticated, user, token, hasRole, can } = useAuthStore();
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -24,5 +24,5 @@ export function useAuth() {
     router.push("/login");
   }, [clearAuth, router]);
 
-  return { login, logout, isAuthenticated, user, token };
+  return { login, logout, isAuthenticated, user, token, hasRole, can };
 }

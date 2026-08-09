@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { Providers } from "@/components/layout/providers";
 import { ServiceWorkerRegistration } from "@/components/layout/service-worker-registration";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { LocaleProvider } from "@/lib/i18n/use-locale";
 
 export const metadata: Metadata = {
   title: "RenOS",
@@ -32,10 +34,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen">
-        <Providers>
-          <ServiceWorkerRegistration />
-          {children}
-        </Providers>
+        <ErrorBoundary>
+          <Providers>
+            <ServiceWorkerRegistration />
+            <LocaleProvider>{children}</LocaleProvider>
+          </Providers>
+        </ErrorBoundary>
       </body>
     </html>
   );
