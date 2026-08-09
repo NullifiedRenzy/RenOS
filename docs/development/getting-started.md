@@ -1,5 +1,10 @@
 # Getting Started with RenOS Development
 
+> **First time here?** For production deployment see
+> [QUICK_START.md](QUICK_START.md) (the canonical quick start) and
+> [PRODUCTION_CHECKLIST.md](../../PRODUCTION_CHECKLIST.md). This page is the
+> step-by-step **development** workflow.
+
 ## Quickest Start
 
 For a one-command bootstrap that starts everything (infrastructure, Core,
@@ -121,22 +126,16 @@ All common tasks are automated via the Makefile:
 make help           # List all commands
 
 # Docker
-make up             # Start dependencies (docker compose up -d)
-make down           # Stop dependencies
-make logs           # View live logs
-make ps             # Show container status
-make reset          # STOP AND DELETE ALL DATA (irreversible)
-make status         # Show health of all services
+make docker-up      # Start dependencies (docker compose up -d)
+make docker-down    # Stop dependencies
+make docker-logs    # View live logs
+# (no make ps/reset/status targets — use `docker compose ps` etc.)
 
 # Build and test
 make lint           # Run all linters
 make test           # Run all tests
 make build          # Build all components
-make check          # Full pre-commit check
-
-# Development workflow
-make dev            # Start dependencies and show next steps
-```
+make check          # Full pre-commit check (fmt vet lint test)
 
 ## Project Structure
 
@@ -153,7 +152,7 @@ renos/
 
 ## Coding Standards
 
-See [Chapter 14 of the Engineering Specification](../engineering-specification.txt)
+See [Chapter 14 of the Engineering Specification](../ENGINEERING_SPEC.md)
 for full coding standards.
 
 Key points:
@@ -184,7 +183,7 @@ docker compose logs postgres
 
 # Common fixes:
 # - Port conflict: change host port mapping
-# - Volume corruption: make reset (destroys all data)
+# - Volume corruption: docker compose down -v (destroys all data)
 # - Out of disk: docker system prune
 ```
 
@@ -192,10 +191,10 @@ docker compose logs postgres
 
 ```bash
 # Stop and remove all data (irreversible)
-make reset
+docker compose down -v
 
 # Start fresh
-make up
+docker compose up -d
 ```
 
 ### Docker Compose Reference

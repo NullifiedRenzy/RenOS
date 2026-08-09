@@ -43,8 +43,8 @@ Desktop.ini
 
 # Env
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
 # Proto generated
 proto/agent/v1/*.rs
@@ -57,3 +57,19 @@ data/
 *.tar.gz
 *.rpk
 tmp/
+
+*storybook.log
+storybook-static
+
+# Compiled Go binaries
+renctl/renctl
+installer/upgrade/upgrade
+installer/wizard/wizard
+core/cmd/renos-plugin/renos-plugin
+
+# Rust build artifacts
+sdk/rust/target/
+
+# Local backups and env work files
+backups/
+docker-compose.m68*.yml

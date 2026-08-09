@@ -1,153 +1,149 @@
-.PHONY: all build clean dev lint test help
+.PHONY: all build test lint fmt vet clean docker-build docker-up docker-down migrate
 
+# ─── Variables ────────────────────────────────────────────────────────────
+GO := go
+NPM := npm
+DOCKER := docker
+DOCKER_COMPOSE := docker compose
+
+CORE_DIR := core
+HUB_DIR := hub
+AGENT_DIR := agent
+
+VERSION ?= 1.0.0-rc1
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS := -X 'github.com/renos-project/renos/core/api.Version=$(VERSION)' \
+           -X 'github.com/renos-project/renos/core/api.Commit=$(COMMIT)' \
+           -X 'github.com/renos-project/renos/core/api.BuildTime=$(BUILD_TIME)'
+
+# ─── Build ────────────────────────────────────────────────────────────────
 all: build
 
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+build: build-core build-hub build-agent
 
-# ─── Go (Core) ───────────────────────────────────────────────────────────────
+build-core:
+	cd $(CORE_DIR) && $(GO) build -ldflags "$(LDFLAGS)" -o ../bin/renos-core ./cmd/renos-core
 
-core-deps: ## Install Go dependencies
-	cd core && go mod tidy
+build-hub:
+	cd $(HUB_DIR) && $(NPM) run build
 
-core-build: ## Build RenCore binary
-	cd core && go build -o renos-core ./cmd/renos-core/
+build-agent:
+	cd $(AGENT_DIR) && cargo build --release
 
-core-run: ## Run RenCore locally
-	cd core && go run ./cmd/renos-core/
+# ─── Development ──────────────────────────────────────────────────────────
+dev-core:
+	cd $(CORE_DIR) && $(GO) run ./cmd/renos-core
 
-core-test: ## Run Core tests
-	cd core && go test -v -count=1 ./...
+dev-hub:
+	cd $(HUB_DIR) && $(NPM) run dev
 
-core-lint: ## Lint Core code
-	cd core && golangci-lint run ./...
+# ─── Test ─────────────────────────────────────────────────────────────────
+test: test-core test-hub test-agent
 
-# ─── Rust (Agent) ────────────────────────────────────────────────────────────
+test-core:
+	cd $(CORE_DIR) && $(GO) test -v -count=1 ./...
 
-agent-deps: ## Fetch Agent dependencies
-	cd agent && cargo fetch
+test-hub:
+	cd $(HUB_DIR) && $(NPM) test
 
-agent-build: ## Build RenAgent binary
-	cd agent && cargo build --release
+test-agent:
+	cd $(AGENT_DIR) && cargo test
 
-agent-run: ## Run RenAgent locally
-	cd agent && cargo run --
+test-coverage:
+	cd $(CORE_DIR) && $(GO) test -coverprofile=coverage.out -covermode=atomic ./...
+	@echo "Coverage report: core/coverage.out"
 
-agent-test: ## Run Agent tests
-	cd agent && cargo test
+test-race:
+	cd $(CORE_DIR) && $(GO) test -race -count=1 ./...
 
-agent-lint: ## Lint Agent code
-	cd agent && cargo clippy -- -D warnings
+# ─── Lint ─────────────────────────────────────────────────────────────────
+lint: lint-core lint-hub lint-agent
 
-agent-check: ## Check Agent compiles (fast)
-	cd agent && cargo check
+lint-core:
+	cd $(CORE_DIR) && golangci-lint run
 
-# ─── Next.js (Hub) ───────────────────────────────────────────────────────────
+lint-hub:
+	cd $(HUB_DIR) && $(NPM) run lint
 
-hub-install: ## Install Hub dependencies
-	cd hub && npm install
+lint-agent:
+	cd $(AGENT_DIR) && cargo clippy -- -D warnings
 
-hub-dev: ## Start Hub dev server
-	cd hub && npm run dev
+# ─── Format ───────────────────────────────────────────────────────────────
+fmt: fmt-core fmt-agent fmt-hub
 
-hub-build: ## Build Hub for production
-	cd hub && npm run build
+fmt-core:
+	cd $(CORE_DIR) && gofmt -s -w .
 
-hub-test: ## Run Hub tests
-	cd hub && npm test
+fmt-hub:
+	cd $(HUB_DIR) && npx prettier --write .
 
-hub-lint: ## Lint Hub code
-	cd hub && npm run lint
+fmt-agent:
+	cd $(AGENT_DIR) && cargo fmt
 
-hub-typecheck: ## TypeScript type check
-	cd hub && npx tsc --noEmit
+# ─── Vet ──────────────────────────────────────────────────────────────────
+vet:
+	cd $(CORE_DIR) && $(GO) vet ./...
 
-# ─── Docker Compose ──────────────────────────────────────────────────────────
+# ─── Docker ───────────────────────────────────────────────────────────────
+docker-build:
+	$(DOCKER_COMPOSE) build
 
-up: dc-up ## Start development dependencies (alias)
-down: dc-down ## Stop development dependencies (alias)
+docker-up:
+	$(DOCKER_COMPOSE) up -d
 
-dc-up: ## Start development dependencies
-	docker compose up -d
+docker-down:
+	$(DOCKER_COMPOSE) down
 
-dc-down: ## Stop development dependencies
-	docker compose down
+docker-logs:
+	$(DOCKER_COMPOSE) logs -f
 
-dc-logs: ## View dependency logs
-	docker compose logs -f
+# ─── Database ─────────────────────────────────────────────────────────────
+migrate:
+	cd $(CORE_DIR) && $(GO) run ./cmd/renos-core --migrate-only
 
-dc-restart: ## Restart dependencies (preserves data)
-	docker compose restart
+# ─── Clean ────────────────────────────────────────────────────────────────
+clean:
+	rm -rf bin/ $(CORE_DIR)/bin/ $(HUB_DIR)/.next/ $(AGENT_DIR)/target/
+	cd $(HUB_DIR) && $(NPM) run clean 2>/dev/null || true
 
-dc-ps: ## List running containers and health
-	docker compose ps
+# ─── Dependencies ─────────────────────────────────────────────────────────
+deps: deps-core deps-hub
 
-dc-status: ## Show health status of all services
-	docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+deps-core:
+	cd $(CORE_DIR) && $(GO) mod tidy
 
-dc-reset: ## Remove volumes, reset all data (IRREVERSIBLE)
-	docker compose down -v
+deps-hub:
+	cd $(HUB_DIR) && $(NPM) install
 
-# Short aliases
-logs: dc-logs ## View dependency logs (alias)
-ps: dc-ps ## List running containers (alias)
-status: dc-status ## Show health status (alias)
-reset: dc-reset ## Reset all data, destroy volumes (alias)
-restart: dc-restart ## Restart containers (alias)
+deps-agent:
+	cd $(AGENT_DIR) && cargo fetch
 
-# ─── Proto ───────────────────────────────────────────────────────────────────
+# ─── Security ─────────────────────────────────────────────────────────────
+security:
+	cd $(CORE_DIR) && govulncheck ./...
 
-proto-gen: ## Generate proto stubs (requires protoc)
-	cd proto && buf generate
+# ─── Quick checks (for pre-commit) ────────────────────────────────────────
+check: fmt vet lint test
 
-proto-lint: ## Lint proto files
-	cd proto && buf lint
-
-# ─── Quality ─────────────────────────────────────────────────────────────────
-
-lint: core-lint agent-lint hub-lint hub-typecheck ## Run all linters
-
-test: core-test agent-test hub-test ## Run all tests
-
-build: core-build agent-build hub-build ## Build all components
-
-fmt: ## Format all code
-	cd core && gofmt -w -s ./..
-	cd agent && cargo fmt
-	cd hub && npx prettier --write .
-
-check: lint test build ## Full pre-commit check
-
-# ─── CI (used in GitHub Actions) ──────────────────────────────────────────────
-
-ci-core: core-deps core-lint core-build core-test ## CI target for Core
-ci-agent: agent-deps agent-lint agent-build agent-test ## CI target for Agent
-ci-hub: hub-install hub-lint hub-typecheck hub-build hub-test ## CI target for Hub
-
-# ─── Development ─────────────────────────────────────────────────────────────
-
-dev: dc-up ## Start development environment (dependencies only)
-	@echo ""
-	@echo "  RenOS development environment is ready."
-	@echo "  ───────────────────────────────────────────"
-	@echo ""
-	@echo "  Start Core in another terminal:"
-	@echo "    make core-run"
-	@echo ""
-	@echo "  Start Hub in another terminal:"
-	@echo "    make hub-install hub-dev"
-	@echo ""
-	@echo "  Start Agent in another terminal:"
-	@echo "    make agent-run"
-	@echo ""
-	@echo "  Verify dependencies:"
-	@echo "    make dc-status"
-	@echo "    curl http://localhost:${RENOS_PORT:-8443}/api/v1/healthz"
-	@echo ""
-
-dev-full: dc-up ## Start full dev environment
-	@echo "Development environment is ready."
-	@echo "  Core:  cd core && go run ./cmd/renos-core/"
-	@echo "  Agent: cd agent && cargo run --"
-	@echo "  Hub:   cd hub && npm run dev"
-	@echo "  DB:    psql postgres://renos:renos@localhost:5432/renos"
+# ─── Help ─────────────────────────────────────────────────────────────────
+help:
+	@echo "Targets:"
+	@echo "  all            - Build everything"
+	@echo "  build          - Build all components"
+	@echo "  test           - Run all tests"
+	@echo "  lint           - Run all linters"
+	@echo "  fmt            - Format all code"
+	@echo "  vet            - Go vet"
+	@echo "  docker-build   - Build Docker images"
+	@echo "  docker-up      - Start services"
+	@echo "  docker-down    - Stop services"
+	@echo "  migrate        - Run database migrations"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  deps           - Tidy/install dependencies"
+	@echo "  security       - Run security scan"
+	@echo "  check          - Quick pre-commit checks"
+	@echo "  dev-core       - Run core in dev mode"
+	@echo "  dev-hub        - Run hub in dev mode"
+	@echo "  test-race      - Run tests with race detector"
+	@echo "  test-coverage  - Run tests with coverage report"

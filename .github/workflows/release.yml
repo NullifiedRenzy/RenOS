@@ -23,6 +23,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Extract version info
+        id: version
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -50,16 +58,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ─── Build Images ──────────────────────────────────────────────────────
+      # ─── Build & Push Images ────────────────────────────────────────────────
 
       - name: Build and push Core
         uses: docker/build-push-action@v6
         with:
           context: core
           push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            COMMIT=${{ steps.version.outputs.COMMIT }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-core:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-core:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-core:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -70,7 +82,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-agent:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-agent:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-agent:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -81,7 +93,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-hub:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-hub:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-hub:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

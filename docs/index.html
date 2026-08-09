@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RenOS Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-tertiary:#232340;--accent:#6366f1;--accent-hover:#818cf8;--text:#e2e8f0;--text-muted:#94a3b8;--text-dim:#64748b;--border:#2d2d4a;--code-bg:#131325;--danger:#ef4444;--success:#22c55e;--warning:#f59e0b;--sidebar-width:280px;--header-height:56px;--radius:8px;--shadow:0 4px 24px rgba(0,0,0,.3)}
+[data-theme=light]{--bg-primary:#fff;--bg-secondary:#f1f5f9;--bg-tertiary:#e2e8f0;--accent:#4f46e5;--accent-hover:#4338ca;--text:#0f172a;--text-muted:#475569;--text-dim:#94a3b8;--border:#cbd5e1;--code-bg:#f8fafc;--shadow:0 4px 24px rgba(0,0,0,.08)}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--header-height) + 16px)}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-primary);color:var(--text);line-height:1.7;font-size:15px;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent-hover)}
+code,pre{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:0 0}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-dim)}
+.header{position:fixed;top:0;left:0;right:0;height:var(--header-height);background:var(--bg-secondary);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:100;backdrop-filter:blur(12px);gap:16px}
+.header-logo{font-size:18px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px;white-space:nowrap}
+.header-logo span{color:var(--accent)}
+.header-logo small{font-weight:400;font-size:13px;color:var(--text-dim)}
+.header-search{flex:1;max-width:480px;position:relative}
+.header-search input{width:100%;height:36px;padding:0 36px 0 14px;background:var(--bg-primary);border:1px solid var(--border);border-radius:20px;color:var(--text);font-size:14px;outline:0;transition:border-color .2s}
+.header-search input:focus{border-color:var(--accent)}
+.header-search input::placeholder{color:var(--text-dim)}
+.header-search .search-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:16px;pointer-events:none}
+.header-actions{display:flex;align-items:center;gap:10px}
+.version-select{height:32px;padding:0 28px 0 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:0;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.theme-toggle{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg-primary);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}
+.theme-toggle:hover{background:var(--bg-tertiary)}
+.layout{display:flex;padding-top:var(--header-height);min-height:100vh}
+.sidebar{width:var(--sidebar-width);position:fixed;top:var(--header-height);left:0;bottom:0;background:var(--bg-secondary);border-right:1px solid var(--border);overflow-y:auto;padding:16px 0;z-index:50}
+.sidebar-section{margin-bottom:2px}
+.sidebar-link{display:flex;align-items:center;gap:10px;padding:8px 20px;color:var(--text-muted);font-size:14px;font-weight:400;border-left:2px solid transparent;transition:all .15s;cursor:pointer}
+.sidebar-link:hover{color:var(--text);background:var(--bg-tertiary)}
+.sidebar-link.active{color:var(--accent);border-left-color:var(--accent);background:rgba(99,102,241,.08);font-weight:500}
+.sidebar-link .icon{width:18px;text-align:center;font-size:15px;flex-shrink:0}
+.sidebar-section-title{padding:16px 20px 6px;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em}
+.sidebar-mobile-toggle{display:none;position:fixed;bottom:20px;right:20px;z-index:200;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,.4);align-items:center;justify-content:center}
+.content{flex:1;margin-left:var(--sidebar-width);padding:40px 48px 80px;max-width:960px}
+.section{display:none;animation:fadeIn .3s ease}
+.section.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.section h1{font-size:32px;font-weight:700;margin-bottom:8px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.section h2{font-size:22px;font-weight:600;margin:36px 0 12px;color:var(--accent)}
+.section h3{font-size:17px;font-weight:600;margin:24px 0 10px}
+.section h4{font-size:15px;font-weight:600;margin:18px 0 8px;color:var(--text-muted)}
+.section p{margin-bottom:14px;color:var(--text-muted);line-height:1.8}
+.section ul,.section ol{margin:10px 0 16px 24px;color:var(--text-muted)}
+.section li{margin-bottom:6px}
+.section img{max-width:100%;border-radius:var(--radius)}
+.toc{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:24px}
+.toc-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:10px}
+.toc a{display:block;font-size:13px;padding:3px 0;color:var(--text-muted)}
+.toc a:hover{color:var(--accent)}
+.toc .toc-h2{padding-left:0}
+.toc .toc-h3{padding-left:16px}
+.toc .toc-h4{padding-left:32px}
+.code-block{position:relative;margin:14px 0 20px;background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.code-block-header{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;background:var(--bg-tertiary);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-dim)}
+.code-block-header .lang{font-weight:500}
+.copy-btn{background:0 0;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;transition:all .15s}
+.copy-btn:hover{background:var(--bg-primary);color:var(--text)}
+.copy-btn.copied{color:var(--success)}
+.code-block pre{padding:14px;overflow-x:auto;font-size:13px;line-height:1.6;color:var(--text)}
+.code-block code{font-size:13px}
+.inline-code{background:var(--code-bg);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:13px}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin:16px 0}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:all .2s}
+.card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow)}
+.card h4{margin:0 0 8px;color:var(--text);font-size:15px}
+.card p{margin:0;font-size:13px;color:var(--text-muted)}
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;margin:0 4px 4px 0}
+.badge-blue{background:rgba(99,102,241,.15);color:var(--accent)}
+.badge-green{background:rgba(34,197,94,.15);color:var(--success)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--danger)}
+.badge-yellow{background:rgba(245,158,11,.15);color:var(--warning)}
+.callout{padding:14px 18px;border-radius:var(--radius);margin:16px 0;border-left:3px solid}
+.callout-info{background:rgba(99,102,241,.08);border-color:var(--accent);color:var(--accent-hover)}
+.callout-warning{background:rgba(245,158,11,.08);border-color:var(--warning);color:var(--warning)}
+.callout-danger{background:rgba(239,68,68,.08);border-color:var(--danger);color:var(--danger)}
+.callout-success{background:rgba(34,197,94,.08);border-color:var(--success);color:var(--success)}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+td,th{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--bg-secondary);font-weight:600;color:var(--text);font-size:13px}
+td{color:var(--text-muted)}
+tr:hover td{background:rgba(99,102,241,.03)}
+.no-results{text-align:center;padding:48px 24px;color:var(--text-dim);display:none}
+.no-results.visible{display:block}
+.step{display:flex;gap:14px;margin-bottom:20px}
+.step-num{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.step-content{flex:1}
+.step-content p{margin:0}
+.diagram-box{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin:16px 0;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;overflow-x:auto;white-space:pre;color:var(--text-muted)}
+@media(max-width:768px){
+.sidebar{transform:translateX(-100%);transition:transform .3s ease}
+.sidebar.open{transform:translateX(0)}
+.content{margin-left:0;padding:24px 16px 80px}
+.sidebar-mobile-toggle{display:flex}
+.header-search{max-width:200px}
+.header-logo small{display:none}
+.card-grid{grid-template-columns:1fr}
+.section h1{font-size:24px}
+.section h2{font-size:19px}
+.version-select{max-width:100px;font-size:12px}
+}
+@media(max-width:480px){
+.header{padding:0 10px;gap:8px}
+.header-search{max-width:140px}
+.header-search input{font-size:12px;padding:0 30px 0 10px}
+.theme-toggle{width:32px;height:32px;font-size:14px}
+}
+.section[match=false]{display:none!important}
+.sidebar-overlay{display:none;position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.5)}
+.sidebar-overlay.visible{display:block}
+</style>
+</head>
+<body>
+<header class="header">
+<div class="header-logo"><span>&#x25C8;</span> RenOS <small>v0.1.0</small></div>
+<div class="header-search"><input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off"><span class="search-icon">&#x2315;</span></div>
+<div class="header-actions">
+<select class="version-select" id="versionSelect"><option value="v0.1.0">v0.1.0</option><option value="v0.2.0">v0.2.0</option><option value="v0.3.0">v0.3.0</option><option value="latest" selected>latest</option></select>
+<button class="theme-toggle" id="themeToggle" title="Toggle theme">&#x263E;</button>
+</div>
+</header>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="layout">
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-section"><div class="sidebar-section-title">Documentation</div>
+<a class="sidebar-link active" data-section="getting-started" href="#getting-started"><span class="icon">&#x1F4D6;</span> Getting Started</a>
+<a class="sidebar-link" data-section="architecture" href="#architecture"><span class="icon">&#x1F3D7;</span> Architecture</a>
+<a class="sidebar-link" data-section="installation" href="#installation"><span class="icon">&#x1F4E6;</span> Installation</a>
+<a class="sidebar-link" data-section="agents" href="#agents"><span class="icon">&#x1F916;</span> Agents</a>
+<a class="sidebar-link" data-section="plugins" href="#plugins"><span class="icon">&#x1F4E6;</span> Plugins</a>
+<a class="sidebar-link" data-section="ai" href="#ai"><span class="icon">&#x1F9E0;</span> AI</a>
+<a class="sidebar-link" data-section="automation" href="#automation"><span class="icon">&#x2699;</span> Automation</a>
+<a class="sidebar-link" data-section="cluster" href="#cluster"><span class="icon">&#x1F4E1;</span> Cluster</a>
+<a class="sidebar-link" data-section="security" href="#security"><span class="icon">&#x1F512;</span> Security</a>
+<a class="sidebar-link" data-section="api" href="#api"><span class="icon">&#x1F4F1;</span> API</a>
+<a class="sidebar-link" data-section="cli" href="#cli"><span class="icon">&#x2328;</span> CLI</a>
+<a class="sidebar-link" data-section="marketplace" href="#marketplace"><span class="icon">&#x1F6D2;</span> Marketplace</a>
+<a class="sidebar-link" data-section="sdk" href="#sdk"><span class="icon">&#x1F4E6;</span> SDK</a>
+<a class="sidebar-link" data-section="troubleshooting" href="#troubleshooting"><span class="icon">&#x1F6A7;</span> Troubleshooting</a>
+<a class="sidebar-link" data-section="faq" href="#faq"><span class="icon">&#x2753;</span> FAQ</a>
+<a class="sidebar-link" data-section="examples" href="#examples"><span class="icon">&#x1F4CB;</span> Examples</a>
+</div>
+</nav>
+<main class="content">
+<div class="no-results" id="noResults"><div style="font-size:48px;margin-bottom:16px">&#x1F50D;</div><h3>No results found</h3><p>Try a different search term or browse the sections.</p></div>
+
+<section class="section active" id="section-getting-started" data-section="getting-started">
+<div class="toc" id="toc-getting-started"></div>
+<h1>Getting Started with RenOS</h1>
+<p>RenOS is an open-source, self-hosted device management platform designed to manage desktops, servers, VMs, Docker containers, NAS, and mobile devices from a single unified interface. It provides secure remote command execution, real-time monitoring, automation, and AI-powered operations.</p>
+<h2 id="gs-overview">Overview</h2>
+<p>RenOS is built on a modular architecture with four primary components: a Go-based Core server that handles API and orchestration, a Rust-based Agent that runs on managed devices, a Next.js-based Hub for the web UI, and a Protobuf-based communication layer. The platform uses PostgreSQL for persistence, Redis for caching and pub/sub, and NATS for messaging between services.</p>
+<div class="card-grid">
+<div class="card"><h4>&#x1F680; Core</h4><p>Go backend service handling REST API, WebSocket connections, job scheduling, authentication, and device orchestration.</p></div>
+<div class="card"><h4>&#x1F916; Agent</h4><p>Rust-based lightweight agent deployed on managed devices. Supports Linux, macOS, Windows, and ARM architectures.</p></div>
+<div class="card"><h4>&#x1F4BB; Hub</h4><p>Next.js + React + TypeScript web interface for managing devices, viewing dashboards, and configuring automation.</p></div>
+<div class="card"><h4>&#x1F4E1; Messaging</h4><p>NATS provides real-time message delivery between Core and Agents. Redis handles caching and pub/sub for events.</p></div>
+</div>
+<h2 id="gs-quick-start">Quick Start Guide</h2>
+<p>Get RenOS running in under 5 minutes with Docker:</p>
+<div class="step"><div class="step-num">1</div><div class="step-content"><p>Clone the repository: <code class="inline-code">git clone https://github.com/renos-project/renos.git && cd renos</code></p></div></div>
+<div class="step"><div class="step-num">2</div><div class="step-content"><p>Run the installer: <code class="inline-code">./install.sh</code> — this starts PostgreSQL, Redis, NATS, and the Core server.</p></div></div>
+<div class="step"><div class="step-num">3</div><div class="step-content"><p>Access the Hub at <strong>http://localhost:8443</strong> and log in with <code class="inline-code">admin@renos.local</code> / <code class="inline-code">admin</code>.</p></div></div>
+<div class="step"><div class="step-num">4</div><div class="step-content"><p>Install the Agent on a device: <code class="inline-code">curl -fsSL https://your-server/install.sh | bash</code></p></div></div>
+<div class="step"><div class="step-num">5</div><div class="step-content"><p>Start managing your devices from the dashboard or CLI.</p></div></div>
+<h2 id="gs-requirements">System Requirements</h2>
+<table><tr><th>Component</th><th>Minimum</th><th>Recommended</th></tr>
+<tr><td>CPU</td><td>2 cores</td><td>4+ cores</td></tr>
+<tr><td>RAM</td><td>2 GB</td><td>8+ GB</td></tr>
+<tr><td>Disk</td><td>20 GB</td><td>100+ GB SSD</td></tr>
+<tr><td>Docker</td><td>24+ with Compose V2</td><td>Latest stable</td></tr>
+<tr><td>OS (Server)</td><td>Linux (x86_64)</td><td>Linux (x86_64, aarch64)</td></tr>
+<tr><td>OS (Agent)</td><td>Linux, macOS, Windows</td><td>Linux (any distro)</td></tr>
+</table>
+<h3>Supported Agent Platforms</h3>
+<ul><li><strong>Linux:</strong> Ubuntu 20.04+, Debian 11+, RHEL 8+, Fedora 36+, Arch Linux, Alpine 3.16+</li><li><strong>macOS:</strong> Monterey 12+ (Intel & Apple Silicon)</li><li><strong>Windows:</strong> Windows 10/11, Windows Server 2019+</li><li><strong>ARM:</strong> Raspberry Pi (32/64-bit), ARM64 servers</li><li><strong>Containers:</strong> Docker containers as agent targets</li></ul>
+<h2 id="gs-architecture">Architecture Overview</h2>
+<p>RenOS follows a hub-and-spoke architecture. The Core server acts as the central hub, managing communication with all connected agents. Agents establish outbound WebSocket or mTLS connections to the Core, enabling management even behind NAT or firewalls.</p>
+<div class="diagram-box">
+  +----------------+       +----------------+
+  |    Hub (Web)   |       |  renctl (CLI)  |
+  |  Next.js/React |       |  Go binary     |
+  +-------+--------+       +-------+--------+
+          |                         |
+          |      HTTP/WebSocket     |
+          v                         v
+  +--------------------------------------------------+
+  |               Core Server (Go)                   |
+  |  +----------+  +-----------+  +---------------+  |
+  |  | REST API |  | Scheduler |  | Job Processor |  |
+  |  +----------+  +-----------+  +---------------+  |
+  |  +----------+  +-----------+  +---------------+  |
+  |  | Auth     |  | Plugin    |  | AI Engine     |  |
+  |  +----------+  +-----------+  +---------------+  |
+  +-----+------------+------------+------------------+
+        |            |            |
+    gRPC/mTLS    PostgreSQL    Redis/NATS
+        |            |            |
+  +-----v------------v------------v------------------+
+  |              Agent (Rust)                        |
+  |  +----------+  +-----------+  +---------------+  |
+  |  | Executor |  | Heartbeat |  | Update Mgr   |  |
+  |  +----------+  +-----------+  +---------------+  |
+  |  +----------+  +-----------+                    |
+  |  | Docker   |  | Systemd   |                    |
+  |  +----------+  +-----------+                    |
+  +--------------------------------------------------+
+</div>
+<h2 id="gs-security-model">Security Model</h2>
+<p>RenOS implements a defense-in-depth approach: all agent communication uses mutual TLS (mTLS) or WebSocket with JWT authentication. The platform enforces role-based access control (RBAC) on every API endpoint, encrypts secrets at rest using AES-256-GCM, and logs all administrative actions for audit purposes. Rate limiting, CSRF protection, and Content Security Policy headers protect the web interface.</p>
+</section>
+
+<section class="section" id="section-architecture" data-section="architecture">
+<div class="toc" id="toc-architecture"></div>
+<h1>Architecture</h1>
+<h2 id="arch-high-level">High-Level Architecture</h2>
+<p>RenOS is organized as a monorepo containing four main components: Core (Go), Agent (Rust), Hub (Next.js/TypeScript), and Proto (shared Protobuf definitions). This approach is formalized in ADR-001, which was accepted after considering multi-repo alternatives. The monorepo ensures that cross-component changes land in a single commit and that CI runs all tests together.</p>
+<div class="diagram-box">
+  Repository Structure:
+  renos/
+    core/           # Go backend
+    agent/          # Rust agent
+    hub/            # Next.js frontend
+    proto/          # Shared protobuf
+    deploy/         # Docker, nginx configs
+    scripts/        # Dev & ops scripts
+    docs/           # Documentation
+</div>
+<h2 id="arch-components">Component Architecture</h2>
+<h3>Core (Go)</h3>
+<p>The Core server is written in Go, chosen for its excellent standard library for HTTP/gRPC servers, lightweight goroutine concurrency model for managing many agent connections, fast compile times, and single-binary deployment. Core handles:</p>
+<ul><li><strong>REST API</strong> — All management endpoints under <code class="inline-code">/api/v1/</code></li><li><strong>WebSocket Hub</strong> — Real-time device communication and event streaming</li><li><strong>Job Scheduler</strong> — Cron-based and triggered job execution</li><li><strong>Authentication</strong> — JWT issuance, OAuth2, SSO providers</li><li><strong>Plugin System</strong> — Plugin loading, lifecycle, and API gateway</li><li><strong>AI Engine</strong> — Provider-agnostic AI integration layer</li></ul>
+<h3>Agent (Rust)</h3>
+<p>The device agent is written in Rust for C-level performance with memory safety and no garbage collector. It compiles to a tiny ~5MB static binary suitable for Raspberry Pi Zero, with excellent cross-compilation support for ARM/aarch64.</p>
+<ul><li><strong>Command Executor</strong> — Run shell commands with policy enforcement</li><li><strong>Heartbeat</strong> — Periodic health and status reporting</li><li><strong>Docker Manager</strong> — Container, image, volume, network operations</li><li><strong>Systemd Manager</strong> — Service status and control</li><li><strong>File System</strong> — File browsing, upload/download, permissions</li><li><strong>Update Manager</strong> — Self-update and OS package management</li></ul>
+<h3>Hub (Next.js + React + TypeScript)</h3>
+<p>The web UI uses Next.js with React and TypeScript. Server components provide fast initial loads, and the App Router delivers layouts, loading states, and error boundaries. The Hub communicates with Core via REST API and WebSocket for real-time updates.</p>
+<h2 id="arch-data-flow">Data Flow</h2>
+<div class="diagram-box">
+  User Action  --&gt;  Hub (HTTP)  --&gt;  Core API  --&gt;  Database
+                                        |
+                                   NATS Pub/Sub
+                                        |
+                                    Agent(s)
+                                    (WebSocket/mTLS)
+                                        |
+                                   Execute Command
+                                        |
+                                   Result --&gt; NATS --&gt; Core --&gt; Hub --&gt; User
+</div>
+<p>When a user initiates a command through the Hub or CLI, the request flows through the Core API, which publishes the command to NATS. The target agent receives the command via its persistent connection, executes it within the configured security policies, and publishes the result back through NATS to the Core, which stores it and notifies the Hub via WebSocket.</p>
+<h2 id="arch-security">Security Architecture</h2>
+<p>Security is enforced at every layer: JWT tokens authenticate API requests, RBAC authorizes actions, mTLS secures agent connections, input validation prevents injection attacks, and CSP blocks XSS. Secrets are encrypted with AES-256-GCM at rest, and all administrative actions are audit-logged.</p>
+</section>
+
+<section class="section" id="section-installation" data-section="installation">
+<div class="toc" id="toc-installation"></div>
+<h1>Installation</h1>
+<h2 id="install-docker">Docker (Recommended)</h2>
+<p>The quickest way to get started is with Docker Compose. Two compose files are provided:</p>
+<table><tr><th>File</th><th>Purpose</th><th>Services</th></tr>
+<tr><td><code class="inline-code">docker-compose.yml</code></td><td>Development infrastructure</td><td>PostgreSQL, Redis, NATS</td></tr>
+<tr><td><code class="inline-code">docker-compose.prod.yml</code></td><td>Full production stack</td><td>All of the above + Core, Hub, Nginx</td></tr>
+</table>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code># Development setup
+git clone https://github.com/renos-project/renos.git
+cd renos
+docker compose up -d
+./scripts/dev-up.sh
+
+# Production setup
+docker compose -f docker-compose.prod.yml up -d</code></pre></div>
+
+<h2 id="install-bare-metal">Bare Metal</h2>
+<p>For installations without Docker, each component can be run directly:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code># Prerequisites: Go 1.22+, Rust 1.75+, Node 20+
+# Build Core
+cd core
+go build -o renos-core .
+
+# Build Agent
+cd agent
+cargo build --release
+
+# Build Hub
+cd hub
+npm install
+npm run build
+
+# Start Core (requires PostgreSQL, Redis, NATS running)
+./renos-core --config config.yaml</code></pre></div>
+
+<h2 id="install-kubernetes">Kubernetes</h2>
+<p>RenOS can be deployed to Kubernetes using Helm charts available in the <code class="inline-code">deploy/charts/</code> directory:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>helm repo add renos https://charts.renos.dev
+helm install renos renos/renos \
+  --set core.replicas=3 \
+  --set postgresql.enabled=true \
+  --set ingress.enabled=true</code></pre></div>
+
+<h2 id="install-config">Configuration</h2>
+<p>Configuration is managed through environment variables or a YAML config file. The primary configuration file is <code class="inline-code">config.yaml</code> (or <code class="inline-code">.env</code> for Docker deployments).</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>server:
+  host: 0.0.0.0
+  port: 8443
+  external_url: https://renos.example.com
+
+database:
+  url: postgres://renos:password@localhost:5432/renos?sslmode=disable
+  pool_size: 10
+
+redis:
+  url: redis://localhost:6379/0
+
+nats:
+  url: nats://localhost:4222
+
+auth:
+  jwt_secret: change-me-to-a-random-32-char-string
+  jwt_ttl: 24h
+  session_ttl: 7d
+
+encryption:
+  key: change-me-to-a-random-32-char-string
+
+logging:
+  level: info
+  format: json</code></pre></div>
+
+<h2 id="install-env-vars">Environment Variables Reference</h2>
+<table><tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+<tr><td><code class="inline-code">RENOS_DATABASE_URL</code></td><td><code class="inline-code">postgres://renos:renos@localhost:5432/renos</code></td><td>PostgreSQL connection string</td></tr>
+<tr><td><code class="inline-code">RENOS_REDIS_URL</code></td><td><code class="inline-code">redis://localhost:6379/0</code></td><td>Redis connection string</td></tr>
+<tr><td><code class="inline-code">RENOS_NATS_URL</code></td><td><code class="inline-code">nats://localhost:4222</code></td><td>NATS connection string</td></tr>
+<tr><td><code class="inline-code">RENOS_JWT_SECRET</code></td><td><em>required</em></td><td>JWT signing key (min 32 chars)</td></tr>
+<tr><td><code class="inline-code">RENOS_ENCRYPTION_KEY</code></td><td><em>required</em></td><td>Encryption key for secrets (min 32 chars)</td></tr>
+<tr><td><code class="inline-code">RENOS_EXTERNAL_URL</code></td><td><code class="inline-code">http://localhost:8443</code></td><td>Public-facing URL</td></tr>
+<tr><td><code class="inline-code">RENOS_LOG_LEVEL</code></td><td><code class="inline-code">info</code></td><td>Log level: debug, info, warn, error</td></tr>
+<tr><td><code class="inline-code">RENOS_POOL_SIZE</code></td><td><code class="inline-code">5</code></td><td>Database connection pool size</td></tr>
+<tr><td><code class="inline-code">RENOS_MAX_CONCURRENT_JOBS</code></td><td><code class="inline-code">10</code></td><td>Max parallel job executions</td></tr>
+<tr><td><code class="inline-code">RENOS_ADMIN_PASSWORD</code></td><td><code class="inline-code">admin</code></td><td>Initial admin password</td></tr>
+</table>
+
+<h2 id="install-tls">TLS Configuration</h2>
+<p>Place your SSL certificates in <code class="inline-code">deploy/nginx/ssl/</code> and uncomment the HTTPS server block in the Nginx config. RenOS also supports Let's Encrypt automatic certificate provisioning.</p>
+</section>
+
+<section class="section" id="section-agents" data-section="agents">
+<div class="toc" id="toc-agents"></div>
+<h1>Agents</h1>
+<h2 id="agents-overview">Agent Overview</h2>
+<p>The RenOS Agent is a lightweight Rust binary that runs on managed devices. It establishes a persistent secure connection to the Core server and executes commands, reports telemetry, manages containers, and more. The agent is designed to be minimal (~5MB binary), secure (no open ports required), and resilient (automatic reconnection with exponential backoff).</p>
+<h2 id="agents-platforms">Supported Platforms</h2>
+<table><tr><th>Platform</th><th>Architecture</th><th>Status</th></tr>
+<tr><td>Linux (glibc)</td><td>amd64, arm64, armv7</td><td><span class="badge badge-green">Stable</span></td></tr>
+<tr><td>Linux (musl - Alpine)</td><td>amd64, arm64</td><td><span class="badge badge-green">Stable</span></td></tr>
+<tr><td>macOS</td><td>amd64, arm64</td><td><span class="badge badge-green">Stable</span></td></tr>
+<tr><td>Windows</td><td>amd64</td><td><span class="badge badge-blue">Beta</span></td></tr>
+<tr><td>FreeBSD</td><td>amd64</td><td><span class="badge badge-yellow">Experimental</span></td></tr>
+</table>
+<h2 id="agents-installation">Agent Installation</h2>
+<h3>Linux / macOS (curl pipe)</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>curl -fsSL https://your-renos-server.com/install.sh | sudo bash</code></pre></div>
+<h3>Manual Download</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>wget https://releases.renos.dev/agent/latest/renos-agent-linux-amd64
+chmod +x renos-agent-linux-amd64
+sudo mv renos-agent-linux-amd64 /usr/local/bin/renos-agent
+
+renos-agent enroll --server https://renos.example.com --token ENROLL_TOKEN</code></pre></div>
+<h3>Windows (PowerShell)</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>Invoke-WebRequest -Uri https://releases.renos.dev/agent/latest/renos-agent-windows-amd64.exe -OutFile renos-agent.exe
+.\renos-agent.exe enroll --server https://renos.example.com --token ENROLL_TOKEN</code></pre></div>
+<h2 id="agents-configuration">Agent Configuration</h2>
+<p>The agent can be configured via command-line flags, environment variables, or a YAML config file at <code class="inline-code">/etc/renos/agent.yaml</code>:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>server_url: https://renos.example.com
+tls_skip_verify: false
+heartbeat_interval: 60
+log_level: info
+tags:
+  - production
+  - webserver
+capabilities:
+  - command_exec
+  - docker
+  - systemd
+  - file_system
+policies:
+  allowed_commands:
+    - "systemctl *"
+    - "docker *"
+    - "df -h"
+  blocked_commands:
+    - "rm -rf /*"
+    - "mkfs*"</code></pre></div>
+<h2 id="agents-heartbeats">Heartbeats</h2>
+<p>Agents send heartbeats to the Core at a configurable interval (default: 60 seconds). Each heartbeat contains system metrics (CPU, memory, disk, network), running processes and services, agent version and uptime, Docker container status, and pending command acknowledgments. Heartbeats are visible in the Hub dashboard and accessible via the API at <code class="inline-code">GET /api/v1/devices/{id}/heartbeats</code>.</p>
+<h2 id="agents-updates">Agent Updates</h2>
+<p>Agents can self-update automatically. The Core distributes new agent binaries, and the agent performs a safe rolling update:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code># Trigger update from CLI
+renctl agent update --target all
+
+# Or target specific devices
+renctl agent update --target device-uuid-1,device-uuid-2
+
+# Check agent versions
+renctl agent list --show-version</code></pre></div>
+<h2 id="agents-troubleshooting">Agent Troubleshooting</h2>
+<table><tr><th>Problem</th><th>Solution</th></tr>
+<tr><td>Agent won't connect</td><td>Verify server URL, check firewall (outbound 443 or 8443), confirm enrollment token is valid</td></tr>
+<tr><td>Heartbeats not showing</td><td>Check NATS connectivity, verify agent is running (<code class="inline-code">systemctl status renos-agent</code>)</td></tr>
+<tr><td>Command execution fails</td><td>Check command policies in agent config, verify agent permissions, review logs at <code class="inline-code">/var/log/renos-agent.log</code></td></tr>
+<tr><td>Agent won't update</td><td>Ensure agent has write permission to its binary location, check disk space</td></tr>
+</table>
+</section>
+
+<section class="section" id="section-plugins" data-section="plugins">
+<div class="toc" id="toc-plugins"></div>
+<h1>Plugins</h1>
+<h2 id="plugins-architecture">Plugin Architecture</h2>
+<p>RenOS supports a plugin system that extends Core, Agent, and Hub capabilities. Plugins are self-contained packages that can add new API endpoints, device actions, UI components, or automation triggers. The plugin system uses WebAssembly (WASM) for Core plugins and native modules for Agent plugins, providing sandboxed execution with well-defined APIs.</p>
+<h2 id="plugins-creating">Creating Plugins</h2>
+<p>Plugins can be written in any language that compiles to WebAssembly (Go, Rust, AssemblyScript, etc.) or as native modules in Go (for Core) or Rust (for Agent).</p>
+<h3>Minimal Core Plugin (Go)</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">go</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>package main
+
+import "renos/plugin"
+
+func init() {
+    plugin.Register(&MyPlugin{})
+}
+
+type MyPlugin struct{}
+
+func (p *MyPlugin) Name() string { return "my-plugin" }
+func (p *MyPlugin) Version() string { return "1.0.0" }
+
+func (p *MyPlugin) Init(ctx plugin.Context) error {
+    ctx.Router().Get("/hello", func(c plugin.Context) error {
+        return c.JSON(200, map[string]string{"message": "Hello from plugin!"})
+    })
+    return nil
+}
+
+func (p *MyPlugin) Close() error { return nil }</code></pre></div>
+<h3>Agent Plugin (Rust)</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">rust</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>use renos_agent_sdk::{Capability, Context};
+
+struct HealthCheck;
+
+impl Capability for HealthCheck {
+    fn name(&self) -> &str { "health-check" }
+    fn version(&self) -> &str { "1.0.0" }
+
+    fn execute(&self, ctx: &Context, args: &[String]) -> Result&lt;String, String&gt; {
+        let output = std::process::Command::new("uptime").output().unwrap();
+        Ok(String::from_utf8_lossy(&amp;output.stdout).to_string())
+    }
+}
+
+renos_agent_sdk::export!(HealthCheck);</code></pre></div>
+<h2 id="plugins-manifest">Plugin Manifest Reference</h2>
+<p>Every plugin must include a <code class="inline-code">manifest.yaml</code> file:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>id: com.renos.health-check
+name: Health Check
+version: 1.0.0
+type: agent
+description: Periodic health monitoring for devices
+author: Acme Corp
+license: MIT
+
+capabilities:
+  - command_exec
+  - metrics_collection
+
+permissions:
+  - execute_commands
+  - read_system_info
+  - write_logs
+
+hooks:
+  on_install: setup.sh
+  on_uninstall: cleanup.sh
+  on_update: migrate.sh
+
+min_renos_version: ">=0.1.0"
+max_renos_version: "<1.0.0"</code></pre></div>
+<h2 id="plugins-api">Plugin API</h2>
+<p>The plugin API provides access to: HTTP Router (register custom API endpoints), Database (read/write access to plugin-scoped tables), Event Bus (subscribe to and publish internal events), Logger (structured logging with the platform logger), Secrets (access encrypted secrets vault), and Device API (execute commands and read device state).</p>
+<h2 id="plugins-hooks">Plugin Lifecycle & Hooks</h2>
+<table><tr><th>Hook</th><th>When</th><th>Purpose</th></tr>
+<tr><td><code class="inline-code">on_install</code></td><td>After plugin files are copied</td><td>Database migrations, dependency checks</td></tr>
+<tr><td><code class="inline-code">on_uninstall</code></td><td>Before plugin files are removed</td><td>Cleanup data, deregister hooks</td></tr>
+<tr><td><code class="inline-code">on_update</code></td><td>Version upgrade detected</td><td>Data migration between versions</td></tr>
+<tr><td><code class="inline-code">on_enable</code></td><td>Plugin activated</td><td>Start background workers, connect services</td></tr>
+<tr><td><code class="inline-code">on_disable</code></td><td>Plugin deactivated</td><td>Graceful shutdown of workers</td></tr>
+</table>
+<h2 id="plugins-marketplace">Marketplace</h2>
+<p>Plugins are distributed through the RenOS Marketplace. Users can browse, install, and manage plugins directly from the Hub UI or CLI. Publishing requires package signing with a developer key and passing automated compatibility and security validation.</p>
+</section>
+
+<section class="section" id="section-ai" data-section="ai">
+<div class="toc" id="toc-ai"></div>
+<h1>AI Integration</h1>
+<h2 id="ai-overview">RenAI Overview</h2>
+<p>RenAI is RenOS's built-in AI engine that provides natural-language device management, intelligent alert correlation, automated troubleshooting, and predictive maintenance. It supports both local and cloud AI models through a provider-agnostic architecture.</p>
+<h2 id="ai-providers">Supported Providers</h2>
+<div class="card-grid">
+<div class="card"><h4>&#x1F9E0; Ollama (Local)</h4><p>Run models locally with Ollama. Supports Llama 3, Mistral, CodeLlama, and hundreds of other open-source models. Zero data leaves your network.</p></div>
+<div class="card"><h4>&#x1F517; OpenAI</h4><p>Connect to GPT-4, GPT-4o, and GPT-3.5. Requires an API key. Best for complex reasoning and natural-language tasks.</p></div>
+<div class="card"><h4>&#x1F4A1; Anthropic</h4><p>Claude 3 Opus, Sonnet, and Haiku models. Excellent for analysis and safety-constrained operations.</p></div>
+<div class="card"><h4>&#x1F310; Google AI</h4><p>Gemini 1.5 Pro and Flash models. Strong multimodal capabilities and long context windows.</p></div>
+</div>
+<h2 id="ai-configuration">Provider Configuration</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>ai:
+  default_provider: ollama
+  providers:
+    ollama:
+      base_url: http://localhost:11434
+      model: llama3.1:8b
+      timeout: 30s
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      model: gpt-4o
+      organization: org-xxx
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      model: claude-3-sonnet-20241022
+    google:
+      api_key: ${GOOGLE_AI_API_KEY}
+      model: gemini-1.5-pro</code></pre></div>
+<h2 id="ai-prompt-engineering">Prompt Engineering</h2>
+<p>RenAI uses carefully crafted system prompts that define the AI's role as a device management assistant. Prompts include system context (available devices, their capabilities, and current state), safety constraints (prohibited operations), output format (structured JSON for machine parsing, Markdown for human display), and tool definitions (available API functions the AI can invoke).</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">text</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>You are RenAI, a device management assistant for RenOS.
+Available devices:
+- webserver-01 (Linux, online, Docker running)
+- database-02 (Linux, online, Postgres active)
+- office-mac (macOS, online)
+
+Available actions:
+- run_command(device, command)
+- get_logs(device, filter)
+- list_containers(device)
+- restart_service(device, service)
+
+Safety rules:
+- Never run destructive commands (rm -rf, mkfs, dd)
+- Confirm before restarting critical services
+- Flag suspicious patterns to the user</code></pre></div>
+<h2 id="ai-context-building">Context Building</h2>
+<p>RenAI automatically builds context for each interaction by gathering device inventory and status from the database, recent events and alerts from the event log, current system metrics (CPU, memory, disk), user's role and permissions, and conversation history (last 20 turns). This context is injected into the prompt before each AI call, ensuring the model has up-to-date information about the managed environment.</p>
+</section>
+
+<section class="section" id="section-automation" data-section="automation">
+<div class="toc" id="toc-automation"></div>
+<h1>Automation</h1>
+<h2 id="auto-workflows">Workflows</h2>
+<p>RenOS provides a powerful automation engine for creating multi-step workflows. Workflows consist of triggers, conditions, and actions that execute in sequence or parallel across one or many devices.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>name: Security Patch Rollout
+description: Apply security patches to webserver fleet
+trigger:
+  type: schedule
+  cron: "0 3 * * 0"
+conditions:
+  - type: device_count
+    min: 1
+    max: 50
+  - type: time_window
+    start: "02:00"
+    end: "06:00"
+actions:
+  - name: Pre-check
+    type: command
+    target: all
+    command: "df -h / && free -m"
+  - name: Apply patches
+    type: command
+    target: all
+    command: "apt update && apt upgrade -y"
+    timeout: 300
+  - name: Verify
+    type: command
+    target: all
+    command: "uptime && docker ps"
+  - name: Notify
+    type: webhook
+    url: https://hooks.slack.com/services/xxx
+    payload:
+      text: "Patch rollout completed for {{device_count}} devices"</code></pre></div>
+<h2 id="auto-schedules">Schedules</h2>
+<p>Schedules use standard cron expressions to trigger commands or workflows at specified times. You can target individual devices, groups, or all devices.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl schedule create \
+  --name "Daily Health Check" \
+  --cron "0 2 * * *" \
+  --command "uptime && df -h" \
+  --target-group webservers
+
+renctl schedule list
+renctl schedule disable --id schedule-uuid</code></pre></div>
+<h2 id="auto-triggers">Triggers</h2>
+<table><tr><th>Trigger Type</th><th>Description</th></tr>
+<tr><td><code class="inline-code">schedule</code></td><td>Cron-based time trigger</td></tr>
+<tr><td><code class="inline-code">event</code></td><td>System event (device online/offline, heartbeat threshold)</td></tr>
+<tr><td><code class="inline-code">webhook</code></td><td>Incoming webhook from external system</td></tr>
+<tr><td><code class="inline-code">device_condition</code></td><td>Device metric crosses threshold (CPU > 90%, disk > 95%)</td></tr>
+<tr><td><code class="inline-code">manual</code></td><td>Manually triggered from UI or CLI</td></tr>
+</table>
+<h2 id="auto-conditions">Conditions</h2>
+<p>Conditions gate whether a workflow executes. Multiple conditions are AND-ed together: <code class="inline-code">device_count</code> (only run if device count is within range), <code class="inline-code">time_window</code> (only run within specified hours), <code class="inline-code">device_state</code> (only if devices match state criteria), and <code class="inline-code">expression</code> (arbitrary expression evaluated server-side).</p>
+<h2 id="auto-actions">Actions</h2>
+<table><tr><th>Action Type</th><th>Description</th></tr>
+<tr><td><code class="inline-code">command</code></td><td>Execute shell command on target devices</td></tr>
+<tr><td><code class="inline-code">docker</code></td><td>Container operations (start, stop, restart, pull)</td></tr>
+<tr><td><code class="inline-code">service</code></td><td>Systemd service control</td></tr>
+<tr><td><code class="inline-code">webhook</code></td><td>Send HTTP request to external URL</td></tr>
+<tr><td><code class="inline-code">notification</code></td><td>Send notification (email, Slack, PagerDuty)</td></tr>
+<tr><td><code class="inline-code">script</code></td><td>Execute a stored script on target</td></tr>
+</table>
+<h2 id="auto-webhooks">Webhooks</h2>
+<p>RenOS can both receive incoming webhooks (as triggers) and send outgoing webhooks (as actions). Incoming webhooks can trigger workflows with payload data available as variables.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl webhook create \
+  --name "deploy-hook" \
+  --secret "whsec_xxx" \
+  --workflow "deploy-workflow"
+
+curl -X POST https://renos.example.com/api/v1/webhooks/deploy-hook \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Secret: whsec_xxx" \
+  -d '{"ref": "main", "repo": "myapp"}'</code></pre></div>
+<h2 id="auto-bulk">Bulk Operations</h2>
+<p>Execute commands across multiple devices simultaneously with built-in rate limiting and error handling:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl exec --group webservers --command "systemctl reload nginx"
+renctl exec --targets device-1,device-2 --command "df -h"
+renctl exec --group all --command "uptime" \
+  --timeout 30 \
+  --parallel 10 \
+  --ignore-errors</code></pre></div>
+</section>
+
+<section class="section" id="section-cluster" data-section="cluster">
+<div class="toc" id="toc-cluster"></div>
+<h1>Cluster Operations</h1>
+<h2 id="cluster-ha">High Availability</h2>
+<p>RenOS supports active-passive high availability for the Core server. In a cluster configuration, one Core instance acts as the leader, handling all API requests, job scheduling, and agent communication. Standby instances remain ready to take over if the leader fails, using leader election via distributed locks in PostgreSQL.</p>
+<h2 id="cluster-election">Leader Election</h2>
+<p>Leader election uses PostgreSQL advisory locks for distributed coordination:</p>
+<div class="diagram-box">
+  Core Instance 1 (Leader)
+      |-- Holds advisory lock (key: 12345)
+      |-- Processes API requests
+      |-- Schedules and dispatches jobs
+      |-- Maintains agent connections
+      |-- Writes heartbeats to DB
+
+  Core Instance 2 (Standby)
+      |-- Attempts advisory lock (fails)
+      |-- Polls lock every 5 seconds
+      |-- Ready to take over
+      |-- Minimal CPU/memory usage
+
+  Core Instance 3 (Standby)
+      |-- Same as Instance 2
+      |-- Ready for failover
+</div>
+<h2 id="cluster-nodes">Node Management</h2>
+<p>Cluster nodes are configured in the <code class="inline-code">config.yaml</code> or via environment variables:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>cluster:
+  enabled: true
+  node_id: core-1
+  node_name: us-east-1-core
+  leader_key: renos:cluster:leader
+  heartbeat_interval: 5s
+  election_timeout: 15s
+  standby_port: 8444
+
+database:
+  url: postgres://renos:password@postgres-host:5432/renos
+
+redis:
+  url: redis://redis-host:6379/0
+
+nats:
+  url: nats://nats-host:4222</code></pre></div>
+<h2 id="cluster-distribution">Task Distribution</h2>
+<p>When running in cluster mode, task distribution works as follows: only the leader evaluates cron schedules and dispatches jobs; all commands go through the leader's NATS connection; file transfers use direct agent-to-agent transfers when possible, coordinated by leader; agents connect to a single Core instance; if it fails, they reconnect and are redistributed.</p>
+<div class="callout callout-info"><strong>Scaling Note:</strong> RenOS is designed for single-server deployments in its current version. Horizontal scaling of the Core is supported for high availability but all instances share the same database, Redis, and NATS infrastructure.</div>
+<h2 id="cluster-replication">State Replication</h2>
+<table><tr><th>State Type</th><th>Storage</th><th>Replication</th></tr>
+<tr><td>Device data</td><td>PostgreSQL</td><td>Database-level replication</td></tr>
+<tr><td>Job queue</td><td>PostgreSQL + NATS</td><td>NATS JetStream persistence</td></tr>
+<tr><td>Session data</td><td>Redis</td><td>Redis replication</td></tr>
+<tr><td>Agent connections</td><td>In-memory (leader)</td><td>Re-established on failover</td></tr>
+<tr><td>Schedules</td><td>PostgreSQL</td><td>Database-level replication</td></tr>
+<tr><td>Audit logs</td><td>PostgreSQL</td><td>Database-level replication</td></tr>
+</table>
+</section>
+
+<section class="section" id="section-security" data-section="security">
+<div class="toc" id="toc-security"></div>
+<h1>Security</h1>
+<h2 id="sec-authn">Authentication</h2>
+<h3>JWT Authentication</h3>
+<p>All API requests (except health checks and login) require a JWT bearer token. Tokens are issued on login and expire after a configurable TTL (default: 24 hours). Token claims include user ID, email, display name, and role.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>TOKEN=$(curl -s -X POST http://localhost:8443/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@renos.local","password":"admin"}' | jq -r '.token')
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8443/api/v1/devices</code></pre></div>
+<h3>OAuth2 Providers</h3>
+<p>RenOS supports OAuth2 authentication via Google, GitHub, GitLab, and Microsoft.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>auth:
+  oauth2:
+    google:
+      client_id: xxx.apps.googleusercontent.com
+      client_secret: ${GOOGLE_CLIENT_SECRET}
+      redirect_url: https://renos.example.com/auth/google/callback
+    github:
+      client_id: ${GITHUB_CLIENT_ID}
+      client_secret: ${GITHUB_CLIENT_SECRET}</code></pre></div>
+<h3>SSO / SAML</h3>
+<p>Enterprise SSO is supported via SAML 2.0. Configure your Identity Provider metadata:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>auth:
+  saml:
+    idp_metadata_url: https://idp.example.com/metadata.xml
+    entity_id: renos
+    acs_url: https://renos.example.com/auth/saml/callback</code></pre></div>
+<h2 id="sec-authz">Authorization</h2>
+<h3>Role-Based Access Control (RBAC)</h3>
+<table><tr><th>Role</th><th>Permissions</th></tr>
+<tr><td><code class="inline-code">admin</code></td><td>Full system access: manage users, devices, settings, plugins, billing</td></tr>
+<tr><td><code class="inline-code">operator</code></td><td>Device operations: run commands, view logs, manage schedules, restart services</td></tr>
+<tr><td><code class="inline-code">viewer</code></td><td>Read-only: view devices, dashboards, logs (no command execution)</td></tr>
+<tr><td><code class="inline-code">agent</code></td><td>Agent role: heartbeat reporting, command acknowledgment (no API access)</td></tr>
+</table>
+<h3>IAM Policies</h3>
+<p>Fine-grained access control can be defined using IAM policies with resource-level permissions:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">json</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>{
+  "policy": {
+    "statements": [
+      {
+        "effect": "allow",
+        "actions": ["device:read", "device:command"],
+        "resources": ["device:group:webservers/*"],
+        "conditions": {
+          "time_before": "18:00",
+          "time_after": "08:00"
+        }
+      }
+    ]
+  }
+}</code></pre></div>
+<h2 id="sec-encryption">Encryption</h2>
+<h3>At Rest</h3>
+<ul><li><strong>Secrets Vault</strong> — Encrypted with AES-256-GCM using a configurable encryption key</li><li><strong>Database</strong> — Sensitive columns (tokens, secrets) encrypted at the application layer</li><li><strong>Key Derivation</strong> — SHA-256 hash for key derivation from passphrase</li></ul>
+<h3>In Transit</h3>
+<ul><li><strong>Agent Communication</strong> — mTLS with certificate verification, or WebSocket over TLS (WSS)</li><li><strong>API</strong> — TLS 1.3 recommended, enforced via Nginx reverse proxy</li><li><strong>Internal Services</strong> — NATS with TLS, Redis with TLS, PostgreSQL with TLS</li></ul>
+<h2 id="sec-audit">Audit Logging</h2>
+<p>Every security-relevant action is logged with timestamp (UTC, microsecond precision), user ID and email, source IP address, action type and resource, request payload (sanitized of secrets), response status code, and duration.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8443/api/v1/audit-logs?limit=20
+
+renctl audit export --format json --since "2026-01-01"</code></pre></div>
+<h2 id="sec-vault">Secrets Vault</h2>
+<p>The Secrets Vault provides encrypted storage for sensitive data such as API keys, database passwords, and certificates. Access to the vault is controlled by RBAC policies, and all access is audit-logged.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl vault set my-api-key --value "sk-xxx"
+renctl vault get my-api-key
+renctl vault list
+renctl vault delete my-api-key</code></pre></div>
+<h3>Security Checklist</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">text</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>[ ] RENOS_JWT_SECRET is a secure random value (min 32 chars)
+[ ] RENOS_ENCRYPTION_KEY is a secure random value (min 32 chars)
+[ ] POSTGRES_PASSWORD is a strong password
+[ ] RENOS_ADMIN_PASSWORD is not the default "admin"
+[ ] RENOS_EXTERNAL_URL uses HTTPS
+[ ] TLS certificates are configured for Nginx
+[ ] Firewall limits access to required ports only
+[ ] Audit logging is enabled
+[ ] Rate limiting is configured</code></pre></div>
+</section>
+
+<section class="section" id="section-api" data-section="api">
+<div class="toc" id="toc-api"></div>
+<h1>API Reference</h1>
+<div class="callout callout-info"><strong>Interactive API documentation:</strong> Full OpenAPI/Swagger docs are available at <a href="/api/docs" target="_blank">/api/docs</a> when the server is running.</div>
+<h2 id="api-base">Base URL</h2>
+<p>All endpoints are under <code class="inline-code">/api/v1/</code>.</p>
+<table><tr><th>Environment</th><th>Base URL</th></tr>
+<tr><td>Development</td><td><code class="inline-code">http://localhost:8443</code></td></tr>
+<tr><td>Production</td><td><code class="inline-code">https://your-domain.com</code></td></tr>
+</table>
+<h2 id="api-auth">Authentication</h2>
+<p>All endpoints (except <code class="inline-code">/healthz</code>, <code class="inline-code">/readyz</code>, <code class="inline-code">/version</code>, and login) require a Bearer token:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>curl -H "Authorization: Bearer $TOKEN" http://localhost:8443/api/v1/devices</code></pre></div>
+<h2 id="api-endpoints">Key Endpoints</h2>
+<h3>Health & Status</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>GET  /api/v1/healthz
+GET  /api/v1/readyz
+GET  /api/v1/version</code></pre></div>
+<h3>Devices</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>GET    /api/v1/devices                          # List all devices
+GET    /api/v1/devices/{id}                     # Device details
+POST   /api/v1/devices/enroll-token             # Generate enrollment token
+POST   /api/v1/devices/{id}/commands            # Run command
+GET    /api/v1/devices/{id}/commands            # List command results
+GET    /api/v1/devices/{id}/heartbeats          # Heartbeat history
+GET    /api/v1/devices/{id}/containers          # Docker containers
+GET    /api/v1/devices/{id}/systemd-services    # Systemd services</code></pre></div>
+<h3>Groups</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>GET    /api/v1/groups                           # List groups
+POST   /api/v1/groups                           # Create group
+POST   /api/v1/groups/{id}/devices              # Add device to group
+POST   /api/v1/groups/{id}/commands             # Run command on group</code></pre></div>
+<h3>Schedules</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>GET    /api/v1/schedules                        # List schedules
+POST   /api/v1/schedules                        # Create schedule
+PUT    /api/v1/schedules/{id}                   # Update schedule
+DELETE /api/v1/schedules/{id}                   # Delete schedule</code></pre></div>
+<h2 id="api-rate-limiting">Rate Limiting</h2>
+<table><tr><th>Endpoint</th><th>Limit</th><th>Burst</th></tr>
+<tr><td>Login</td><td>5 req/min</td><td>10</td></tr>
+<tr><td>General API</td><td>50 req/s</td><td>100</td></tr>
+<tr><td>WebSocket</td><td>2 req/s</td><td>5</td></tr>
+</table>
+<p>Rate limit headers are returned in all responses: <code class="inline-code">X-RateLimit-Limit</code>, <code class="inline-code">X-RateLimit-Remaining</code>, <code class="inline-code">X-RateLimit-Reset</code>.</p>
+<h2 id="api-pagination">Pagination</h2>
+<p>List endpoints support cursor-based pagination. Max items per page: 200. Max offset: 10,000.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>GET /api/v1/devices?limit=50&cursor=xxx
+# Response:
+# { "data": [...], "next_cursor": "yyy", "has_more": true }</code></pre></div>
+<h2 id="api-errors">Error Handling</h2>
+<p>All errors follow a consistent format:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">json</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or expired token"
+  }
+}</code></pre></div>
+<table><tr><th>Status</th><th>Code</th><th>Meaning</th></tr>
+<tr><td>200</td><td>OK</td><td>Success</td></tr>
+<tr><td>201</td><td>Created</td><td>Resource created</td></tr>
+<tr><td>400</td><td>BAD_REQUEST</td><td>Invalid input</td></tr>
+<tr><td>401</td><td>UNAUTHORIZED</td><td>No/invalid token</td></tr>
+<tr><td>403</td><td>FORBIDDEN</td><td>Insufficient permissions</td></tr>
+<tr><td>404</td><td>NOT_FOUND</td><td>Resource not found</td></tr>
+<tr><td>429</td><td>RATE_LIMITED</td><td>Too many requests</td></tr>
+<tr><td>500</td><td>INTERNAL_ERROR</td><td>Server error (sanitized)</td></tr>
+<tr><td>503</td><td>UNAVAILABLE</td><td>Service unavailable</td></tr>
+</table>
+<h2 id="api-websocket">WebSocket Protocol</h2>
+<p>Real-time events are delivered via WebSocket connection to <code class="inline-code">/api/v1/ws?token=JWT</code>:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">javascript</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>const ws = new WebSocket(`ws://localhost:8443/api/v1/ws?token=${jwtToken}`);
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  console.log(msg.type, msg.device_id, msg.data);
+};
+
+ws.onclose = () => {
+  setTimeout(() => { /* reconnect */ }, 1000);
+};</code></pre></div>
+</section>
+
+<section class="section" id="section-cli" data-section="cli">
+<div class="toc" id="toc-cli"></div>
+<h1>CLI Reference</h1>
+<h2 id="cli-overview">renctl Overview</h2>
+<p><code class="inline-code">renctl</code> is the command-line interface for RenOS. It connects to the Core API and provides complete management capabilities. The CLI is distributed as a single Go binary and supports autocomplete for bash, zsh, and fish.</p>
+<h2 id="cli-global">Global Flags</h2>
+<table><tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+<tr><td><code class="inline-code">--server</code></td><td><code class="inline-code">http://localhost:8443</code></td><td>Core server URL</td></tr>
+<tr><td><code class="inline-code">--token</code></td><td><em>env: RENOS_TOKEN</em></td><td>API token</td></tr>
+<tr><td><code class="inline-code">--format</code></td><td><code class="inline-code">table</code></td><td>Output format: table, json, yaml</td></tr>
+<tr><td><code class="inline-code">--timeout</code></td><td><code class="inline-code">30s</code></td><td>Request timeout</td></tr>
+<tr><td><code class="inline-code">--debug</code></td><td><code class="inline-code">false</code></td><td>Enable debug logging</td></tr>
+</table>
+<h2 id="cli-commands">Command Reference</h2>
+<h3>Authentication</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl login --server https://renos.example.com
+renctl logout
+renctl token refresh
+renctl whoami</code></pre></div>
+<h3>Device Management</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl device list
+renctl device get &lt;id&gt;
+renctl device delete &lt;id&gt;
+renctl device tag add &lt;id&gt; &lt;tag&gt;
+renctl device tag remove &lt;id&gt; &lt;tag&gt;
+renctl exec &lt;id&gt; -- &lt;command&gt;
+renctl exec --group &lt;group&gt; -- &lt;cmd&gt;
+renctl exec --all -- &lt;command&gt;</code></pre></div>
+<h3>Groups</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl group create &lt;name&gt;
+renctl group list
+renctl group delete &lt;id&gt;
+renctl group add-device &lt;id&gt; &lt;dev&gt;
+renctl group remove-device &lt;id&gt; &lt;dev&gt;</code></pre></div>
+<h3>Docker</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl docker ps &lt;device&gt;
+renctl docker inspect &lt;device&gt; &lt;id&gt;
+renctl docker start &lt;device&gt; &lt;id&gt;
+renctl docker stop &lt;device&gt; &lt;id&gt;
+renctl docker restart &lt;device&gt; &lt;id&gt;
+renctl docker images &lt;device&gt;
+renctl docker volumes &lt;device&gt;
+renctl docker networks &lt;device&gt;</code></pre></div>
+<h3>Schedules</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl schedule create \
+  --name "Health Check" \
+  --cron "0 * * * *" \
+  --command "uptime" \
+  --target-group webservers
+renctl schedule list
+renctl schedule disable &lt;id&gt;</code></pre></div>
+<h3>Systemd</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl service list &lt;device&gt;
+renctl service status &lt;device&gt; &lt;unit&gt;
+renctl service start &lt;device&gt; &lt;unit&gt;
+renctl service stop &lt;device&gt; &lt;unit&gt;
+renctl service restart &lt;device&gt; &lt;unit&gt;
+renctl service enable &lt;device&gt; &lt;unit&gt;
+renctl service disable &lt;device&gt; &lt;unit&gt;</code></pre></div>
+<h3>AI</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl ai ask "Show me all devices with high CPU usage"
+renctl ai ask "Restart the nginx service on all webservers"
+renctl ai explain "Why was the database server restarted?"
+renctl ai diagnose --device db-01 "Slow query performance"</code></pre></div>
+<h3>Cluster</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl cluster status
+renctl cluster nodes
+renctl cluster failover</code></pre></div>
+<h3>Plugins</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl plugin list
+renctl plugin install &lt;id&gt;
+renctl plugin remove &lt;id&gt;
+renctl plugin update &lt;id&gt;
+renctl plugin enable &lt;id&gt;
+renctl plugin disable &lt;id&gt;</code></pre></div>
+<h3>Vault</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl vault set &lt;key&gt; --value &lt;val&gt;
+renctl vault get &lt;key&gt;
+renctl vault list
+renctl vault delete &lt;key&gt;</code></pre></div>
+<h3>Audit</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl audit log
+renctl audit export --format json</code></pre></div>
+<h2 id="cli-shell-completion">Shell Completion</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>source &lt;(renctl completion bash)
+source &lt;(renctl completion zsh)
+renctl completion fish > ~/.config/fish/completions/renctl.fish</code></pre></div>
+<h2 id="cli-config">CLI Configuration</h2>
+<p>The CLI stores configuration in <code class="inline-code">~/.renos/config.yaml</code>:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>server: https://renos.example.com
+token: eyJhbGciOiJIUzI1NiIs...
+format: table
+timeout: 30s</code></pre></div>
+</section>
+
+<section class="section" id="section-marketplace" data-section="marketplace">
+<div class="toc" id="toc-marketplace"></div>
+<h1>Marketplace</h1>
+<h2 id="marketplace-browsing">Browsing the Marketplace</h2>
+<p>The RenOS Marketplace is accessible from the Hub UI under the "Marketplace" tab, or via the CLI. It hosts plugins, integrations, workflows, and automation templates contributed by the community and verified by the RenOS team.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl marketplace search "monitoring"
+renctl marketplace list --category monitoring
+renctl marketplace show plugin-id
+renctl marketplace info plugin-id</code></pre></div>
+<h2 id="marketplace-installing">Installing Plugins</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl marketplace install com.renos.monitoring
+renctl plugin install ./my-plugin-v1.0.0.wasm
+renctl plugin list</code></pre></div>
+<h2 id="marketplace-upgrading">Upgrading Plugins</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl marketplace updates
+renctl marketplace upgrade com.renos.monitoring
+renctl marketplace upgrade --all</code></pre></div>
+<h2 id="marketplace-publishing">Publishing Plugins</h2>
+<p>To publish a plugin to the Marketplace, you need a developer account and a signing key:</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl marketplace package ./my-plugin/ --output my-plugin.wasm
+renctl marketplace sign my-plugin.wasm --key ./signing-key.pem
+renctl marketplace publish my-plugin.wasm \
+  --name "My Plugin" \
+  --description "Does something useful" \
+  --category monitoring \
+  --icon icon.png</code></pre></div>
+<h2 id="marketplace-versioning">Versioning & Compatibility</h2>
+<p>Plugins follow semantic versioning. The <code class="inline-code">manifest.yaml</code> declares compatibility with RenOS versions: <code class="inline-code">min_renos_version</code>, <code class="inline-code">max_renos_version</code>, and <code class="inline-code">api_version</code>. The marketplace automatically validates compatibility before installation, blocking incompatible plugins with a clear error message.</p>
+</section>
+
+<section class="section" id="section-sdk" data-section="sdk">
+<div class="toc" id="toc-sdk"></div>
+<h1>SDK Reference</h1>
+<h2 id="sdk-go">Go SDK</h2>
+<p>The Go SDK provides a client library for interacting with the RenOS API and building Core plugins.</p>
+<div class="code-block"><div class="code-block-header"><span class="lang">go</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "github.com/renos-project/renos/sdk/go"
+)
+
+func main() {
+    client := renos.NewClient(renos.Config{
+        Server: "https://renos.example.com",
+        Token:  os.Getenv("RENOS_TOKEN"),
+    })
+
+    devices, err := client.ListDevices(context.Background(), nil)
+    if err != nil { log.Fatal(err) }
+    for _, d := range devices {
+        fmt.Printf("Device: %s (%s)\n", d.Name, d.Status)
+    }
+
+    result, err := client.RunCommand(context.Background(),
+        "device-uuid",
+        &renos.CommandRequest{Command: "uptime"},
+    )
+    if err != nil { log.Fatal(err) }
+    fmt.Printf("Output: %s\n", result.Output)
+}</code></pre></div>
+
+<h2 id="sdk-typescript">TypeScript SDK</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">typescript</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>import { RenOSClient } from '@renos/sdk';
+
+const client = new RenOSClient({
+  server: 'https://renos.example.com',
+  token: process.env.RENOS_TOKEN,
+});
+
+const devices = await client.devices.list();
+devices.forEach(d => console.log(`${d.name}: ${d.status}`));
+
+const result = await client.devices.runCommand('device-uuid', {
+  command: 'df -h',
+});
+console.log(result.output);
+
+const ws = client.events.connect();
+ws.on('device.online', (deviceId) => {
+  console.log(`Device ${deviceId} came online`);
+});
+
+const hook = await client.webhooks.create({
+  name: 'deploy-hook',
+  secret: 'whsec_xxx',
+  workflow: 'deploy-workflow',
+});</code></pre></div>
+
+<h2 id="sdk-python">Python SDK</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">python</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>from renos import RenOSClient
+
+client = RenOSClient(
+    server="https://renos.example.com",
+    token="your-token"
+)
+
+devices = client.devices.list()
+for device in devices:
+    print(f"{device.name}: {device.status}")
+
+result = client.devices.run_command(
+    device_id="device-uuid",
+    command="uptime -p"
+)
+print(result.output)
+
+results = client.groups.run_command(
+    group_id="webservers",
+    command="systemctl reload nginx"
+)
+
+schedule = client.schedules.create(
+    name="Daily Backup",
+    cron="0 3 * * *",
+    command="./backup.sh",
+    target_group="databases"
+)</code></pre></div>
+
+<h2 id="sdk-csharp">C# SDK</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">csharp</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>using RenOS.SDK;
+
+var client = new RenOSClient(new Config
+{
+    Server = "https://renos.example.com",
+    Token = Environment.GetEnvironmentVariable("RENOS_TOKEN")
+});
+
+var devices = await client.Devices.ListAsync();
+foreach (var device in devices)
+{
+    Console.WriteLine($"{device.Name}: {device.Status}");
+}
+
+var result = await client.Devices.RunCommandAsync(
+    "device-uuid",
+    new CommandRequest { Command = "uname -a" }
+);
+Console.WriteLine(result.Output);
+
+await foreach (var evt in client.Events.SubscribeAsync())
+{
+    Console.WriteLine($"Event: {evt.Type} - {evt.DeviceId}");
+}</code></pre></div>
+
+<h2 id="sdk-rust">Rust SDK</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">rust</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>use renos_sdk::RenOSClient;
+
+#[tokio::main]
+async fn main() -> Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let client = RenOSClient::new(renos_sdk::Config {
+        server: "https://renos.example.com".into(),
+        token: std::env::var("RENOS_TOKEN")?,
+    });
+
+    let devices = client.devices().list().await?;
+    for device in &amp;devices {
+        println!("{}: {}", device.name, device.status);
+    }
+
+    let result = client.devices()
+        .run_command("device-uuid", "uptime")
+        .await?;
+    println!("Output: {}", result.output);
+
+    let mut events = client.events().subscribe().await?;
+    while let Some(event) = events.next().await {
+        println!("Event: {:?}", event);
+    }
+
+    Ok(())
+}</code></pre></div>
+</section>
+
+<section class="section" id="section-troubleshooting" data-section="troubleshooting">
+<div class="toc" id="toc-troubleshooting"></div>
+<h1>Troubleshooting</h1>
+<h2 id="ts-common">Common Issues</h2>
+<h3>Services Won't Start</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>docker info
+docker compose -f docker-compose.prod.yml logs core
+docker compose -f docker-compose.prod.yml logs postgres
+docker compose -f docker-compose.prod.yml ps</code></pre></div>
+<h3>Database Connection Errors</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>docker compose -f docker-compose.prod.yml exec postgres pg_isready -U renos
+echo $RENOS_DATABASE_URL
+psql $RENOS_DATABASE_URL -c "SELECT 1"</code></pre></div>
+<h3>Migration Errors</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>docker compose -f docker-compose.prod.yml exec core renos-core migrate
+docker compose -f docker-compose.prod.yml exec core renos-core migrate down 1</code></pre></div>
+<h3>Agent Connection Issues</h3>
+<table><tr><th>Symptom</th><th>Check</th></tr>
+<tr><td>Agent won't connect</td><td>Firewall allows outbound on 443/8443? Server URL correct? Token valid?</td></tr>
+<tr><td>Connects then disconnects</td><td>Check agent logs (<code class="inline-code">/var/log/renos-agent.log</code>). Verify TLS config.</td></tr>
+<tr><td>Heartbeats missing</td><td>Verify agent is running: <code class="inline-code">systemctl status renos-agent</code>.</td></tr>
+<tr><td>Commands not executing</td><td>Review command policies. Check agent permissions.</td></tr>
+</table>
+<h2 id="ts-debugging">Debugging</h2>
+<h3>Core Debug Mode</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>RENOS_LOG_LEVEL=debug ./renos-core --config config.yaml
+docker compose -f docker-compose.prod.yml exec core \
+  env RENOS_LOG_LEVEL=debug renos-core migrate
+curl http://localhost:6060/debug/pprof/</code></pre></div>
+<h3>Agent Debug Mode</h3>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renos-agent --log-level debug --foreground
+renos-agent ping --server https://renos.example.com</code></pre></div>
+<h2 id="ts-logging">Logging</h2>
+<table><tr><th>Component</th><th>Log Location</th><th>Format</th></tr>
+<tr><td>Core</td><td>Docker logs: <code class="inline-code">docker logs renos-core</code></td><td>JSON</td></tr>
+<tr><td>Agent</td><td><code class="inline-code">/var/log/renos-agent.log</code></td><td>JSON or text</td></tr>
+<tr><td>Hub</td><td>Docker logs: <code class="inline-code">docker logs renos-hub</code></td><td>Text</td></tr>
+<tr><td>Nginx</td><td><code class="inline-code">/var/log/nginx/access.log</code></td><td>Combined</td></tr>
+</table>
+<h2 id="ts-metrics">Metrics</h2>
+<p>Prometheus metrics are exposed at <code class="inline-code">/api/v1/metrics</code>. Available metrics include: <code class="inline-code">renos_devices_total</code>, <code class="inline-code">renos_commands_total</code>, <code class="inline-code">renos_heartbeats_total</code>, <code class="inline-code">renos_api_request_duration_seconds</code>, <code class="inline-code">renos_agent_connections</code>, and <code class="inline-code">renos_scheduler_jobs_total</code>.</p>
+<h2 id="ts-support">Support Channels</h2>
+<div class="card-grid">
+<div class="card"><h4>&#x1F4AC; Discord</h4><p>Join the RenOS community Discord for real-time help.</p></div>
+<div class="card"><h4>&#x1F4E0; GitHub Issues</h4><p>Report bugs at <code class="inline-code">github.com/renos-project/renos/issues</code></p></div>
+<div class="card"><h4>&#x1F4D6; Documentation</h4><p>This documentation is maintained in the RenOS repository.</p></div>
+<div class="card"><h4>&#x2709;&#xFE0F; Email</h4><p>Commercial support: <code class="inline-code">support@renos.dev</code></p></div>
+</div>
+</section>
+
+<section class="section" id="section-faq" data-section="faq">
+<div class="toc" id="toc-faq"></div>
+<h1>Frequently Asked Questions</h1>
+<h2 id="faq-general">General</h2>
+<h3>What is RenOS?</h3>
+<p>RenOS is an open-source, self-hosted platform for managing devices — desktops, servers, VMs, Docker containers, NAS devices, and mobile devices — from a single interface. It provides secure remote access, command execution, automation, monitoring, and AI-powered operations.</p>
+<h3>Is RenOS free?</h3>
+<p>Yes, RenOS is open-source and free to self-host. Commercial support plans are available for enterprise deployments.</p>
+<h3>What license does RenOS use?</h3>
+<p>RenOS is licensed under the Apache License 2.0.</p>
+<h3>Can I use RenOS behind a firewall?</h3>
+<p>Yes. Agents establish outbound connections to the Core, so no inbound ports are required on managed devices. The Core server only needs the API port (8443) open to the agent network.</p>
+<h2 id="faq-technical">Technical</h2>
+<h3>What technologies is RenOS built with?</h3>
+<p>Core is written in Go, Agent in Rust, and Hub in Next.js with React and TypeScript. The platform uses PostgreSQL, Redis, and NATS for data storage and messaging.</p>
+<h3>Can I manage Windows devices?</h3>
+<p>Yes. The RenOS Agent supports Windows 10/11 and Windows Server 2019+. Some features (like Docker management) require additional configuration on Windows.</p>
+<h3>How secure is RenOS?</h3>
+<p>RenOS implements defense-in-depth security: mTLS for agent communication, JWT authentication with RBAC for API access, AES-256-GCM encryption for secrets at rest, CSRF protection, Content Security Policy headers, input validation, and comprehensive audit logging.</p>
+<h3>Does RenOS support SSO?</h3>
+<p>Yes. RenOS supports OAuth2 (Google, GitHub, GitLab, Microsoft) and SAML 2.0 for single sign-on.</p>
+<h3>Can I run multiple RenOS instances?</h3>
+<p>Yes. Multi-instance high availability is supported with active-passive failover using PostgreSQL advisory locks for leader election.</p>
+<h2 id="faq-operations">Operations</h2>
+<h3>How do I backup RenOS?</h3>
+<p>Use the built-in backup script: <code class="inline-code">./scripts/backup.sh</code>. This creates a compressed SQL dump of the database. Set up a cron job for automated daily backups.</p>
+<h3>How do I update RenOS?</h3>
+<p>Run <code class="inline-code">docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d</code>, then run pending database migrations with <code class="inline-code">renos-core migrate</code>.</p>
+<h3>Can I use RenOS with Kubernetes?</h3>
+<p>Yes. Helm charts are available in the <code class="inline-code">deploy/charts/</code> directory for Kubernetes deployment.</p>
+<h2 id="faq-plugins">Plugins & Integration</h2>
+<h3>Can I write my own plugins?</h3>
+<p>Yes. Plugins can be written in any language that compiles to WebAssembly, or as native modules in Go (Core) or Rust (Agent).</p>
+<h3>Is there a REST API?</h3>
+<p>Yes. A comprehensive REST API is available under <code class="inline-code">/api/v1/</code> with OpenAPI documentation at <code class="inline-code">/api/docs</code>.</p>
+<h3>Does RenOS integrate with monitoring tools?</h3>
+<p>Yes. RenOS exposes Prometheus metrics and can send webhook notifications to Slack, PagerDuty, OpsGenie, and custom endpoints.</p>
+</section>
+
+<section class="section" id="section-examples" data-section="examples">
+<div class="toc" id="toc-examples"></div>
+<h1>Examples</h1>
+<p>Below are practical examples demonstrating common RenOS usage patterns. Example scripts are located in the <code class="inline-code">scripts/</code> and <code class="inline-code">examples/</code> directories of the repository.</p>
+<h2 id="ex-device-health">Device Health Check</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>#!/bin/bash
+renctl exec --group webservers -- \
+  "echo '=== UPTIME ===' && uptime && \
+   echo '=== DISK ===' && df -h / && \
+   echo '=== MEMORY ===' && free -h && \
+   echo '=== DOCKER ===' && docker ps"</code></pre></div>
+<h2 id="ex-ansible">Ansible-Style Automation</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>#!/bin/bash
+TARGET_GROUP="production-servers"
+
+echo "[1/4] Pulling latest images..."
+renctl exec --group $TARGET_GROUP -- \
+  "docker compose -f /opt/app/docker-compose.yml pull"
+
+echo "[2/4] Restarting services..."
+renctl exec --group $TARGET_GROUP -- \
+  "docker compose -f /opt/app/docker-compose.yml up -d"
+
+echo "[3/4] Health check..."
+renctl exec --group $TARGET_GROUP -- \
+  "curl -sf http://localhost:3000/health"
+
+echo "[4/4] Verification..."
+renctl exec --group $TARGET_GROUP -- \
+  "docker compose -f /opt/app/docker-compose.yml ps"</code></pre></div>
+<h2 id="ex-ai-ops">AI-Assisted Operations</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl ai diagnose --device web-01 "Nginx returning 502 errors"
+renctl ai ask "What should I check when disk usage exceeds 90%?"
+renctl ai ask "Show me a PromQL query for disk usage across all devices"
+renctl ai ask "Restart the PostgreSQL service on db-01"
+renctl ai explain "What happened on the cluster in the last hour?"</code></pre></div>
+<h2 id="ex-workflow">Automated Workflow Example</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>name: High Disk Usage Remediation
+trigger:
+  type: device_condition
+  metric: disk_usage_percent
+  operator: ">"
+  threshold: 90
+  cooldown: 300
+conditions:
+  - type: device_count
+    max: 20
+actions:
+  - name: Identify large files
+    type: command
+    command: "du -sh /tmp/* /var/log/* 2>/dev/null | sort -rh | head -10"
+  - name: Clean package cache
+    type: command
+    command: "apt clean 2>/dev/null; yum clean all 2>/dev/null; true"
+  - name: Notify admin
+    type: webhook
+    url: https://hooks.slack.com/services/xxx
+    payload:
+      text: "Auto-remediation completed for {{device.name}}"</code></pre></div>
+<h2 id="ex-api">API Usage Examples</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">python</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>from renos import RenOSClient
+
+client = RenOSClient(server="https://renos.example.com", token="YOUR_TOKEN")
+
+for device in client.devices.list(tags=["webserver"]):
+    client.devices.run_command(device.id, "apt update && apt upgrade -y")
+    print(f"Updated {device.name}")
+
+for device in client.devices.list():
+    hb = client.devices.get_latest_heartbeat(device.id)
+    print(f"{device.name}: CPU={hb.cpu}% MEM={hb.memory}% DISK={hb.disk}%")</code></pre></div>
+<h2 id="ex-docker">Docker Compose Integration</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>#!/bin/bash
+TARGET_GROUP="docker-hosts"
+
+echo "=== Container Status ==="
+renctl exec --group $TARGET_GROUP -- \
+  "docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'"
+
+echo "=== Resource Usage ==="
+renctl exec --group $TARGET_GROUP -- \
+  "docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'"
+
+renctl exec --group $TARGET_GROUP -- \
+  "docker system prune -af --volumes 2>/dev/null; echo 'Cleanup complete'"</code></pre></div>
+<h2 id="ex-backup">Automated Backup Workflow</h2>
+<div class="code-block"><div class="code-block-header"><span class="lang">bash</span><button class="copy-btn" onclick="copyCode(this)">&#x1F4CB; Copy</button></div><pre><code>renctl schedule create \
+  --name "Daily DB Backup" \
+  --cron "0 2 * * *" \
+  --target-group "databases" \
+  --command \
+"pg_dumpall -U postgres | gzip > /var/backups/backup-$(date +%Y%m%d).sql.gz
+find /var/backups -name '*.sql.gz' -mtime +30 -delete"</code></pre></div>
+</section>
+
+</main>
+</div>
+<button class="sidebar-mobile-toggle" id="mobileToggle">&#x2630;</button>
+<script>
+const themeToggle=document.getElementById('themeToggle');
+const html=document.documentElement;
+const savedTheme=localStorage.getItem('renos-theme');
+if(savedTheme)html.setAttribute('data-theme',savedTheme);
+themeToggle.addEventListener('click',()=>{const c=html.getAttribute('data-theme');const n=c==='dark'?'light':'dark';html.setAttribute('data-theme',n);localStorage.setItem('renos-theme',n);themeToggle.textContent=n==='dark'?'\u263E':'\u2600'});
+themeToggle.textContent=savedTheme==='light'?'\u2600':'\u263E';
+
+const sidebarLinks=document.querySelectorAll('.sidebar-link');
+const sections=document.querySelectorAll('.section');
+function activateSection(id){sections.forEach(s=>s.classList.remove('active'));sidebarLinks.forEach(l=>l.classList.remove('active'));const sec=document.getElementById('section-'+id);const link=document.querySelector('.sidebar-link[data-section="'+id+'"]');if(sec)sec.classList.add('active');if(link)link.classList.add('active');document.getElementById('noResults').classList.remove('visible')}
+sidebarLinks.forEach(link=>{link.addEventListener('click',(e)=>{e.preventDefault();const id=link.getAttribute('data-section');activateSection(id);document.getElementById('searchInput').value='';removeHighlights();const t=document.getElementById('section-'+id);if(t)t.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('visible')})});
+
+const searchInput=document.getElementById('searchInput');
+let searchTimeout;
+function removeHighlights(){document.querySelectorAll('.search-highlight').forEach(el=>{const p=el.parentNode;p.replaceChild(document.createTextNode(el.textContent),el);p.normalize()})}
+function highlightText(element,query){const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT,null,false);const nodes=[];while(walker.nextNode())nodes.push(walker);nodes.forEach(node=>{const text=node.textContent;const lower=text.toLowerCase();const idx=lower.indexOf(query);if(idx>=0){const span=document.createElement('span');span.className='search-highlight';span.textContent=text.substring(idx,idx+query.length);const rest=text.substring(idx+query.length);node.textContent=text.substring(0,idx);node.parentNode.insertBefore(span,node.nextSibling);if(rest){const rn=document.createTextNode(rest);span.parentNode.insertBefore(rn,span.nextSibling)}}})}
+function performSearch(){const q=searchInput.value.toLowerCase().trim();removeHighlights();if(!q){sections.forEach(s=>s.removeAttribute('match'));const fa=document.querySelector('.sidebar-link.active');if(fa)activateSection(fa.getAttribute('data-section'));else activateSection('getting-started');document.getElementById('noResults').classList.remove('visible');return}
+let any=false;sections.forEach(s=>{const t=s.textContent.toLowerCase();if(t.includes(q)){s.removeAttribute('match');any=true;highlightText(s,q)}else s.setAttribute('match','false')});if(!any){document.getElementById('noResults').classList.add('visible');sections.forEach(s=>s.classList.remove('active'))}else{document.getElementById('noResults').classList.remove('visible');sections.forEach(s=>s.removeAttribute('style'));sidebarLinks.forEach(l=>l.classList.remove('active'));const fv=document.querySelector('.section:not([match="false"])');if(fv){const id=fv.getAttribute('data-section');const link=document.querySelector('.sidebar-link[data-section="'+id+'"]');if(link)link.classList.add('active')}}}
+searchInput.addEventListener('input',()=>{clearTimeout(searchTimeout);searchTimeout=setTimeout(performSearch,200)});
+
+function copyCode(btn){const block=btn.closest('.code-block');const code=block.querySelector('pre code');const text=code.textContent;navigator.clipboard.writeText(text).then(()=>{btn.classList.add('copied');btn.innerHTML='\u2713 Copied';setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML='\uD83D\uDCCB Copy'},2000)}).catch(()=>{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);btn.classList.add('copied');btn.innerHTML='\u2713 Copied';setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML='\uD83D\uDCCB Copy'},2000)})}
+
+document.querySelectorAll('.section').forEach(section=>{const toc=section.querySelector('.toc');if(!toc)return;const headings=section.querySelectorAll('h2,h3,h4');if(headings.length===0){toc.style.display='none';return}
+let h='<div class="toc-title">Table of Contents</div>';headings.forEach(hd=>{const tag=hd.tagName.toLowerCase();const id=hd.id||hd.textContent.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');hd.id=id;h+='<a class="toc-'+tag+'" href="#'+id+'">'+hd.textContent+'</a>'});toc.innerHTML=h});
+document.addEventListener('click',(e)=>{const tl=e.target.closest('.toc a');if(tl){e.preventDefault();const tid=tl.getAttribute('href').substring(1);const t=document.getElementById(tid);if(t){t.scrollIntoView({behavior:'smooth',block:'start'});t.style.transition='background 0.5s';t.style.background='rgba(99,102,241,0.08)';setTimeout(()=>{t.style.background=''},1000)}}});
+document.getElementById('mobileToggle').addEventListener('click',()=>{document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('visible')});
+document.getElementById('sidebarOverlay').addEventListener('click',()=>{document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('visible')});
+document.getElementById('versionSelect').addEventListener('change',function(){const v=this.value;const l=document.querySelector('.header-logo small');if(l)l.textContent=v});
+</script>
+</body>
+</html>

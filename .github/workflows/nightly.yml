@@ -30,6 +30,8 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: docker/setup-buildx-action@v3
+
       # Core tests with testcontainers
       - name: Core integration tests
         run: go test -v -count=1 -tags=integration ./...
@@ -43,12 +45,37 @@ jobs:
         run: cargo test
         working-directory: agent
 
-      # Hub build
-      - name: Hub build
-        run: |
-          npm ci
-          npm run build
+      # Hub test + build
+      - name: Hub install
+        run: npm ci
         working-directory: hub
+
+      - name: Hub test
+        run: npm test
+        working-directory: hub
+
+      - name: Hub build
+        run: npm run build
+        working-directory: hub
+
+      # Docker image build test
+      - name: Build Core image
+        uses: docker/build-push-action@v6
+        with:
+          context: core
+          push: false
+          tags: renos-core:nightly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Hub image
+        uses: docker/build-push-action@v6
+        with:
+          context: hub
+          push: false
+          tags: renos-hub:nightly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # Security scan
       - name: Trivy scan

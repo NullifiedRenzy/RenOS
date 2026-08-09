@@ -1,15 +1,15 @@
-# Release Process — v0.1.0-nova
+# Release Process — v1.0.0-rc1
 
 ## Release Checklist
 
 ### Pre-Release
 
-- [ ] All CI checks pass on `main` branch
-- [ ] `make check` runs locally without errors
-- [ ] `go mod tidy` has been run and `go.sum` is committed
+- [x] All CI checks pass on `main` branch
+- [x] `make check` runs locally without errors
+- [x] `go mod tidy` has been run and `go.sum` is committed
 - [ ] `agent/Cargo.lock` is up to date
-- [ ] `hub/package-lock.json` is up to date
-- [ ] CHANGELOG.md is updated with all changes since last release
+- [x] `hub/package-lock.json` is up to date
+- [x] CHANGELOG.md is updated with all changes since last release
 - [ ] All Dockerfiles build successfully:
   ```bash
   docker build -t renos-core:test -f core/Dockerfile core
@@ -17,8 +17,8 @@
   docker build -t renos-hub:test -f hub/Dockerfile hub
   ```
 - [ ] Quick start guide in README.md is tested end-to-end
-- [ ] `.env.example` reflects all current configuration options
-- [ ] No hardcoded secrets, debug endpoints, or TODOs remain
+- [x] `.env.example` reflects all current configuration options
+- [x] No hardcoded secrets, debug endpoints, or TODOs remain
 
 ### Release Steps
 
@@ -32,22 +32,22 @@ make check
 
 # 3. Commit any pending changes
 git add -A
-git commit -m "chore: prep v0.1.0-nova"
+git commit -m "chore: prep v1.0.0-rc1"
 
 # 4. Tag the release
-git tag -a v0.1.0-nova -m "v0.1.0-nova — Foundation release"
+git tag -a v1.0.0-rc1 -m "v1.0.0-rc1 — Release candidate 1"
 
 # 5. Push tag to trigger CI release workflow
-git push origin v0.1.0-nova
+git push origin v1.0.0-rc1
 ```
 
 ### Post-Release
 
 - [ ] Verify GitHub Release is created with auto-generated notes
 - [ ] Verify Docker images are pushed to GHCR:
-  - `ghcr.io/{owner}/renos-core:v0.1.0-nova`
-  - `ghcr.io/{owner}/renos-agent:v0.1.0-nova`
-  - `ghcr.io/{owner}/renos-hub:v0.1.0-nova`
+  - `ghcr.io/{owner}/renos-core:v1.0.0-rc1`
+  - `ghcr.io/{owner}/renos-agent:v1.0.0-rc1`
+  - `ghcr.io/{owner}/renos-hub:v1.0.0-rc1`
 - [ ] Test `docker compose up` with released images
 - [ ] Update `dev` branch to match `main`
 
@@ -57,21 +57,21 @@ git push origin v0.1.0-nova
 
 ```bash
 # Create an annotated tag (preferred):
-git tag -a v0.1.0-nova -m "v0.1.0-nova — Foundation release"
+git tag -a v1.0.0-rc1 -m "v1.0.0-rc1 — Release candidate 1"
 
 # Push tag to remote:
-git push origin v0.1.0-nova
+git push origin v1.0.0-rc1
 
 # Delete a tag locally and remotely (if needed):
-git tag -d v0.1.0-nova
-git push origin :refs/tags/v0.1.0-nova
+git tag -d v1.0.0-rc1
+git push origin :refs/tags/v1.0.0-rc1
 ```
 
 ### Tag Naming Convention
 
 - `v{major}.{minor}.{patch}-{codename}`
-- Example: `v0.1.0-nova`
-- Hotfixes: `v0.1.1-nova`
+- Example: `v1.0.0-rc1`
+- Hotfixes: `v1.0.1`
 
 ---
 

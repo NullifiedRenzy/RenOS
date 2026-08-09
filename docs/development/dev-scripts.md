@@ -42,10 +42,10 @@ ENROLL_TOKEN=$(curl -s -X POST http://localhost:8443/api/v1/devices/enroll-token
   -H "Authorization: Bearer $TOKEN" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
 
-# Enroll the agent
+# Enroll the agent (token is a required --token flag)
 RENOS_DATA_DIR=/tmp/renos/agent \
 RENOS_API_URL=http://localhost:8443 \
-./agent/target/release/renos-agent enroll "$ENROLL_TOKEN"
+./agent/target/release/renos-agent enroll --token "$ENROLL_TOKEN"
 
 # Rerun dev-up.sh to start the agent
 ./scripts/dev-up.sh
