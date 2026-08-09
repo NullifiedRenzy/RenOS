@@ -1,0 +1,81 @@
+{
+  "title": "RenOS — Overview",
+  "uid": "renos-overview",
+  "version": 1,
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "title": "HTTP Request Rate",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_http_requests_total[1m])", "legendFormat": "{{method}} {{path}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "title": "HTTP P99 Latency",
+      "type": "graph",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(renos_http_request_duration_ms_bucket[5m]))", "legendFormat": "{{method}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "title": "Active HTTP Requests",
+      "type": "singlestat",
+      "targets": [
+        { "expr": "renos_http_requests_active" }
+      ],
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 8 }
+    },
+    {
+      "title": "Agents Online",
+      "type": "singlestat",
+      "targets": [
+        { "expr": "renos_agents_online" }
+      ],
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 8 }
+    },
+    {
+      "title": "Terminal Sessions",
+      "type": "singlestat",
+      "targets": [
+        { "expr": "renos_terminal_active_sessions" }
+      ],
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 8 }
+    },
+    {
+      "title": "HTTP Error Rate (4xx/5xx)",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_http_errors_total[5m])", "legendFormat": "{{status}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 }
+    },
+    {
+      "title": "Go Runtime — Goroutines",
+      "type": "graph",
+      "targets": [
+        { "expr": "go_goroutines", "legendFormat": "goroutines" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 }
+    },
+    {
+      "title": "SLO Availability",
+      "type": "table",
+      "targets": [
+        { "expr": "renos_slo_availability", "legendFormat": "{{slo_name}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 }
+    },
+    {
+      "title": "SLO Error Budget",
+      "type": "table",
+      "targets": [
+        { "expr": "renos_slo_error_budget", "legendFormat": "{{slo_name}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 }
+    }
+  ]
+}

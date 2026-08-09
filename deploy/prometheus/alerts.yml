@@ -1,0 +1,161 @@
+groups:
+  - name: renos-core
+    interval: 30s
+    rules:
+      # ── Availability Alerts ──
+      - alert: RenOSDown
+        expr: up{job="renos-core"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "RenOS Core is down"
+          description: "RenOS Core has been unreachable for >1m."
+
+      # ── HTTP / API Alerts ──
+      - alert: HighHTTPErrorRate
+        expr: |
+          rate(renos_http_errors_total[5m]) / rate(renos_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "High HTTP error rate ({{ $value | humanizePercentage }})"
+          description: "HTTP 4xx/5xx rate >5% over 5m."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.99, rate(renos_http_request_duration_ms_bucket[5m])) > 5000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "P99 latency >5s"
+          description: "HTTP request P99 latency is {{ $value }}ms."
+
+      - alert: BurstOfActiveRequests
+        expr: renos_http_requests_active > 200
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Burst of active requests ({{ $value }})"
+          description: ">200 concurrent HTTP requests."
+
+      # ── Database Alerts ──
+      - alert: DatabaseDown
+        expr: renos_db_pool_active_connections == 0 and on() (up{job="renos-core"} == 1)
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Database connection lost"
+          description: "No active database connections."
+
+      - alert: HighDBLatency
+        expr: |
+          histogram_quantile(0.99, rate(renos_db_query_duration_ms_bucket[5m])) > 1000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "DB query P99 >1s"
+          description: "Database query P99 latency is {{ $value }}ms."
+
+      - alert: DatabasePoolExhausted
+        expr: renos_db_pool_active_connections / (renos_db_pool_active_connections + renos_db_pool_idle_connections) > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "DB pool >90% utilized"
+          description: "Database connection pool is >90% utilized."
+
+      # ── NATS Alerts ──
+      - alert: NATSDisconnected
+        expr: rate(renos_nats_disconnects_total[5m]) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "NATS disconnection detected"
+          description: "NATS has disconnected {{ $value }} times in 5m."
+
+      - alert: NATSReconnecting
+        expr: rate(renos_nats_reconnects_total[5m]) > 2
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "NATS reconnecting frequently"
+          description: "NATS reconnected {{ $value }} times in 5m."
+
+      # ── Agent Alerts ──
+      - alert: AgentsOffline
+        expr: renos_agents_online < renos_agents_total * 0.5
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: ">50% agents offline"
+          description: "Only {{ $value }} agents online out of {{ $labels.total }}."
+
+      - alert: AgentHeartbeatLatencyHigh
+        expr: |
+          histogram_quantile(0.99, rate(renos_agent_heartbeat_latency_ms_bucket[5m])) > 5000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Agent heartbeat P99 >5s"
+          description: "Agent heartbeat latency is {{ $value }}ms."
+
+      # ── Redis Alerts ──
+      - alert: RedisErrors
+        expr: rate(renos_redis_errors_total[5m]) > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis errors detected"
+          description: "Redis errors: {{ $value }} in 5m for {{ $labels.command }}."
+
+      # ── AI Alerts ──
+      - alert: AIProviderFailureRate
+        expr: rate(renos_ai_provider_failures_total[10m]) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "AI provider failures ({{ $value }})"
+          description: "AI provider {{ $labels.provider }} has {{ $value }} failures in 10m."
+
+      # ── Go Runtime Alerts ──
+      - alert: HighGoroutineCount
+        expr: go_goroutines > 5000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Goroutine count >5000"
+          description: "{{ $value }} goroutines running."
+
+      - alert: HighMemoryUsage
+        expr: go_memstats_alloc_bytes / go_memstats_sys_bytes > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Go heap usage >90%"
+          description: "Heap {{ $value | humanizePercentage }} of system memory."
+
+      # ── SLO Alerts ──
+      - alert: SLOErrorBudgetExhausted
+        expr: renos_slo_error_budget < 0.1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "SLO error budget <10% remaining"
+          description: "SLO {{ $labels.slo_name }} has {{ $value | humanizePercentage }} error budget remaining."
+
+      - alert: SLOAvailabilityBelowTarget
+        expr: renos_slo_availability < 0.99
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "SLO availability <99%"
+          description: "SLO {{ $labels.slo_name }} availability is {{ $value }}."
+
+      # ── Circuit Breaker Alerts ──
+      - alert: CircuitBreakerTrips
+        expr: rate(renos_circuit_breaker_trips_total[5m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Circuit breaker tripped"
+          description: "Device {{ $labels.device_id }} circuit breaker tripped."

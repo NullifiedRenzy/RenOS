@@ -1,0 +1,33 @@
+{
+  "title": "RenOS — Workflows",
+  "uid": "renos-workflows",
+  "version": 1,
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "title": "Workflow Executions",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_workflow_executions_total[1m])", "legendFormat": "{{status}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "title": "Workflow Duration (P99)",
+      "type": "graph",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(renos_workflow_duration_ms_bucket[5m]))", "legendFormat": "{{workflow_type}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "title": "Workflow Steps Processed",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_workflow_steps_total[1m])", "legendFormat": "{{step_type}}" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+    }
+  ]
+}

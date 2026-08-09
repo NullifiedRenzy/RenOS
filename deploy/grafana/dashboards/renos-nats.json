@@ -1,0 +1,34 @@
+{
+  "title": "RenOS — NATS & Messaging",
+  "uid": "renos-nats",
+  "version": 1,
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "title": "NATS Publish Rate",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_nats_publish_total[1m])", "legendFormat": "{{subject}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "title": "NATS Subscribe Rate",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_nats_subscribe_total[1m])", "legendFormat": "{{subject}}" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "title": "NATS Reconnects & Disconnects",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(renos_nats_reconnects_total[1m])", "legendFormat": "reconnects" },
+        { "expr": "rate(renos_nats_disconnects_total[1m])", "legendFormat": "disconnects" }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+    }
+  ]
+}
