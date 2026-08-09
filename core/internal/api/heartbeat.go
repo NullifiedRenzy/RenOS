@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
 	"github.com/renos-project/renos/core/internal/ws"
 )
@@ -32,31 +31,9 @@ func heartbeatHandler(devices *db.DeviceRepository, audits *db.AuditRepository, 
 			return
 		}
 
-		if req.DeviceID == "" || req.DeviceSecret == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device_id and device_secret required")
-			return
-		}
-
-		device, err := devices.FindByID(r.Context(), req.DeviceID)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Device not found")
-			return
-		}
-
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(device.Metadata), &metadata); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to parse device metadata")
-			return
-		}
-
-		hash, ok := metadata["device_secret_hash"].(string)
-		if !ok || hash == "" {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Device not enrolled")
-			return
-		}
-
-		if !auth.VerifyPassword(hash, req.DeviceSecret) {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid device secret")
+		device, apiErr := verifyDeviceSecret(devices, deviceAuthRequest{DeviceID: req.DeviceID, DeviceSecret: req.DeviceSecret})
+		if apiErr != nil {
+			writeError(w, apiErr.status, apiErr.code, apiErr.message)
 			return
 		}
 

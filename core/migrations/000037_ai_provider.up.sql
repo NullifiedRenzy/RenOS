@@ -1,0 +1,2 @@
+ALTER TABLE ai_conversations ADD COLUMN provider TEXT NOT NULL DEFAULT '';
+ALTER TABLE ai_conversations ADD COLUMN model TEXT NOT NULL DEFAULT '';

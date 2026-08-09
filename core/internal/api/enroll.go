@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"sync"
@@ -51,11 +52,12 @@ type enrollmentToken struct {
 }
 
 var (
-	tokenMu     sync.RWMutex
+	tokenMu      sync.RWMutex
 	activeTokens = make(map[string]*enrollmentToken)
+	maxTokens    = 1000
 )
 
-func generateEnrollTokenHandler(cfg *config.Config) http.HandlerFunc {
+func generateEnrollTokenHandler(cfg *config.Config, audits *db.AuditRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := randomToken()
 		et := &enrollmentToken{
@@ -65,8 +67,39 @@ func generateEnrollTokenHandler(cfg *config.Config) http.HandlerFunc {
 		}
 
 		tokenMu.Lock()
+		// Evict expired tokens to prevent unbounded growth
+		now := time.Now()
+		for t, et := range activeTokens {
+			if now.After(et.ExpiresAt) || et.Used {
+				delete(activeTokens, t)
+			}
+		}
+		// Enforce max tokens limit
+		if len(activeTokens) >= maxTokens {
+			// Remove oldest token
+			var oldestKey string
+			var oldestTime time.Time
+			for t, tok := range activeTokens {
+				if oldestKey == "" || tok.CreatedAt.Before(oldestTime) {
+					oldestKey = t
+					oldestTime = tok.CreatedAt
+				}
+			}
+			if oldestKey != "" {
+				delete(activeTokens, oldestKey)
+			}
+		}
 		activeTokens[token] = et
 		tokenMu.Unlock()
+
+		claims, _ := r.Context().Value(claimsKey).(*auth.Claims)
+		var actorID string
+		if claims != nil {
+			actorID = claims.UserID
+		}
+		if err := audits.Create(r.Context(), "user", actorID, "enroll_token.generated", "system", ""); err != nil {
+			slog.Error("failed to audit token generation", "error", err)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{

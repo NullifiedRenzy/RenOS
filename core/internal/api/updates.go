@@ -4,122 +4,175 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
-	"github.com/renos-project/renos/core/internal/ws"
+	"github.com/renos-project/renos/core/internal/notify"
+	"github.com/renos-project/renos/core/internal/update"
 )
 
-type syncUpdatePayload struct {
-	PackageName      string `json:"package_name"`
-	CurrentVersion   string `json:"current_version"`
-	AvailableVersion string `json:"available_version"`
-	Severity         string `json:"severity"`
-	Status           string `json:"status"`
-}
-
-func syncUpdatesHandler(updates *db.UpdateStatusRepository, devices *db.DeviceRepository) http.HandlerFunc {
+func getVersionInfoHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		deviceID := chi.URLParam(r, "id")
-		if deviceID == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device id required")
-			return
-		}
-
-		var req struct {
-			DeviceID     string              `json:"device_id"`
-			DeviceSecret string              `json:"device_secret"`
-			Updates      []syncUpdatePayload `json:"updates"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
-			return
-		}
-
-		if _, apiErr := verifyDeviceSecret(devices, deviceAuthRequest{DeviceID: req.DeviceID, DeviceSecret: req.DeviceSecret}); apiErr != nil {
-			writeError(w, apiErr.status, apiErr.code, apiErr.message)
-			return
-		}
-
-		if req.DeviceID != deviceID {
-			writeError(w, http.StatusForbidden, "FORBIDDEN", "device_id mismatch")
-			return
-		}
-
-		var records []*db.UpdateStatus
-		for _, u := range req.Updates {
-			records = append(records, &db.UpdateStatus{
-				PackageName:      u.PackageName,
-				CurrentVersion:   u.CurrentVersion,
-				AvailableVersion: u.AvailableVersion,
-				Severity:         u.Severity,
-				Status:           u.Status,
-			})
-		}
-
-		if err := updates.ReplaceForDevice(r.Context(), deviceID, records); err != nil {
-			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to sync updates")
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "synced"})
+		planner := update.NewUpdatePlanner(nil, nil)
+		writeJSON(w, http.StatusOK, planner.GetVersionInfo())
 	}
 }
 
-func listUpdatesHandler(updates *db.UpdateStatusRepository) http.HandlerFunc {
+func checkForUpdatesHandler(history *db.UpdateHistoryRepository, notifier *notify.Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		deviceID := chi.URLParam(r, "id")
-		if deviceID == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device id required")
-			return
-		}
-
-		list, err := updates.ListByDevice(r.Context(), deviceID)
+		planner := update.NewUpdatePlanner(history, nil)
+		release, err := planner.CheckForUpdates(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to list updates")
+			writeError(w, http.StatusInternalServerError, "check_failed", "failed to check for updates: "+err.Error())
 			return
 		}
-
-		if list == nil {
-			list = []*db.UpdateStatus{}
+		if release == nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"update_available": false, "current_version": update.CurrentVersion})
+			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"updates": list,
-		})
+		if notifier != nil {
+			notifier.Notify(r.Context(), "", "system", "Update available",
+				"RenOS "+release.Version+" is available (channel: "+string(release.Channel)+").", "update", release.Version,
+				map[string]any{"version": release.Version, "channel": string(release.Channel)})
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"update_available": true, "release": release})
 	}
 }
 
-func requestUpdateActionHandler(updates *db.UpdateStatusRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func planUpdateHandler(history *db.UpdateHistoryRepository) http.HandlerFunc {
+	type request struct {
+		TargetVersion string `json:"target_version"`
+		Channel       string `json:"channel"`
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		deviceID := chi.URLParam(r, "id")
-		action := chi.URLParam(r, "action")
-		if deviceID == "" || action == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device id and action required")
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
+			return
+		}
+		planner := update.NewUpdatePlanner(history, nil)
+		if req.Channel != "" {
+			planner.SetChannel(update.Channel(req.Channel))
+		}
+
+		release, err := planner.CheckForUpdates(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "check_failed", err.Error())
+			return
+		}
+		if release == nil {
+			writeError(w, http.StatusNotFound, "no_update", "no update available for the specified channel")
 			return
 		}
 
-		if action != "check" && action != "upgrade" && action != "dry-run" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "action must be check, upgrade, or dry-run")
+		plan := planner.PlanUpdate(release)
+		writeJSON(w, http.StatusOK, plan)
+	}
+}
+
+func startUpdateHandler(history *db.UpdateHistoryRepository, backups *db.UpdateBackupRepository, audits *db.AuditRepository) http.HandlerFunc {
+	type request struct {
+		TargetVersion string `json:"target_version"`
+		Channel       string `json:"channel"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
 			return
 		}
 
-		if _, err := devices.FindByID(r.Context(), deviceID); err != nil {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "Device not found")
+		planner := update.NewUpdatePlanner(history, backups)
+		if req.Channel != "" {
+			planner.SetChannel(update.Channel(req.Channel))
+		}
+
+		release, err := planner.CheckForUpdates(r.Context())
+		if err != nil || release == nil {
+			writeError(w, http.StatusNotFound, "no_update", "no update available")
 			return
 		}
 
-		claims := r.Context().Value(claimsKey).(*auth.Claims)
-		audits.Create(r.Context(), "user", claims.UserID, "update_action."+action, "device", deviceID)
+		uid := getUserID(r)
+		entry := &db.UpdateHistoryEntry{
+			VersionFrom: update.CurrentVersion,
+			VersionTo:   release.Version,
+			Channel:     string(release.Channel),
+			Status:      "pending",
+			StartedBy:   &uid,
+		}
+		if err := history.Create(r.Context(), entry); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create update entry")
+			return
+		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message":   "update action queued",
-			"device_id": deviceID,
-			"action":    action,
-		})
+		plan := planner.PlanUpdate(release)
+		go planner.ApplyUpdate(r.Context(), plan, entry)
+
+		audits.Create(r.Context(), "user", uid, "update.start", "update", entry.ID)
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "started", "update_id": entry.ID})
+	}
+}
+
+func rollbackUpdateHandler(history *db.UpdateHistoryRepository, backups *db.UpdateBackupRepository, audits *db.AuditRepository) http.HandlerFunc {
+	type request struct {
+		BackupID string `json:"backup_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.BackupID == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "backup_id is required")
+			return
+		}
+
+		planner := update.NewUpdatePlanner(history, backups)
+		if err := planner.Rollback(r.Context(), req.BackupID); err != nil {
+			writeError(w, http.StatusInternalServerError, "rollback_failed", err.Error())
+			return
+		}
+		audits.Create(r.Context(), "user", getUserID(r), "update.rollback", "backup", req.BackupID)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "rolled_back"})
+	}
+}
+
+func listUpdateHistoryHandler(history *db.UpdateHistoryRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		list, err := history.ListAll(r.Context(), 50)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to list update history")
+			return
+		}
+		if list == nil { list = []*db.UpdateHistoryEntry{} }
+		writeJSON(w, http.StatusOK, list)
+	}
+}
+
+func listUpdateBackupsHandler(backups *db.UpdateBackupRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		list, err := backups.ListAll(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to list backups")
+			return
+		}
+		if list == nil { list = []*db.UpdateBackup{} }
+		writeJSON(w, http.StatusOK, list)
+	}
+}
+
+func setUpdateChannelHandler() http.HandlerFunc {
+	type request struct {
+		Channel string `json:"channel"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid body")
+			return
+		}
+		ch := update.Channel(req.Channel)
+		if ch != update.ChannelStable && ch != update.ChannelBeta && ch != update.ChannelNightly {
+			writeError(w, http.StatusBadRequest, "invalid_channel", "must be stable, beta, or nightly")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"channel": string(ch)})
 	}
 }

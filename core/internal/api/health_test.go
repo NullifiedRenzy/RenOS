@@ -33,8 +33,8 @@ func TestHealthEndpointReturns200(t *testing.T) {
 		t.Errorf("expected status 'ok', got '%s'", body["status"])
 	}
 
-	if body["version"] != "0.1.0" {
-		t.Errorf("expected version '0.1.0', got '%s'", body["version"])
+	if body["version"] == "" {
+		t.Errorf("expected version to be set, got empty string")
 	}
 }
 

@@ -33,8 +33,9 @@ func TestCommandRoutesWithoutAuthReturn401(t *testing.T) {
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusUnauthorized {
-				t.Errorf("expected 401, got %d", rec.Code)
+			// POST without auth headers hits CSRF first (403), GET hits auth (401)
+			if rec.Code != http.StatusUnauthorized && rec.Code != http.StatusForbidden {
+				t.Errorf("expected 401 or 403, got %d", rec.Code)
 			}
 
 			var body map[string]interface{}
@@ -46,8 +47,9 @@ func TestCommandRoutesWithoutAuthReturn401(t *testing.T) {
 			if !ok {
 				t.Fatal("expected error object in response")
 			}
-			if errObj["code"] != "UNAUTHORIZED" {
-				t.Errorf("expected UNAUTHORIZED, got '%s'", errObj["code"])
+			code := errObj["code"].(string)
+			if code != "UNAUTHORIZED" && code != "CSRF_REJECTED" {
+				t.Errorf("expected UNAUTHORIZED or CSRF_REJECTED, got '%s'", code)
 			}
 		})
 	}
@@ -111,7 +113,7 @@ func TestPendingCommandsHandlerWithMissingFields(t *testing.T) {
 }
 
 func TestSubmitResultHandlerWithMissingFields(t *testing.T) {
-	handler := submitResultHandler(nil, nil, nil, nil)
+	handler := submitResultHandler(nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/commands/test-id/result", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -124,7 +126,7 @@ func TestSubmitResultHandlerWithMissingFields(t *testing.T) {
 }
 
 func TestRequestCommandHandlerWithEmptyBody(t *testing.T) {
-	handler := requestCommandHandler(nil, nil, nil, nil)
+	handler := requestCommandHandler(nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/test-id/commands", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -137,7 +139,7 @@ func TestRequestCommandHandlerWithEmptyBody(t *testing.T) {
 }
 
 func TestRequestCommandHandlerWithMissingCommand(t *testing.T) {
-	handler := requestCommandHandler(nil, nil, nil, nil)
+	handler := requestCommandHandler(nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/test-id/commands", strings.NewReader(`{"command":""}`))
 	req.Header.Set("Content-Type", "application/json")

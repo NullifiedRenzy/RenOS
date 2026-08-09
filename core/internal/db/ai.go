@@ -50,8 +50,7 @@ func (r *AIConversationRepository) FindByID(ctx context.Context, id string) (*AI
 	return conv, nil
 }
 
-func (r *AIConversationRepository) ListByUser(ctx context.Context, userID string) ([]*AIConversation, error) {
-	rows, err := r.pool.Query(ctx,
+func (r *AIConversationRepository) ListByUser(ctx context.Context, userID string) ([]*AIConversation, error) {	rows, err := r.pool.Query(ctx,
 		`SELECT id, user_id, title, messages, created_at, updated_at
 		 FROM ai_conversations WHERE user_id = $1 ORDER BY updated_at DESC`,
 		userID,
@@ -81,4 +80,22 @@ func (r *AIConversationRepository) AppendMessage(ctx context.Context, id string,
 		return fmt.Errorf("append message: %w", err)
 	}
 	return nil
+}
+
+func (r *AIConversationRepository) Delete(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM ai_conversations WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete ai_conversation: %w", err)
+	}
+	return nil
+}
+
+// Count returns the total number of AI conversations across all users.
+func (r *AIConversationRepository) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM ai_conversations`).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count ai_conversations: %w", err)
+	}
+	return n, nil
 }

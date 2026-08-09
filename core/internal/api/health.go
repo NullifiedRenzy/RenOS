@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,13 +12,29 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var Version = "dev"
+var Commit = "unknown"
+var BuildTime = "unknown"
+
 func healthHandler(pool *pgxpool.Pool, nc *nats.Conn, rdb *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{
 			"status":  "ok",
-			"version": "0.1.0",
+			"version": Version,
+		})
+	}
+}
+
+func versionHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"version":    Version,
+			"commit":     Commit,
+			"build_time": BuildTime,
 		})
 	}
 }
@@ -38,7 +55,7 @@ func readyHandler(pool *pgxpool.Pool, nc *nats.Conn, rdb *redis.Client) http.Han
 		}
 
 		resp := map[string]interface{}{
-			"version": "0.1.0",
+			"version": Version,
 			"checks":  checks,
 		}
 
@@ -161,5 +178,41 @@ func checkRedis(rdb *redis.Client) dependencyCheck {
 	return dependencyCheck{
 		Status:    "ok",
 		LatencyMs: duration,
+	}
+}
+
+// StartHealthMonitor periodically checks all dependencies and logs their status.
+// This provides connection flapping detection and background health visibility.
+func StartHealthMonitor(ctx context.Context, pool *pgxpool.Pool, nc *nats.Conn, rdb *redis.Client, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		// Run immediately on start
+		checks := readyChecks(pool, nc, rdb)
+		logHealthStatus(checks)
+
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("health monitor stopped")
+				return
+			case <-ticker.C:
+				checks := readyChecks(pool, nc, rdb)
+				logHealthStatus(checks)
+			}
+		}
+	}()
+}
+
+func logHealthStatus(checks readyCheckSet) {
+	if checks.Database.Status != "ok" {
+		slog.Error("health: database unhealthy", "error", checks.Database.Error, "latency_ms", checks.Database.LatencyMs)
+	}
+	if checks.NATS.Status != "ok" {
+		slog.Error("health: nats unhealthy", "error", checks.NATS.Error)
+	}
+	if checks.Redis.Status != "ok" {
+		slog.Error("health: redis unhealthy", "error", checks.Redis.Error)
 	}
 }

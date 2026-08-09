@@ -15,7 +15,9 @@ type FileAction struct {
 	UserID      string          `json:"user_id"`
 	ActionType  string          `json:"action_type"`
 	Path        string          `json:"path"`
+	TargetPath  string          `json:"target_path"`
 	Query       string          `json:"query"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
 	Status      string          `json:"status"`
 	ExitCode    *int            `json:"exit_code,omitempty"`
 	Output      *string         `json:"output,omitempty"`
@@ -40,7 +42,7 @@ func (r *FileActionRepository) Create(ctx context.Context, deviceID, userID, act
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO file_actions (device_id, user_id, action_type, path, query, status)
 		 VALUES ($1, $2, $3, $4, $5, 'pending')
-		 RETURNING id, device_id, user_id, action_type, path, query, status,
+		 RETURNING id, device_id, user_id, action_type, path, target_path, query, metadata, status,
 		           exit_code, output, error, result_json,
 		           requested_at, started_at, completed_at, created_at, updated_at`,
 		deviceID, userID, actionType, path, query,
@@ -48,9 +50,24 @@ func (r *FileActionRepository) Create(ctx context.Context, deviceID, userID, act
 	return scanFileAction(row)
 }
 
+func (r *FileActionRepository) CreateWithTarget(ctx context.Context, deviceID, userID, actionType, path, targetPath, query string, metadata json.RawMessage) (*FileAction, error) {
+	if metadata == nil {
+		metadata = json.RawMessage(`{}`)
+	}
+	row := r.pool.QueryRow(ctx,
+		`INSERT INTO file_actions (device_id, user_id, action_type, path, target_path, query, metadata, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+		 RETURNING id, device_id, user_id, action_type, path, target_path, query, metadata, status,
+		           exit_code, output, error, result_json,
+		           requested_at, started_at, completed_at, created_at, updated_at`,
+		deviceID, userID, actionType, path, targetPath, query, metadata,
+	)
+	return scanFileAction(row)
+}
+
 func (r *FileActionRepository) FindByID(ctx context.Context, id string) (*FileAction, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, device_id, user_id, action_type, path, query, status,
+		`SELECT id, device_id, user_id, action_type, path, target_path, query, metadata, status,
 		        exit_code, output, error, result_json,
 		        requested_at, started_at, completed_at, created_at, updated_at
 		 FROM file_actions WHERE id = $1`,
@@ -61,7 +78,7 @@ func (r *FileActionRepository) FindByID(ctx context.Context, id string) (*FileAc
 
 func (r *FileActionRepository) PendingByDevice(ctx context.Context, deviceID string) ([]*FileAction, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, device_id, user_id, action_type, path, query, status,
+		`SELECT id, device_id, user_id, action_type, path, target_path, query, metadata, status,
 		        exit_code, output, error, result_json,
 		        requested_at, started_at, completed_at, created_at, updated_at
 		 FROM file_actions WHERE device_id = $1 AND status = 'pending'
@@ -86,7 +103,7 @@ func (r *FileActionRepository) PendingByDevice(ctx context.Context, deviceID str
 
 func (r *FileActionRepository) ListByDevice(ctx context.Context, deviceID string) ([]*FileAction, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, device_id, user_id, action_type, path, query, status,
+		`SELECT id, device_id, user_id, action_type, path, target_path, query, metadata, status,
 		        exit_code, output, error, result_json,
 		        requested_at, started_at, completed_at, created_at, updated_at
 		 FROM file_actions WHERE device_id = $1 ORDER BY requested_at DESC`,
@@ -115,7 +132,7 @@ func (r *FileActionRepository) UpdateResult(ctx context.Context, id, status stri
 		     started_at = COALESCE(started_at, NOW()),
 		     completed_at = NOW(), updated_at = NOW()
 		 WHERE id = $6
-		 RETURNING id, device_id, user_id, action_type, path, query, status,
+		 RETURNING id, device_id, user_id, action_type, path, target_path, query, metadata, status,
 		           exit_code, output, error, result_json,
 		           requested_at, started_at, completed_at, created_at, updated_at`,
 		status, exitCode, output, errMsg, resultJSON, id,
@@ -125,7 +142,7 @@ func (r *FileActionRepository) UpdateResult(ctx context.Context, id, status stri
 
 func scanFileAction(row scanner) (*FileAction, error) {
 	a := &FileAction{}
-	err := row.Scan(&a.ID, &a.DeviceID, &a.UserID, &a.ActionType, &a.Path, &a.Query, &a.Status,
+	err := row.Scan(&a.ID, &a.DeviceID, &a.UserID, &a.ActionType, &a.Path, &a.TargetPath, &a.Query, &a.Metadata, &a.Status,
 		&a.ExitCode, &a.Output, &a.Error, &a.ResultJSON,
 		&a.RequestedAt, &a.StartedAt, &a.CompletedAt, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {

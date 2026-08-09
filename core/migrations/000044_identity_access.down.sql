@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS iam_audit_log;
+DROP TABLE IF EXISTS approval_decisions;
+DROP TABLE IF EXISTS approval_requests;
+DROP TABLE IF EXISTS approval_workflows;
+DROP TABLE IF EXISTS iam_user_group_members;
+DROP TABLE IF EXISTS iam_user_groups;
+DROP TABLE IF EXISTS iam_role_assignments;
+DROP TABLE IF EXISTS iam_roles;
+DROP TABLE IF EXISTS api_tokens;
+DROP TABLE IF EXISTS oauth2_auth_codes;
+DROP TABLE IF EXISTS oauth2_apps;
+DROP TABLE IF EXISTS identity_providers;

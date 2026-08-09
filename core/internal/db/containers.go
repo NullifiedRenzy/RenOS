@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,14 +41,17 @@ func (r *ContainerRepository) ReplaceForDevice(ctx context.Context, deviceID str
 		return fmt.Errorf("delete containers: %w", err)
 	}
 
+	batch := &pgx.Batch{}
 	for _, c := range containers {
-		if _, err := tx.Exec(ctx,
+		batch.Queue(
 			`INSERT INTO containers (device_id, container_id, name, image, status, state, ports)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			deviceID, c.ContainerID, c.Name, c.Image, c.Status, c.State, c.Ports,
-		); err != nil {
-			return fmt.Errorf("insert container: %w", err)
-		}
+		)
+	}
+	br := tx.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
+		return fmt.Errorf("insert containers: %w", err)
 	}
 
 	return tx.Commit(ctx)

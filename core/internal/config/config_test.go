@@ -133,3 +133,118 @@ func TestLoadInvalidPortFallsBackToDefault(t *testing.T) {
 		t.Errorf("expected fallback port 8443 for invalid env, got %d", cfg.Port)
 	}
 }
+
+func TestValidateProductionSecrets(t *testing.T) {
+	tests := []struct {
+		name        string
+		jwtSecret   string
+		encKey      string
+		adminPass   string
+		logLevel    slog.Level
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:      "valid production config",
+			jwtSecret: "a]secure-jwt-secret-that-is-long-enough-for-validation-000",
+			encKey:    "a-secure-encryption-key-that-is-long-enough-for-validation-00",
+			adminPass: "strongpassword123",
+			logLevel:  slog.LevelInfo,
+			wantErr:   false,
+		},
+		{
+			name:        "empty JWT secret in production",
+			jwtSecret:   "",
+			encKey:      "a-secure-encryption-key-that-is-long-enough-for-validation-00",
+			adminPass:   "strongpassword123",
+			logLevel:    slog.LevelInfo,
+			wantErr:     true,
+			errContains: "RENOS_JWT_SECRET must not be empty",
+		},
+		{
+			name:        "empty encryption key in production",
+			jwtSecret:   "a]secure-jwt-secret-that-is-long-enough-for-validation-000",
+			encKey:      "",
+			adminPass:   "strongpassword123",
+			logLevel:    slog.LevelInfo,
+			wantErr:     true,
+			errContains: "RENOS_ENCRYPTION_KEY must not be empty",
+		},
+		{
+			name:        "weak admin password in production",
+			jwtSecret:   "a]secure-jwt-secret-that-is-long-enough-for-validation-000",
+			encKey:      "a-secure-encryption-key-that-is-long-enough-for-validation-00",
+			adminPass:   "short",
+			logLevel:    slog.LevelInfo,
+			wantErr:     true,
+			errContains: "at least 8 characters",
+		},
+		{
+			name:        "default admin password in production",
+			jwtSecret:   "a]secure-jwt-secret-that-is-long-enough-for-validation-000",
+			encKey:      "a-secure-encryption-key-that-is-long-enough-for-validation-00",
+			adminPass:   "admin",
+			logLevel:    slog.LevelInfo,
+			wantErr:     true,
+			errContains: "must not be 'admin'",
+		},
+		{
+			name:      "dev secrets bypass validation",
+			jwtSecret: "dev-secret-do-not-use-in-production",
+			encKey:    "dev-encryption-key-change-in-production",
+			adminPass: "admin",
+			logLevel:  slog.LevelDebug,
+			wantErr:   false,
+		},
+		{
+			name:        "short JWT secret in production",
+			jwtSecret:   "tooshort",
+			encKey:      "a-secure-encryption-key-that-is-long-enough-for-validation-00",
+			adminPass:   "strongpassword123",
+			logLevel:    slog.LevelInfo,
+			wantErr:     true,
+			errContains: "at least 32 characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				DatabaseURL:  "postgres://test:test@localhost/test",
+				NATSUrl:      "nats://localhost:4222",
+				Port:         8443,
+				LogLevel:     tt.logLevel,
+				JWTSecret:    tt.jwtSecret,
+				EncryptionKey: tt.encKey,
+				AdminPassword: tt.adminPass,
+			}
+
+			err := Validate(cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("expected error containing %q, got %q", tt.errContains, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected no error, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

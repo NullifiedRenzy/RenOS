@@ -7,10 +7,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
-func requestContainerActionHandler(actions *db.ContainerActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func requestContainerActionHandler(actions *db.ContainerActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		containerID := chi.URLParam(r, "containerId")
@@ -20,8 +21,13 @@ func requestContainerActionHandler(actions *db.ContainerActionRepository, device
 			return
 		}
 
-		if action != "start" && action != "stop" && action != "restart" && action != "logs" && action != "stats" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "action must be start, stop, restart, logs, or stats")
+		if action != "start" && action != "stop" && action != "restart" && action != "logs" && action != "stats" &&
+			action != "kill" && action != "remove" && action != "exec" && action != "inspect" && action != "pause" && action != "unpause" && action != "rename" &&
+			action != "image_pull" && action != "image_remove" && action != "image_prune" &&
+			action != "volume_remove" && action != "volume_prune" &&
+			action != "network_disconnect" && action != "network_connect" &&
+			action != "system_prune" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "unsupported action")
 			return
 		}
 
@@ -31,6 +37,14 @@ func requestContainerActionHandler(actions *db.ContainerActionRepository, device
 		}
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "container_action",
+			DeviceIDs:  []string{deviceID},
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
 
 		act, err := actions.Create(r.Context(), deviceID, claims.UserID, containerID, action)
 		if err != nil {

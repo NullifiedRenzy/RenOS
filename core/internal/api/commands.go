@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
@@ -14,7 +15,7 @@ type requestCommandPayload struct {
 	Command string `json:"command"`
 }
 
-func requestCommandHandler(commands *db.CommandRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func requestCommandHandler(commands *db.CommandRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		if deviceID == "" {
@@ -38,6 +39,15 @@ func requestCommandHandler(commands *db.CommandRepository, devices *db.DeviceRep
 		}
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "command",
+			DeviceIDs:  []string{deviceID},
+			Command:    req.Command,
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
 
 		cmd, err := commands.Create(r.Context(), deviceID, claims.UserID, req.Command)
 		if err != nil {
@@ -149,7 +159,7 @@ type submitResultPayload struct {
 	Error        string `json:"error"`
 }
 
-func submitResultHandler(commands *db.CommandRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func submitResultHandler(commands *db.CommandRepository, devices *db.DeviceRepository, groupActions *db.GroupActionRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cmdID := chi.URLParam(r, "cmdId")
 		if cmdID == "" {
@@ -192,6 +202,17 @@ func submitResultHandler(commands *db.CommandRepository, devices *db.DeviceRepos
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to update command result")
 			return
+		}
+
+		if ga, err := groupActions.FindByCommandID(r.Context(), cmdID); err == nil && ga != nil {
+			failedDelta := 0
+			completedDelta := 0
+			if status == "completed" {
+				completedDelta = 1
+			} else {
+				failedDelta = 1
+			}
+			groupActions.UpdateResult(r.Context(), ga.ID, completedDelta, failedDelta)
 		}
 
 		audits.Create(r.Context(), "device", device.ID, "command.completed", "command", cmdID)

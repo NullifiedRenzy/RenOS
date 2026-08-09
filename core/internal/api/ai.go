@@ -1,86 +1,18 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/renos-project/renos/core/internal/ai"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/notify"
 )
 
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ollamaRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
-}
-
-type ollamaResponse struct {
-	Message chatMessage `json:"message"`
-	Done    bool        `json:"done"`
-}
-
-func getOllamaURL() string {
-	if u := os.Getenv("OLLAMA_URL"); u != "" {
-		return u
-	}
-	return "http://localhost:11434"
-}
-
-func getOllamaModel() string {
-	if m := os.Getenv("OLLAMA_MODEL"); m != "" {
-		return m
-	}
-	return "llama3.2"
-}
-
-func callOllama(messages []chatMessage) (*chatMessage, error) {
-	body := ollamaRequest{
-		Model:    getOllamaModel(),
-		Messages: messages,
-		Stream:   false,
-	}
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
-
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Post(getOllamaURL()+"/api/chat", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("ollama request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama error (%d): %s", resp.StatusCode, string(raw))
-	}
-
-	var result ollamaResponse
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
-	}
-
-	return &result.Message, nil
-}
-
-func chatHandler(convs *db.AIConversationRepository) http.HandlerFunc {
+func chatHandler(renai *ai.RenAI, audits *db.AuditRepository, notifier *notify.Notifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
 
@@ -97,121 +29,177 @@ func chatHandler(convs *db.AIConversationRepository) http.HandlerFunc {
 			return
 		}
 
-		var conv *db.AIConversation
-		if req.ConversationID != "" {
-			var err error
-			conv, err = convs.FindByID(r.Context(), req.ConversationID)
-			if err != nil {
-				writeError(w, http.StatusNotFound, "NOT_FOUND", "Conversation not found")
-				return
-			}
-			if conv.UserID != claims.UserID {
-				writeError(w, http.StatusForbidden, "FORBIDDEN", "not your conversation")
-				return
-			}
-		} else {
-			var err error
-			title := req.Message
-			if len(title) > 80 {
-				title = title[:80]
-			}
-			conv, err = convs.Create(r.Context(), claims.UserID, title)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to create conversation")
-				return
-			}
+		slog.Info("ai chat", "user_id", claims.UserID, "role", claims.Role)
+		if err := audits.Create(r.Context(), "user", claims.UserID, "ai.chat", "conversation", req.ConversationID); err != nil {
+			slog.Error("failed to audit ai chat", "error", err)
 		}
 
-		var messages []chatMessage
-		if len(conv.Messages) > 0 {
-			json.Unmarshal(conv.Messages, &messages)
-		}
-
-		messages = append(messages, chatMessage{Role: "user", Content: req.Message})
-
-		reply, err := callOllama(messages)
+		result, err := renai.Chat(r.Context(), claims.UserID, req.ConversationID, req.Message, claims.Role)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "AI_ERROR", fmt.Sprintf("AI service error: %v", err))
+			writeError(w, http.StatusInternalServerError, "AI_ERROR", err.Error())
 			return
 		}
 
-		messages = append(messages, *reply)
-
-		raw, _ := json.Marshal(messages)
-		if err := convs.AppendMessage(r.Context(), conv.ID, raw); err != nil {
-			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to save messages")
-			return
+		if notifier != nil && len(result.SuggestedActions) > 0 {
+			notifier.Notify(r.Context(), claims.UserID, "ai", "AI suggestions ready",
+				"Your AI assistant produced actionable suggestions for your request.", "conversation", result.ConversationID,
+				map[string]any{"actions": len(result.SuggestedActions)})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"conversation_id": conv.ID,
-			"reply":           reply.Content,
+			"conversation_id":   result.ConversationID,
+			"content":           result.Content,
+			"suggested_actions": result.SuggestedActions,
+			"usage":             result.Usage,
+			"model":             result.Model,
 		})
 	}
 }
 
-func listConversationsHandler(convs *db.AIConversationRepository) http.HandlerFunc {
+func streamChatHandler(renai *ai.RenAI, audits *db.AuditRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
 
-		list, err := convs.ListByUser(r.Context(), claims.UserID)
+		var req struct {
+			ConversationID string `json:"conversation_id"`
+			Message        string `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+			return
+		}
+		if req.Message == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "message required")
+			return
+		}
+
+		if err := audits.Create(r.Context(), "user", claims.UserID, "ai.stream_chat", "conversation", req.ConversationID); err != nil {
+			slog.Error("failed to audit ai stream chat", "error", err)
+		}
+
+		streamCh, convID, providerName, err := renai.StreamChat(r.Context(), claims.UserID, req.ConversationID, req.Message, claims.Role)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "AI_ERROR", err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "STREAM_ERROR", "streaming not supported")
+			return
+		}
+
+		initialMsg, _ := json.Marshal(map[string]interface{}{
+			"type":           "started",
+			"conversation_id": convID,
+			"provider":        providerName,
+		})
+		w.Write(append(initialMsg, '\n'))
+		flusher.Flush()
+
+		for chunk := range streamCh {
+			if chunk.Done {
+				doneMsg, _ := json.Marshal(map[string]interface{}{
+					"type":          "done",
+					"finish_reason": chunk.FinishReason,
+					"usage":         chunk.Usage,
+				})
+				w.Write(append(doneMsg, '\n'))
+				flusher.Flush()
+				return
+			}
+			if chunk.Delta != "" {
+				deltaMsg, _ := json.Marshal(map[string]interface{}{
+					"type":  "delta",
+					"delta": chunk.Delta,
+				})
+				w.Write(append(deltaMsg, '\n'))
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+func listConversationsHandler(renai *ai.RenAI) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := r.Context().Value(claimsKey).(*auth.Claims)
+		convs, err := renai.ListConversations(r.Context(), claims.UserID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to list conversations")
 			return
 		}
-
-		if list == nil {
-			list = []*db.AIConversation{}
+		if convs == nil {
+			convs = []ai.ConversationSummary{}
 		}
-
-		type convSummary struct {
-			ID        string    `json:"id"`
-			Title     string    `json:"title"`
-			CreatedAt time.Time `json:"created_at"`
-			UpdatedAt time.Time `json:"updated_at"`
-		}
-
-		var summaries []convSummary
-		for _, c := range list {
-			summaries = append(summaries, convSummary{
-				ID: c.ID, Title: c.Title,
-				CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
-			})
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"conversations": summaries,
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"conversations": convs,
 		})
 	}
 }
 
-func getConversationHandler(convs *db.AIConversationRepository) http.HandlerFunc {
+func getConversationHandler(renai *ai.RenAI) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
 		convID := chi.URLParam(r, "id")
-
-		conv, err := convs.FindByID(r.Context(), convID)
+		conv, err := renai.GetConversation(r.Context(), claims.UserID, convID)
 		if err != nil {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "Conversation not found")
+			writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 			return
 		}
-		if conv.UserID != claims.UserID {
-			writeError(w, http.StatusForbidden, "FORBIDDEN", "not your conversation")
-			return
-		}
-
-		var messages []chatMessage
-		if len(conv.Messages) > 0 {
-			json.Unmarshal(conv.Messages, &messages)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"id":       conv.ID,
 			"title":    conv.Title,
-			"messages": messages,
+			"messages": conv.Messages,
+		})
+	}
+}
+
+func deleteConversationHandler(renai *ai.RenAI) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := r.Context().Value(claimsKey).(*auth.Claims)
+		convID := chi.URLParam(r, "id")
+		if err := renai.DeleteConversation(r.Context(), claims.UserID, convID); err != nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "conversation deleted",
+		})
+	}
+}
+
+func searchConversationsHandler(renai *ai.RenAI) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := r.Context().Value(claimsKey).(*auth.Claims)
+		query := r.URL.Query().Get("q")
+		if query == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "query parameter q required")
+			return
+		}
+		results, err := renai.SearchConversations(r.Context(), claims.UserID, query)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to search conversations")
+			return
+		}
+		if results == nil {
+			results = []ai.ConversationSummary{}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"conversations": results,
+		})
+	}
+}
+
+func aiSettingsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"providers": ai.ListProviders(),
 		})
 	}
 }

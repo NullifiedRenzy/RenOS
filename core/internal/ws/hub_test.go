@@ -78,15 +78,15 @@ func TestHubUnregister(t *testing.T) {
 	hub.register <- client
 	time.Sleep(50 * time.Millisecond)
 
-	if len(hub.clients) != 1 {
-		t.Errorf("expected 1 client, got %d", len(hub.clients))
+	if hub.ClientCount() != 1 {
+		t.Errorf("expected 1 client, got %d", hub.ClientCount())
 	}
 
 	hub.unregister <- client
 	time.Sleep(50 * time.Millisecond)
 
-	if len(hub.clients) != 0 {
-		t.Errorf("expected 0 clients after unregister, got %d", len(hub.clients))
+	if hub.ClientCount() != 0 {
+		t.Errorf("expected 0 clients after unregister, got %d", hub.ClientCount())
 	}
 
 	hub.Broadcast(Message{Type: "after.unregister", DeviceID: "d1"})

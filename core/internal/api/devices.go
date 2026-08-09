@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,23 +11,34 @@ import (
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
-func listDevicesHandler(devices *db.DeviceRepository) http.HandlerFunc {
+func listDevicesHandler(devices *db.DeviceRepository, audits *db.AuditRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := devices.FindAll(r.Context())
+		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		var list []*db.Device
+		var err error
+		if claims.Role == "admin" {
+			list, err = devices.ListWithLimit(r.Context(), "", parseListLimit(r.URL.Query().Get("limit")), parseOffset(r.URL.Query().Get("offset")))
+		} else {
+			list, err = devices.ListWithLimit(r.Context(), claims.UserID, parseListLimit(r.URL.Query().Get("limit")), parseOffset(r.URL.Query().Get("offset")))
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list devices")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		slog.Info("devices listed", "user_id", claims.UserID, "role", claims.Role, "count", len(list))
+		audits.Create(r.Context(), "user", claims.UserID, "device.list", "device", "")
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"devices": list,
 		})
 	}
 }
 
-func getDeviceHandler(devices *db.DeviceRepository) http.HandlerFunc {
+func getDeviceHandler(devices *db.DeviceRepository, audits *db.AuditRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		claims := r.Context().Value(claimsKey).(*auth.Claims)
 		id := chi.URLParam(r, "id")
 		device, err := devices.FindByID(r.Context(), id)
 		if err != nil {
@@ -34,8 +46,16 @@ func getDeviceHandler(devices *db.DeviceRepository) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		// Non-admin users can only see their own devices
+		if claims.Role != "admin" && device.UserID != claims.UserID {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "Device not found")
+			return
+		}
+
+		slog.Info("device fetched", "user_id", claims.UserID, "device_id", id)
+		audits.Create(r.Context(), "user", claims.UserID, "device.get", "device", id)
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"device": device,
 		})
 	}
@@ -43,44 +63,17 @@ func getDeviceHandler(devices *db.DeviceRepository) http.HandlerFunc {
 
 // M06 uses a temporary device_secret for authentication until mTLS replaces it in M07.
 // The secret is obtained during enrollment and verified against a bcrypt hash in device metadata.
-type connectRequest struct {
-	DeviceID     string `json:"device_id"`
-	DeviceSecret string `json:"device_secret"`
-}
-
 func connectHandler(devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req connectRequest
+		var req deviceAuthRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 			return
 		}
 
-		if req.DeviceID == "" || req.DeviceSecret == "" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device_id and device_secret required")
-			return
-		}
-
-		device, err := devices.FindByID(r.Context(), req.DeviceID)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Device not found")
-			return
-		}
-
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(device.Metadata), &metadata); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to parse device metadata")
-			return
-		}
-
-		hash, ok := metadata["device_secret_hash"].(string)
-		if !ok || hash == "" {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Device not enrolled")
-			return
-		}
-
-		if !auth.VerifyPassword(hash, req.DeviceSecret) {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid device secret")
+		device, apiErr := verifyDeviceSecret(devices, req)
+		if apiErr != nil {
+			writeError(w, apiErr.status, apiErr.code, apiErr.message)
 			return
 		}
 

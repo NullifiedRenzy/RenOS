@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/renos-project/renos/core/internal/auth"
@@ -23,7 +24,7 @@ type loginResponse struct {
 	} `json:"user"`
 }
 
-func loginHandler(users *db.UserRepository, jwtSecret string) http.HandlerFunc {
+func loginHandler(users *db.UserRepository, jwtSecret string, audits *db.AuditRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -38,11 +39,19 @@ func loginHandler(users *db.UserRepository, jwtSecret string) http.HandlerFunc {
 
 		user, err := users.FindByEmail(r.Context(), req.Email)
 		if err != nil {
+			slog.Warn("login failed: user not found", "email", req.Email)
+			if err := audits.Create(r.Context(), "user", req.Email, "login.failed", "user", ""); err != nil {
+				slog.Error("failed to audit login failure", "error", err)
+			}
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid email or password")
 			return
 		}
 
 		if !auth.VerifyPassword(user.Password, req.Password) {
+			slog.Warn("login failed: wrong password", "email", req.Email, "user_id", user.ID)
+			if err := audits.Create(r.Context(), "user", req.Email, "login.failed", "user", user.ID); err != nil {
+				slog.Error("failed to audit login failure", "error", err)
+			}
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid email or password")
 			return
 		}
@@ -51,6 +60,11 @@ func loginHandler(users *db.UserRepository, jwtSecret string) http.HandlerFunc {
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token")
 			return
+		}
+
+		slog.Info("login success", "email", req.Email, "user_id", user.ID, "role", user.Role)
+		if err := audits.Create(r.Context(), "user", user.ID, "login.success", "user", user.ID); err != nil {
+			slog.Error("failed to audit login success", "error", err)
 		}
 
 		resp := loginResponse{Token: token}

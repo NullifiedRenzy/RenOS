@@ -1,6 +1,6 @@
 run:
   timeout: 5m
-  tests: true
+  modules-download-mode: readonly
 
 linters:
   enable:
@@ -10,7 +10,120 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+    - gosec
+    - bodyclose
+    - contextcheck
+    - dupl
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forcetypeassert
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - goimports
+    - gomnd
+    - goprintffuncname
+    - grouper
+    - ifshort
+    - importas
+    - ineffassign
+    - ireturn
+    - lll
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - prealloc
+    - predeclared
+    - promlinter
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tagliatelle
+    - testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - varnamelen
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - wsl
 
 linters-settings:
   errcheck:
-    ignore: "Close|Write|Serve|Shutdown"
+    check-blank: true
+    exclude-functions:
+      - (io.Closer).Close
+      - (net.Listener).Close
+      - (net.Conn).Close
+      - (os.File).Close
+      - (http.Response).Body.Close
+
+  govet:
+    enable-all: true
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  gocyclo:
+    min-complexity: 25
+
+  lll:
+    line-length: 150
+
+  nakedret:
+    max-func-lines: 30
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - dupl
+        - lll
+        - wsl
+
+    - path: cmd/
+      linters:
+        - wsl
+        - lll
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

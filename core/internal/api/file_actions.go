@@ -7,15 +7,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
-type requestFileActionPayload struct {
-	Path  string `json:"path"`
-	Query string `json:"query,omitempty"`
+var validFileActionTypes = map[string]bool{
+	"list_directory": true, "read_file": true, "search_files": true,
+	"create_directory": true, "delete_path": true, "rename_path": true,
+	"move_path": true, "copy_path": true, "set_permissions": true,
+	"upload_file": true, "download_file": true, "preview_file": true,
 }
 
-func requestFileActionHandler(actions *db.FileActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+type requestFileActionPayload struct {
+	Path       string          `json:"path"`
+	TargetPath string          `json:"target_path,omitempty"`
+	Query      string          `json:"query,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+}
+
+func requestFileActionHandler(actions *db.FileActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		actionType := chi.URLParam(r, "actionType")
@@ -23,8 +33,8 @@ func requestFileActionHandler(actions *db.FileActionRepository, devices *db.Devi
 			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device id and action type required")
 			return
 		}
-		if actionType != "list_directory" && actionType != "read_file" && actionType != "search_files" {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "action type must be list_directory, read_file, or search_files")
+		if !validFileActionTypes[actionType] {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "unsupported action type")
 			return
 		}
 
@@ -45,7 +55,21 @@ func requestFileActionHandler(actions *db.FileActionRepository, devices *db.Devi
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
 
-		act, err := actions.Create(r.Context(), deviceID, claims.UserID, actionType, req.Path, req.Query)
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "file_action",
+			DeviceIDs:  []string{deviceID},
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
+
+		var act *db.FileAction
+		var err error
+		if req.TargetPath != "" || req.Metadata != nil {
+			act, err = actions.CreateWithTarget(r.Context(), deviceID, claims.UserID, actionType, req.Path, req.TargetPath, req.Query, req.Metadata)
+		} else {
+			act, err = actions.Create(r.Context(), deviceID, claims.UserID, actionType, req.Path, req.Query)
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to create file action")
 			return
@@ -59,6 +83,7 @@ func requestFileActionHandler(actions *db.FileActionRepository, devices *db.Devi
 				"action_id":   act.ID,
 				"action_type": act.ActionType,
 				"path":        act.Path,
+				"target_path": act.TargetPath,
 				"status":      act.Status,
 			},
 		})
@@ -88,6 +113,30 @@ func getFileActionResultHandler(actions *db.FileActionRepository) http.HandlerFu
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"file_action": act,
+		})
+	}
+}
+
+func listFileActionsHandler(actions *db.FileActionRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		deviceID := chi.URLParam(r, "id")
+		if deviceID == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "device id required")
+			return
+		}
+
+		list, err := actions.ListByDevice(r.Context(), deviceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", "Failed to list file actions")
+			return
+		}
+		if list == nil {
+			list = []*db.FileAction{}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"file_actions": list,
 		})
 	}
 }

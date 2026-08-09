@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
@@ -102,7 +103,7 @@ func listVirtualMachinesHandler(vms *db.VirtualMachineRepository) http.HandlerFu
 	}
 }
 
-func requestVMActionHandler(vms *db.VirtualMachineRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func requestVMActionHandler(vms *db.VirtualMachineRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		domainName := chi.URLParam(r, "domainName")
@@ -123,6 +124,14 @@ func requestVMActionHandler(vms *db.VirtualMachineRepository, devices *db.Device
 		}
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "vm_action",
+			DeviceIDs:  []string{deviceID},
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
 		audits.Create(r.Context(), "user", claims.UserID, "vm_action."+action, "device", deviceID)
 
 		w.Header().Set("Content-Type", "application/json")

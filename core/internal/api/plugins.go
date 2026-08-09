@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
@@ -95,7 +96,7 @@ func listPluginsHandler(plugins *db.PluginRepository) http.HandlerFunc {
 	}
 }
 
-func requestPluginActionHandler(plugins *db.PluginRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func requestPluginActionHandler(plugins *db.PluginRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		pluginName := chi.URLParam(r, "name")
@@ -116,6 +117,14 @@ func requestPluginActionHandler(plugins *db.PluginRepository, devices *db.Device
 		}
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "plugin_action",
+			DeviceIDs:  []string{deviceID},
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
 		audits.Create(r.Context(), "user", claims.UserID, "plugin_action."+action, "device", deviceID)
 
 		w.Header().Set("Content-Type", "application/json")

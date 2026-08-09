@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -28,6 +29,11 @@ func GenerateToken(secret, userID, email, role string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+// RoleIs checks if the given role matches the target, case-insensitive.
+func RoleIs(role, target string) bool {
+	return strings.EqualFold(role, target)
 }
 
 func ValidateToken(secret, tokenStr string) (*Claims, error) {

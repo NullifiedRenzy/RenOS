@@ -7,10 +7,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/renos-project/renos/core/internal/auth"
 	"github.com/renos-project/renos/core/internal/db"
+	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
 )
 
-func requestServiceActionHandler(actions *db.ServiceActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub) http.HandlerFunc {
+func requestServiceActionHandler(actions *db.ServiceActionRepository, devices *db.DeviceRepository, audits *db.AuditRepository, hub *ws.Hub, enforcer *policy.Enforcer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := chi.URLParam(r, "id")
 		unitName := chi.URLParam(r, "unitName")
@@ -31,6 +32,14 @@ func requestServiceActionHandler(actions *db.ServiceActionRepository, devices *d
 		}
 
 		claims := r.Context().Value(claimsKey).(*auth.Claims)
+
+		if r := enforcer.Evaluate(r.Context(), &policy.EvalContext{
+			ActionType: "service_action",
+			DeviceIDs:  []string{deviceID},
+		}); r.Action == "deny" {
+			writeError(w, http.StatusForbidden, "POLICY_DENIED", r.Message)
+			return
+		}
 
 		act, err := actions.Create(r.Context(), deviceID, claims.UserID, unitName, action)
 		if err != nil {
