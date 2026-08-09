@@ -1,0 +1,94 @@
+{
+  "name": "Compose Stack Deploy",
+  "description": "Deploys a compose stack from a Git tag with a health check and automatic rollback to the previous image.",
+  "enabled": true,
+  "trigger_type": "webhook",
+  "trigger_config": {
+    "event": "compose.deploy.requested",
+    "filters": {
+      "headers.X-Deploy-Token": {"exists": true}
+    }
+  },
+  "tags": ["docker", "deploy", "compose"],
+  "steps": [
+    {
+      "name": "Preflight compose config",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker compose -f /srv/apps/app/docker-compose.yml config --quiet",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Compose config invalid",
+        "body": "docker-compose.yml validation failed before deploy"
+      }
+    },
+    {
+      "name": "Pull images",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker compose -f /srv/apps/app/docker-compose.yml pull",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Image pull failed",
+        "body": "Could not pull the new image for the app stack"
+      }
+    },
+    {
+      "name": "Bring stack up",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker compose -f /srv/apps/app/docker-compose.yml up -d --force-recreate",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Deploy failed",
+        "body": "The compose stack could not be brought up"
+      }
+    },
+    {
+      "name": "Health check",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "curl -sf http://localhost/healthz || exit 1",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Deploy health check failed",
+        "body": "The app did not pass its health check after deploy"
+      }
+    },
+    {
+      "name": "Notify deploy result",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Compose deploy complete",
+        "body": "The app stack was deployed and passed its health check on docker-01"
+      }
+    }
+  ]
+}

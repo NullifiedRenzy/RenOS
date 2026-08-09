@@ -1,0 +1,15 @@
+{
+  "id": "small-business",
+  "name": "Small Business",
+  "description": "Office PC health checks, business-hours device policy, and alert escalation for a small office.",
+  "icon": "building",
+  "category": "business",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "office-pc-health-check.json"},
+    {"type": "workflow", "file": "business-hours-device-policy.json"},
+    {"type": "schedule", "file": "schedule-office-health-check.json"},
+    {"type": "alert", "file": "alert-escalation.json"}
+  ]
+}

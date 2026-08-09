@@ -1,0 +1,22 @@
+{
+  "name": "@renos/sdk",
+  "version": "1.0.0",
+  "description": "RenOS API TypeScript SDK",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/ws": "^8.5.13",
+    "@types/node-fetch": "^2.6.12",
+    "@types/node": "^22.7.0"
+  },
+  "license": "MIT"
+}

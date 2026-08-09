@@ -1,0 +1,10 @@
+{
+  "name": "Pi Fleet Health (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "pi-fleet-status --all"
+  },
+  "target_type": "group",
+  "target_ids": ["pis"],
+  "cron_expression": "*/10 * * * *"
+}

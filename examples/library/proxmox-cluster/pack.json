@@ -1,0 +1,16 @@
+{
+  "id": "proxmox-cluster",
+  "name": "Proxmox Cluster",
+  "description": "VM snapshots, cluster resource monitoring, and VM lifecycle automation for a Proxmox VE cluster.",
+  "icon": "network",
+  "category": "proxmox",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "vm-snapshot.json"},
+    {"type": "workflow", "file": "cluster-resource-monitor.json"},
+    {"type": "workflow", "file": "vm-lifecycle.json"},
+    {"type": "schedule", "file": "schedule-vm-snapshot.json"},
+    {"type": "alert", "file": "alert-cluster-cpu.json"}
+  ]
+}

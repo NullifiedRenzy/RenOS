@@ -1,0 +1,75 @@
+{
+  "name": "Game Server Status Check",
+  "description": "Every five minutes, verifies the game server process is running, queries the live status endpoint, and reports player count.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/5 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["gaming", "monitoring", "status"],
+  "steps": [
+    {
+      "name": "Check server process",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "pgrep -f srcds_linux || exit 1",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Game server down",
+        "body": "The game server process is not running on game-01"
+      }
+    },
+    {
+      "name": "Query live status",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "curl -sf http://localhost:8080/status || exit 1",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Status endpoint unreachable",
+        "body": "The game server status endpoint did not respond on game-01"
+      }
+    },
+    {
+      "name": "Read player count",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "curl -sf http://localhost:8080/status | jq -r '.players'",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Player count unavailable",
+        "body": "Could not read the player count from the game server"
+      }
+    },
+    {
+      "name": "Notify server status",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Game server online",
+        "body": "Game server is running and responding on game-01"
+      }
+    }
+  ]
+}

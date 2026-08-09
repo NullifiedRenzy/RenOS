@@ -1,0 +1,11 @@
+{
+  "name": "Compliance Drift",
+  "description": "Critical alert when the overall compliance score drops below 95 for more than an hour, indicating policy drift.",
+  "metric_name": "compliance.score",
+  "condition": "below",
+  "threshold": 95,
+  "duration_seconds": 3600,
+  "severity": "critical",
+  "enabled": true,
+  "notification_channels": []
+}

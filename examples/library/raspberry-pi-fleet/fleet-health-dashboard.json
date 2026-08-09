@@ -1,0 +1,92 @@
+{
+  "name": "Pi Fleet Health Dashboard",
+  "description": "Every five minutes, collects CPU, temperature, and uptime from every Pi and publishes a fleet health status.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/5 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["raspberry-pi", "fleet", "monitoring"],
+  "steps": [
+    {
+      "name": "Check Pi 01",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pi-01",
+        "command": "vcgencmd measure_temp && uptime && cat /proc/loadavg",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-01 unreachable",
+        "body": "pi-01 did not respond to the health check"
+      }
+    },
+    {
+      "name": "Check Pi 02",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "pi-02",
+        "command": "vcgencmd measure_temp && uptime && cat /proc/loadavg",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-02 unreachable",
+        "body": "pi-02 did not respond to the health check"
+      }
+    },
+    {
+      "name": "Check Pi 03",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pi-03",
+        "command": "vcgencmd measure_temp && uptime && cat /proc/loadavg",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-03 unreachable",
+        "body": "pi-03 did not respond to the health check"
+      }
+    },
+    {
+      "name": "Check Pi 04",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "pi-04",
+        "command": "vcgencmd measure_temp && uptime && cat /proc/loadavg",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-04 unreachable",
+        "body": "pi-04 did not respond to the health check"
+      }
+    },
+    {
+      "name": "Publish fleet status",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Pi fleet health",
+        "body": "All Raspberry Pis reported healthy"
+      }
+    }
+  ]
+}

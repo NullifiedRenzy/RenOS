@@ -1,0 +1,109 @@
+{
+  "name": "Proxmox VM Snapshot",
+  "description": "Nightly snapshot of every production VM with retention pruning and a verification step.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 1 * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["proxmox", "snapshot", "backup"],
+  "steps": [
+    {
+      "name": "Snapshot web VM",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm snapshot 100 nightly-$(date +%F) --description 'renos nightly'",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Web VM snapshot failed",
+        "body": "Could not snapshot VM 100 on pve-01"
+      }
+    },
+    {
+      "name": "Snapshot db VM",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm snapshot 101 nightly-$(date +%F) --description 'renos nightly'",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "DB VM snapshot failed",
+        "body": "Could not snapshot VM 101 on pve-01"
+      }
+    },
+    {
+      "name": "Snapshot app VM",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pve-02",
+        "command": "qm snapshot 102 nightly-$(date +%F) --description 'renos nightly'",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "App VM snapshot failed",
+        "body": "Could not snapshot VM 102 on pve-02"
+      }
+    },
+    {
+      "name": "Verify snapshots",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm listsnapshot 100 && qm listsnapshot 101 && qm listsnapshot 102",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Snapshot verification failed",
+        "body": "One or more nightly snapshots are missing after creation"
+      }
+    },
+    {
+      "name": "Prune old snapshots",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "renos-proxmox prune-snapshots --keep 14",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Snapshot pruning warning",
+        "body": "Old snapshot pruning reported a non-fatal issue"
+      }
+    },
+    {
+      "name": "Notify snapshot results",
+      "step_type": "action",
+      "step_order": 5,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Nightly snapshots complete",
+        "body": "All production VMs were snapshotted and verified"
+      }
+    }
+  ]
+}

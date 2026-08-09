@@ -1,0 +1,15 @@
+{
+  "id": "kubernetes-cluster",
+  "name": "Kubernetes Cluster",
+  "description": "Cluster node checks, deployment rollback, and resource-pressure alerts for a Kubernetes cluster.",
+  "icon": "cloud",
+  "category": "kubernetes",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "cluster-node-check.json"},
+    {"type": "workflow", "file": "deployment-rollback.json"},
+    {"type": "schedule", "file": "schedule-node-check.json"},
+    {"type": "alert", "file": "alert-resource-pressure.json"}
+  ]
+}

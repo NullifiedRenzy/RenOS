@@ -1,0 +1,75 @@
+{
+  "name": "Business Hours Device Policy",
+  "description": "At the start of business hours, verifies office PCs are online and applies the business-hours policy; flags machines that are off or blocked.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 8 * * 1-5",
+    "timezone": "UTC"
+  },
+  "tags": ["business", "policy", "endpoint"],
+  "steps": [
+    {
+      "name": "Verify office PCs online",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "renos-agent ping-all",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Office PCs offline",
+        "body": "One or more office PCs did not come online for the business day"
+      }
+    },
+    {
+      "name": "Apply business-hours firewall policy",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "renos-agent apply-policy business-hours",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Policy apply failed",
+        "body": "Could not apply the business-hours policy on one or more office PCs"
+      }
+    },
+    {
+      "name": "Verify workstations unlocked",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "renos-agent session-status",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Unattended workstations",
+        "body": "Some workstations are unlocked or in an unexpected state"
+      }
+    },
+    {
+      "name": "Notify policy applied",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Business-hours policy applied",
+        "body": "Office fleet is ready for the business day"
+      }
+    }
+  ]
+}

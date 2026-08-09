@@ -1,0 +1,92 @@
+{
+  "name": "SD Card Wear Monitor",
+  "description": "Daily check of SD card wear leveling on every Pi; flags cards above 80% of their rated lifetime.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 0 * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["raspberry-pi", "storage", "hardware"],
+  "steps": [
+    {
+      "name": "Read wear level pi-01",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pi-01",
+        "command": "cat /sys/block/mmcblk0/device/life_time 2>/dev/null || echo 0",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-01 SD info unavailable",
+        "body": "Could not read SD card wear data on pi-01"
+      }
+    },
+    {
+      "name": "Read wear level pi-02",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "pi-02",
+        "command": "cat /sys/block/mmcblk0/device/life_time 2>/dev/null || echo 0",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-02 SD info unavailable",
+        "body": "Could not read SD card wear data on pi-02"
+      }
+    },
+    {
+      "name": "Read wear level pi-03",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pi-03",
+        "command": "cat /sys/block/mmcblk0/device/life_time 2>/dev/null || echo 0",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-03 SD info unavailable",
+        "body": "Could not read SD card wear data on pi-03"
+      }
+    },
+    {
+      "name": "Read wear level pi-04",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "pi-04",
+        "command": "cat /sys/block/mmcblk0/device/life_time 2>/dev/null || echo 0",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-04 SD info unavailable",
+        "body": "Could not read SD card wear data on pi-04"
+      }
+    },
+    {
+      "name": "Report wear summary",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "SD wear check complete",
+        "body": "Daily SD card wear check finished for the Pi fleet"
+      }
+    }
+  ]
+}

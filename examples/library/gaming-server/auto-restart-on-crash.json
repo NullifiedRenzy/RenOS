@@ -1,0 +1,75 @@
+{
+  "name": "Auto Restart on Crash",
+  "description": "Every two minutes, checks the game server process and restart script; restarts the server if it crashed and notifies players.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/2 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["gaming", "reliability", "restart"],
+  "steps": [
+    {
+      "name": "Detect crash",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "pgrep -f srcds_linux >/dev/null || echo crashed",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Crash check failed",
+        "body": "Could not determine the game server process state on game-01"
+      }
+    },
+    {
+      "name": "Restart server",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "/opt/games/restart.sh || exit 1",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Game server restart failed",
+        "body": "The game server could not be restarted after a crash"
+      }
+    },
+    {
+      "name": "Verify server is back",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "sleep 10 && pgrep -f srcds_linux || exit 1",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Server did not recover",
+        "body": "The game server did not come back up after restart"
+      }
+    },
+    {
+      "name": "Notify players",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Game server restarted",
+        "body": "The game server crashed and was automatically restarted on game-01"
+      }
+    }
+  ]
+}

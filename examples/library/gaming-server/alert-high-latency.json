@@ -1,0 +1,11 @@
+{
+  "name": "High Game Latency",
+  "description": "Warning when the game server's measured latency stays above 100 ms, indicating a degraded player experience.",
+  "metric_name": "game.latency_ms",
+  "condition": "above",
+  "threshold": 100,
+  "duration_seconds": 300,
+  "severity": "warning",
+  "enabled": true,
+  "notification_channels": []
+}

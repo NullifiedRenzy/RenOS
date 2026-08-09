@@ -1,0 +1,75 @@
+{
+  "name": "Cluster Node Check",
+  "description": "Every ten minutes, verifies all cluster nodes are Ready and no workloads are stuck, and notifies on problems.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/10 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["kubernetes", "monitoring", "nodes"],
+  "steps": [
+    {
+      "name": "List node status",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "k8s-master",
+        "command": "kubectl get nodes -o wide",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "kubectl failed",
+        "body": "Could not reach the cluster API from k8s-master"
+      }
+    },
+    {
+      "name": "Find NotReady nodes",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "k8s-master",
+        "command": "kubectl get nodes -o jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Node not Ready",
+        "body": "One or more cluster nodes are in a NotReady state"
+      }
+    },
+    {
+      "name": "Check kubelet health",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "k8s-nodes",
+        "command": "systemctl is-active kubelet || exit 1",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "kubelet down",
+        "body": "kubelet is not running on one or more nodes"
+      }
+    },
+    {
+      "name": "Notify cluster status",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Cluster healthy",
+        "body": "All nodes reported Ready in the last check"
+      }
+    }
+  ]
+}

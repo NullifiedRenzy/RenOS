@@ -1,0 +1,81 @@
+{
+  "name": "Auto Restart on Hang",
+  "description": "Every two minutes, checks a heartbeat file on each Pi; if it is stale, reboots the Pi and notifies the operator.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/2 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["raspberry-pi", "reliability", "watchdog"],
+  "steps": [
+    {
+      "name": "Check heartbeat pi-01",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pi-01",
+        "command": "test -f /tmp/renos-heartbeat && test $(( $(date +%s) - $(stat -c %Y /tmp/renos-heartbeat) )) -lt 300 && echo alive || reboot",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-01 rebooted",
+        "body": "pi-01 heartbeat was stale and the device was rebooted"
+      }
+    },
+    {
+      "name": "Check heartbeat pi-02",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "pi-02",
+        "command": "test -f /tmp/renos-heartbeat && test $(( $(date +%s) - $(stat -c %Y /tmp/renos-heartbeat) )) -lt 300 && echo alive || reboot",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-02 rebooted",
+        "body": "pi-02 heartbeat was stale and the device was rebooted"
+      }
+    },
+    {
+      "name": "Check heartbeat pi-03",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pi-03",
+        "command": "test -f /tmp/renos-heartbeat && test $(( $(date +%s) - $(stat -c %Y /tmp/renos-heartbeat) )) -lt 300 && echo alive || reboot",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-03 rebooted",
+        "body": "pi-03 heartbeat was stale and the device was rebooted"
+      }
+    },
+    {
+      "name": "Check heartbeat pi-04",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "pi-04",
+        "command": "test -f /tmp/renos-heartbeat && test $(( $(date +%s) - $(stat -c %Y /tmp/renos-heartbeat) )) -lt 300 && echo alive || reboot",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "pi-04 rebooted",
+        "body": "pi-04 heartbeat was stale and the device was rebooted"
+      }
+    }
+  ]
+}

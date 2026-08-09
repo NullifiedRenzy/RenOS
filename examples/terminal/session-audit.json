@@ -1,0 +1,258 @@
+{
+  "name": "Terminal Session Audit",
+  "description": "Audit and review terminal sessions with anomaly detection, compliance checks, and automated reporting",
+  "version": "1.0.0",
+  "tags": ["audit", "security", "compliance", "terminal"],
+  "triggers": [
+    {
+      "type": "cron",
+      "config": {
+        "expression": "0 */6 * * *",
+        "timezone": "UTC"
+      }
+    },
+    {
+      "type": "event",
+      "config": {
+        "event": "terminal.session.closed",
+        "description": "Triggered when any terminal session ends"
+      }
+    },
+    {
+      "type": "manual",
+      "config": {}
+    }
+  ],
+  "variables": {
+    "lookback_hours": { "type": "integer", "default": 24 },
+    "anomaly_threshold": { "type": "integer", "default": 5, "description": "Number of suspicious patterns to trigger alert" },
+    "report_recipients": { "type": "list", "value": ["security@renos.local"] },
+    "compliance_standards": { "type": "list", "value": ["pci-dss", "hipaa", "sox"] },
+    "suspicious_patterns": {
+      "type": "list",
+      "value": [
+        "sudo -i",
+        "su root",
+        "chmod 777",
+        "chown -R",
+        "iptables -F",
+        "rm -rf /",
+        "> /dev/sda",
+        "dd if=/dev/zero",
+        "wget.*|curl.*| bash",
+        "passwd.*root",
+        "usermod -aG sudo",
+        "systemctl stop.*renos",
+        "docker exec -it.*bash",
+        "kubectl.*delete.*namespace",
+        "pg_dumpall.*--no-owner",
+        "mysqldump.*--all-databases",
+        "openssl enc -d",
+        "base64 -d.*|",
+        "eval.*$",
+        "sh -c",
+        "mkfs.*",
+        "pvcreate.*",
+        "vgremove.*",
+        "lvremove.*"
+      ]
+    },
+    "privileged_users": {
+      "type": "list",
+      "value": ["root", "renos-admin"],
+      "description": "Users whose sessions are always logged in detail"
+    }
+  },
+  "nodes": [
+    {
+      "id": "fetch-sessions",
+      "type": "action",
+      "name": "Fetch Recent Sessions",
+      "config": {
+        "action_type": "api",
+        "method": "GET",
+        "url": "/api/v1/terminal/sessions?since={{ now() | date_modify -lookback_hours 'hours' | date '2006-01-02T15:04:05Z' }}&per_page=200",
+        "timeout": 30
+      },
+      "next_on_success": "filter-privileged",
+      "next_on_failure": "notify-audit-error"
+    },
+    {
+      "id": "filter-privileged",
+      "type": "action",
+      "name": "Separate Privileged Sessions",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function filter(sessions, privileged_users) local detail = {} local normal = {} for _, s in ipairs(sessions) do if privileged_users[s.user] then table.insert(detail, s) else table.insert(normal, s) end end return { detail = detail, normal = normal } end",
+        "input": "{{ prev_node_output }}",
+        "variables": ["privileged_users"],
+        "timeout": 10
+      },
+      "next_on_success": "scan-for-anomalies",
+      "next_on_failure": "notify-audit-error"
+    },
+    {
+      "id": "scan-for-anomalies",
+      "type": "loop",
+      "name": "Scan Sessions for Anomalies",
+      "config": {
+        "iterate_over": "{{ env('all_sessions') }}",
+        "variable": "session",
+        "parallel": true
+      },
+      "loop_node": "analyze-session",
+      "next_on_complete": "compile-report"
+    },
+    {
+      "id": "analyze-session",
+      "type": "action",
+      "name": "Analyze Session Transcript",
+      "config": {
+        "action_type": "api",
+        "method": "GET",
+        "url": "/api/v1/terminal/sessions/{{ session.id }}/transcript",
+        "timeout": 15
+      },
+      "next_on_success": "check-suspicious-commands",
+      "next_on_failure": "log-error"
+    },
+    {
+      "id": "check-suspicious-commands",
+      "type": "action",
+      "name": "Check for Suspicious Commands",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function check(transcript, patterns) local findings = {} for _, line in ipairs(transcript) do for _, pattern in ipairs(patterns) do if line:match(pattern) then table.insert(findings, { line = line, pattern = pattern, timestamp = line.timestamp }) end end end return findings end",
+        "input": "{{ prev_node_output }}",
+        "variables": ["suspicious_patterns"],
+        "timeout": 10
+      },
+      "next_on_success": "classify-findings",
+      "next_on_failure": "log-error"
+    },
+    {
+      "id": "classify-findings",
+      "type": "action",
+      "name": "Classify Finding Severity",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function classify(findings) local critical = {} local warning = {} local info = {} local critical_patterns = { 'rm -rf /', '> /dev/sda', 'dd if=/dev/zero', 'mkfs', 'iptables -F' } for _, f in ipairs(findings) do local is_critical = false for _, cp in ipairs(critical_patterns) do if f.line:match(cp) then is_critical = true break end end if is_critical then table.insert(critical, f) elseif f.pattern == 'sudo -i' or f.pattern == 'su root' then table.insert(warning, f) else table.insert(info, f) end end return { critical = critical, warning = warning, info = info } end",
+        "input": "{{ prev_node_output }}",
+        "timeout": 10
+      },
+      "next_on_success": "accumulate-findings",
+      "next_on_failure": "log-error"
+    },
+    {
+      "id": "accumulate-findings",
+      "type": "action",
+      "name": "Accumulate into Report",
+      "config": {
+        "action_type": "set",
+        "variables": {
+          "report.sessions_analyzed": "env('report.sessions_analyzed', 0) + 1",
+          "report.critical_findings": "env('report.critical_findings', []) + env('critical')",
+          "report.warning_findings": "env('report.warning_findings', []) + env('warning')",
+          "report.info_findings": "env('report.info_findings', []) + env('info')"
+        },
+        "timeout": 5
+      },
+      "next_on_success": "log-analyzed",
+      "next_on_failure": "log-error"
+    },
+    {
+      "id": "compile-report",
+      "type": "action",
+      "name": "Compile Audit Report",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function compile(report) local critical_count = #report.critical_findings local warning_count = #report.warning_findings local info_count = #report.info_findings local severity = 'info' if critical_count > 0 then severity = 'critical' elseif warning_count > 5 then severity = 'warning' end local summary = string.format('Audit: %d sessions, %d critical, %d warning, %d info', report.sessions_analyzed, critical_count, warning_count, info_count) return { summary = summary, severity = severity, critical_count = critical_count, warning_count = warning_count, info_count = info_count } end",
+        "input": "{{ env('report') }}",
+        "timeout": 10
+      },
+      "next_on_success": "conditional-alert",
+      "next_on_failure": "notify-audit-error"
+    },
+    {
+      "id": "conditional-alert",
+      "type": "condition",
+      "name": "Should Alert?",
+      "config": {
+        "expression": "env('report_summary').critical_count > 0 or env('report_summary').warning_count >= {{ anomaly_threshold }}"
+      },
+      "next_on_true": "notify-security",
+      "next_on_false": "archive-report"
+    },
+    {
+      "id": "notify-security",
+      "type": "action",
+      "name": "Alert Security Team",
+      "config": {
+        "action_type": "notify",
+        "title": "Terminal session audit alert",
+        "body": "{{ env('report_summary').summary }}",
+        "severity": "{{ env('report_summary').severity }}",
+        "channels": "{{ report_recipients }}"
+      }
+    },
+    {
+      "id": "archive-report",
+      "type": "action",
+      "name": "Archive Audit Report",
+      "config": {
+        "action_type": "api",
+        "method": "POST",
+        "url": "/api/v1/audit/log",
+        "body": {
+          "action": "terminal_audit",
+          "resource": "sessions",
+          "summary": "{{ env('report_summary').summary }}",
+          "findings": "{{ env('report') }}",
+          "compliance_standards": "{{ compliance_standards }}"
+        },
+        "timeout": 10
+      },
+      "next_on_success": "log-complete",
+      "next_on_failure": "notify-audit-error"
+    },
+    {
+      "id": "log-complete",
+      "type": "action",
+      "name": "Log Completion",
+      "config": {
+        "action_type": "notify",
+        "title": "Terminal audit complete",
+        "body": "{{ env('report_summary').summary }}. Archived to audit log.",
+        "severity": "info"
+      }
+    },
+    {
+      "id": "log-error",
+      "type": "action",
+      "name": "Log Per-Session Error",
+      "config": {
+        "action_type": "set",
+        "variables": {
+          "report.skipped_sessions": "env('report.skipped_sessions', 0) + 1"
+        },
+        "timeout": 5
+      },
+      "next_on_success": null
+    },
+    {
+      "id": "notify-audit-error",
+      "type": "action",
+      "name": "Notify Audit Error",
+      "config": {
+        "action_type": "notify",
+        "title": "Terminal audit workflow error",
+        "body": "Audit workflow failed at node {{ node.name }}: {{ node.error }}",
+        "severity": "error"
+      }
+    }
+  ]
+}

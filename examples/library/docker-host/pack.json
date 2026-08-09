@@ -1,0 +1,16 @@
+{
+  "id": "docker-host",
+  "name": "Docker Host",
+  "description": "Container health monitoring, compose stack deployment, and image cleanup for a single Docker host.",
+  "icon": "container",
+  "category": "docker",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "container-health-monitor.json"},
+    {"type": "workflow", "file": "compose-stack-deploy.json"},
+    {"type": "workflow", "file": "image-cleanup.json"},
+    {"type": "schedule", "file": "schedule-image-cleanup.json"},
+    {"type": "alert", "file": "alert-container-restart.json"}
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "name": "Homelab Disk Cleanup",
+  "description": "Weekly cleanup of Docker garbage, journald logs, and old downloads to keep lab hosts lean.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 4 * * 0",
+    "timezone": "UTC"
+  },
+  "tags": ["homelab", "maintenance", "docker"],
+  "steps": [
+    {
+      "name": "Prune Docker resources",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "media-01",
+        "command": "docker system prune -af --volumes",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Docker prune failed",
+        "body": "docker system prune failed on media-01"
+      }
+    },
+    {
+      "name": "Vacuum journal logs",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "media-01",
+        "command": "journalctl --vacuum-size=256M",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Journal vacuum failed",
+        "body": "journalctl --vacuum-size failed on media-01"
+      }
+    },
+    {
+      "name": "Remove old downloads",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "find /data/downloads -type f -mtime +30 -delete",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Old download cleanup failed",
+        "body": "find/delete on /data/downloads failed on nas-01"
+      }
+    },
+    {
+      "name": "Report disk usage",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "df -h / /data",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Disk usage report failed",
+        "body": "Could not collect disk usage on nas-01"
+      }
+    },
+    {
+      "name": "Notify cleanup complete",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Disk cleanup complete",
+        "body": "Weekly cleanup finished on the home lab"
+      }
+    }
+  ]
+}

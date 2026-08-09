@@ -1,0 +1,109 @@
+{
+  "name": "Patch Management",
+  "description": "Weekly patch cycle: stage updates, install in a maintenance window, reboot if required, and verify the fleet afterwards.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 2 * * 0",
+    "timezone": "UTC"
+  },
+  "tags": ["enterprise", "patches", "maintenance"],
+  "steps": [
+    {
+      "name": "Preflight patch readiness",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device_group": "servers",
+        "command": "renos-agent check-updates --preflight",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Patch preflight failed",
+        "body": "One or more servers failed the patch preflight check"
+      }
+    },
+    {
+      "name": "Stage patch downloads",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device_group": "servers",
+        "command": "renos-agent stage-updates",
+        "timeout": 1800
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Patch staging incomplete",
+        "body": "Could not stage all updates on one or more servers"
+      }
+    },
+    {
+      "name": "Install patches",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "servers",
+        "command": "renos-agent install-updates",
+        "timeout": 3600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Patch install failed",
+        "body": "Patch installation failed on one or more servers"
+      }
+    },
+    {
+      "name": "Reboot if required",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device_group": "servers",
+        "command": "renos-agent reboot-if-required",
+        "timeout": 1800
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Reboot check failed",
+        "body": "Could not verify reboot state on one or more servers"
+      }
+    },
+    {
+      "name": "Verify fleet health",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "command",
+        "device_group": "servers",
+        "command": "renos-agent verify-updates",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Post-patch verification failed",
+        "body": "One or more servers are unhealthy after the patch cycle"
+      }
+    },
+    {
+      "name": "Notify patch results",
+      "step_type": "action",
+      "step_order": 5,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Patch cycle complete",
+        "body": "Weekly patch cycle finished and fleet verified"
+      }
+    }
+  ]
+}

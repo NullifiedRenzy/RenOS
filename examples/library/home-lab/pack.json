@@ -1,0 +1,16 @@
+{
+  "id": "home-lab",
+  "name": "Home Lab",
+  "description": "Monitoring, nightly backups, and weekly cleanup for a small home lab with a NAS, media servers, and Docker hosts.",
+  "icon": "server",
+  "category": "homelab",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "media-server-uptime.json"},
+    {"type": "workflow", "file": "nightly-backup.json"},
+    {"type": "workflow", "file": "disk-cleanup.json"},
+    {"type": "schedule", "file": "schedule-nightly-backup.json"},
+    {"type": "alert", "file": "alert-disk-space.json"}
+  ]
+}

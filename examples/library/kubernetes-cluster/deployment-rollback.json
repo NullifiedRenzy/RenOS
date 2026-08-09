@@ -1,0 +1,77 @@
+{
+  "name": "Deployment Rollback",
+  "description": "Rolls back a deployment to the previous revision after a bad rollout, then verifies the pod is back to a healthy state.",
+  "enabled": true,
+  "trigger_type": "webhook",
+  "trigger_config": {
+    "event": "deploy.rollback.requested",
+    "filters": {
+      "headers.X-Rollback-Token": {"exists": true}
+    }
+  },
+  "tags": ["kubernetes", "deploy", "rollback"],
+  "steps": [
+    {
+      "name": "Capture current revision",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "k8s-master",
+        "command": "kubectl rollout history deployment/{{deployment}} -n {{namespace}} | head -n 5",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Rollout history unavailable",
+        "body": "Could not read rollout history for {{deployment}}"
+      }
+    },
+    {
+      "name": "Undo deployment",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "k8s-master",
+        "command": "kubectl rollout undo deployment/{{deployment}} -n {{namespace}}",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Rollback failed",
+        "body": "Could not undo deployment {{deployment}} in namespace {{namespace}}"
+      }
+    },
+    {
+      "name": "Wait for rollout status",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "k8s-master",
+        "command": "kubectl rollout status deployment/{{deployment}} -n {{namespace}} --timeout=180s",
+        "timeout": 240
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Rollback did not converge",
+        "body": "{{deployment}} did not reach a ready state after rollback"
+      }
+    },
+    {
+      "name": "Notify rollback result",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Deployment rolled back",
+        "body": "{{deployment}} in namespace {{namespace}} rolled back to the previous revision"
+      }
+    }
+  ]
+}

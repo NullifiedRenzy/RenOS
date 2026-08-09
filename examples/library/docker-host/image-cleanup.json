@@ -1,0 +1,92 @@
+{
+  "name": "Docker Image Cleanup",
+  "description": "Nightly cleanup of dangling images, build cache, and unused volumes to reclaim disk on the Docker host.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 3 * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["docker", "maintenance", "storage"],
+  "steps": [
+    {
+      "name": "Check disk usage",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "df -h / | awk 'NR==2 { print $5 }'",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Disk usage check failed",
+        "body": "Could not read disk usage on docker-01"
+      }
+    },
+    {
+      "name": "Prune dangling images",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker image prune -af",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Image prune failed",
+        "body": "docker image prune failed on docker-01"
+      }
+    },
+    {
+      "name": "Prune build cache",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker builder prune -af",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Build cache prune failed",
+        "body": "docker builder prune failed on docker-01"
+      }
+    },
+    {
+      "name": "Prune unused volumes",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker volume prune -f",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Volume prune failed",
+        "body": "docker volume prune failed on docker-01"
+      }
+    },
+    {
+      "name": "Notify cleanup complete",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Docker cleanup complete",
+        "body": "Image, cache, and volume cleanup finished on docker-01"
+      }
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "name": "Gaming Performance Metrics",
+  "description": "Every ten minutes, captures CPU, memory, network latency, and tick rate for the game server and reports a performance summary.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/10 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["gaming", "performance", "metrics"],
+  "steps": [
+    {
+      "name": "Capture CPU and memory",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "ps -eo pid,pcpu,pmem,comm --sort=-pcpu | head -n 6",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Performance data unavailable",
+        "body": "Could not read CPU/memory data on game-01"
+      }
+    },
+    {
+      "name": "Measure latency",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "ping -c 4 1.1.1.1 | tail -n 1",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Latency check failed",
+        "body": "Could not measure network latency from game-01"
+      }
+    },
+    {
+      "name": "Read tick rate",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "game-01",
+        "command": "curl -sf http://localhost:8080/metrics | grep -E 'tickrate|fps'",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Tick rate unavailable",
+        "body": "Could not read tick rate metrics from the game server"
+      }
+    },
+    {
+      "name": "Report performance summary",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Gaming performance snapshot",
+        "body": "Performance metrics captured for game-01"
+      }
+    }
+  ]
+}

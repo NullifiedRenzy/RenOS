@@ -1,0 +1,16 @@
+{
+  "id": "enterprise",
+  "name": "Enterprise",
+  "description": "Compliance audits, employee onboarding, and patch management for a larger fleet with stricter controls.",
+  "icon": "shield",
+  "category": "enterprise",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "compliance-audit.json"},
+    {"type": "workflow", "file": "employee-onboarding.json"},
+    {"type": "workflow", "file": "patch-management.json"},
+    {"type": "schedule", "file": "schedule-patch-window.json"},
+    {"type": "alert", "file": "alert-compliance-drift.json"}
+  ]
+}

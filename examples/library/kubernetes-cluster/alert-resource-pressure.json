@@ -1,0 +1,11 @@
+{
+  "name": "Node Resource Pressure",
+  "description": "Warning when a cluster node sustains more than 90% memory pressure, indicating pods at risk of eviction.",
+  "metric_name": "node.memory_pressure",
+  "condition": "above",
+  "threshold": 90,
+  "duration_seconds": 300,
+  "severity": "warning",
+  "enabled": true,
+  "notification_channels": []
+}

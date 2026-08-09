@@ -1,0 +1,75 @@
+{
+  "name": "Media Server Uptime Monitor",
+  "description": "Checks Plex and Jellyfin services every five minutes and restarts them if they stopped responding.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/5 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["homelab", "media", "monitoring"],
+  "steps": [
+    {
+      "name": "Check Plex service",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "media-01",
+        "command": "systemctl is-active plexmediaserver || systemctl restart plexmediaserver",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Plex restart failed",
+        "body": "plexmediaserver could not be restarted on media-01"
+      }
+    },
+    {
+      "name": "Check Jellyfin service",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "media-02",
+        "command": "systemctl is-active jellyfin || systemctl restart jellyfin",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Jellyfin restart failed",
+        "body": "jellyfin could not be restarted on media-02"
+      }
+    },
+    {
+      "name": "Verify Plex HTTP endpoint",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "media-01",
+        "command": "curl -sf http://localhost:32400/identity >/dev/null || exit 1",
+        "timeout": 15
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Plex not responding",
+        "body": "Plex HTTP endpoint did not respond on media-01"
+      }
+    },
+    {
+      "name": "Notify uptime summary",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Media services healthy",
+        "body": "Plex and Jellyfin are running normally"
+      }
+    }
+  ]
+}

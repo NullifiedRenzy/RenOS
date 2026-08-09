@@ -1,0 +1,109 @@
+{
+  "name": "Homelab Nightly Backup",
+  "description": "Encrypted restic backup of the NAS media library and media-server configuration with integrity verification and snapshot pruning.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 2 * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["homelab", "backup", "disaster-recovery"],
+  "steps": [
+    {
+      "name": "Check backup disk space",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "df -h /backup | awk 'NR==2 && $5+0 > 90 { exit 1 }'",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Backup disk full",
+        "body": "Less than 10% free on /backup on nas-01"
+      }
+    },
+    {
+      "name": "Backup media library",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "restic backup /data/media --tag nightly --host nas-01 --password-file /etc/restic/password",
+        "timeout": 3600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Media backup failed",
+        "body": "restic backup of /data/media failed on nas-01"
+      }
+    },
+    {
+      "name": "Backup server configs",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "media-01",
+        "command": "tar czf /tmp/renos-configs-$(date +%F).tar.gz /etc/plexmediaserver /etc/jellyfin",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Config backup failed",
+        "body": "Could not archive media-server configs on media-01"
+      }
+    },
+    {
+      "name": "Verify backup integrity",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "restic check --password-file /etc/restic/password",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Backup integrity check failed",
+        "body": "restic check reported errors on nas-01"
+      }
+    },
+    {
+      "name": "Prune old snapshots",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune --password-file /etc/restic/password",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Backup pruning warning",
+        "body": "restic forget reported a non-fatal issue on nas-01"
+      }
+    },
+    {
+      "name": "Notify backup success",
+      "step_type": "action",
+      "step_order": 5,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Nightly backup complete",
+        "body": "Homelab backup finished and verified on nas-01"
+      }
+    }
+  ]
+}

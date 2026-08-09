@@ -1,0 +1,160 @@
+{
+  "name": "Deploy Application",
+  "description": "Multi-stage deployment workflow with canary checks and rollback",
+  "version": "1.2.0",
+  "tags": ["deploy", "production", "canary"],
+  "triggers": [
+    {
+      "type": "webhook",
+      "config": {
+        "event": "deploy.requested",
+        "filters": {
+          "headers.X-Deploy-Token": { "exists": true }
+        }
+      }
+    },
+    {
+      "type": "manual",
+      "config": {}
+    }
+  ],
+  "variables": {
+    "app_name": { "type": "string", "required": true },
+    "app_version": { "type": "string", "required": true },
+    "target_group": { "type": "string", "default": "web" },
+    "canary_percent": { "type": "integer", "default": 10 },
+    "health_check_timeout": { "type": "integer", "default": 120 }
+  },
+  "nodes": [
+    {
+      "id": "preflight",
+      "type": "action",
+      "name": "Preflight Checks",
+      "config": {
+        "action_type": "command",
+        "device_group": "{{ target_group }}",
+        "command": "deploy/scripts/preflight.sh {{ app_name }} {{ app_version }}",
+        "timeout": 30
+      },
+      "next_on_success": "canary-deploy",
+      "next_on_failure": "notify-failure",
+      "retry": { "count": 1, "backoff": "fixed" }
+    },
+    {
+      "id": "canary-deploy",
+      "type": "action",
+      "name": "Canary Deployment",
+      "config": {
+        "action_type": "command",
+        "device_group": "{{ target_group }}",
+        "command": "deploy/scripts/rollout.sh {{ app_name }} {{ app_version }} --canary={{ canary_percent }}",
+        "timeout": 300
+      },
+      "next_on_success": "health-check",
+      "next_on_failure": "rollback"
+    },
+    {
+      "id": "health-check",
+      "type": "condition",
+      "name": "Health Check Verification",
+      "config": {
+        "expression": "env('health_pass') == true",
+        "timeout_seconds": "{{ health_check_timeout }}"
+      },
+      "next_on_true": "full-deploy",
+      "next_on_false": "analyze-health"
+    },
+    {
+      "id": "analyze-health",
+      "type": "condition",
+      "name": "Analyze Health Failures",
+      "config": {
+        "expression": "env('health_retries') < 3"
+      },
+      "next_on_true": "canary-deploy",
+      "next_on_false": "rollback"
+    },
+    {
+      "id": "full-deploy",
+      "type": "action",
+      "name": "Full Deployment",
+      "config": {
+        "action_type": "command",
+        "device_group": "{{ target_group }}",
+        "command": "deploy/scripts/rollout.sh {{ app_name }} {{ app_version }} --full",
+        "timeout": 600
+      },
+      "next_on_success": "smoke-test",
+      "next_on_failure": "rollback",
+      "retry": { "count": 2, "backoff": "exponential" }
+    },
+    {
+      "id": "smoke-test",
+      "type": "action",
+      "name": "Smoke Tests",
+      "config": {
+        "action_type": "command",
+        "device_group": "{{ target_group }}",
+        "command": "deploy/scripts/smoke.sh {{ app_name }} {{ app_version }}",
+        "timeout": 60
+      },
+      "next_on_success": "notify-success",
+      "next_on_failure": "rollback",
+      "retry": { "count": 1, "backoff": "fixed" }
+    },
+    {
+      "id": "rollback",
+      "type": "action",
+      "name": "Rollback",
+      "config": {
+        "action_type": "command",
+        "device_group": "{{ target_group }}",
+        "command": "deploy/scripts/rollback.sh {{ app_name }} --to={{ env('previous_version') }}",
+        "timeout": 300
+      },
+      "next_on_success": "notify-rollback",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "notify-success",
+      "type": "action",
+      "name": "Notify Success",
+      "config": {
+        "action_type": "notify",
+        "title": "Deployment succeeded",
+        "body": "{{ app_name }} v{{ app_version }} deployed to {{ target_group }}",
+        "severity": "success"
+      }
+    },
+    {
+      "id": "notify-rollback",
+      "type": "action",
+      "name": "Notify Rollback",
+      "config": {
+        "action_type": "notify",
+        "title": "Deployment rolled back",
+        "body": "{{ app_name }} v{{ app_version }} rolled back due to health check failure",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-failure",
+      "type": "action",
+      "name": "Notify Failure",
+      "config": {
+        "action_type": "notify",
+        "title": "Deployment failed",
+        "body": "{{ app_name }} v{{ app_version }} deployment failed at node {{ node.name }}",
+        "severity": "error"
+      }
+    }
+  ],
+  "error_handler": {
+    "type": "notify",
+    "config": {
+      "severity": "critical",
+      "title": "Deploy workflow crashed",
+      "body": "Unhandled error in deployment workflow for {{ app_name }}"
+    }
+  }
+}

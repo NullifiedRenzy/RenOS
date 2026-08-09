@@ -1,0 +1,10 @@
+{
+  "name": "Docker Image Cleanup (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "docker system prune -af --volumes"
+  },
+  "target_type": "device",
+  "target_ids": ["docker-01"],
+  "cron_expression": "0 3 * * *"
+}

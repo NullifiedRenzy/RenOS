@@ -1,0 +1,89 @@
+{
+  "name": "Proxmox VM Lifecycle",
+  "description": "Safely stops a VM, snapshots it before a change, starts it again, and verifies it boots before continuing.",
+  "enabled": true,
+  "trigger_type": "manual",
+  "trigger_config": {},
+  "tags": ["proxmox", "virtualization", "lifecycle"],
+  "steps": [
+    {
+      "name": "Stop VM gracefully",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm shutdown {{vmid}} --timeout 120 || qm stop {{vmid}}",
+        "timeout": 180
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "VM stop failed",
+        "body": "Could not stop VM {{vmid}} on pve-01"
+      }
+    },
+    {
+      "name": "Snapshot before change",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm snapshot {{vmid}} pre-change-$(date +%s)",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Pre-change snapshot failed",
+        "body": "Could not snapshot VM {{vmid}} before the change"
+      }
+    },
+    {
+      "name": "Start VM",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "qm start {{vmid}}",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "VM start failed",
+        "body": "Could not start VM {{vmid}} on pve-01"
+      }
+    },
+    {
+      "name": "Verify VM boot",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "sleep 30 && qm guest exec {{vmid}} -- /bin/true",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "VM did not boot",
+        "body": "VM {{vmid}} did not respond after start; restore the pre-change snapshot"
+      }
+    },
+    {
+      "name": "Notify lifecycle result",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "VM lifecycle complete",
+        "body": "VM {{vmid}} was stopped, snapshotted, and restarted successfully"
+      }
+    }
+  ]
+}

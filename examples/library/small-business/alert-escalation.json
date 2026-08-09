@@ -1,0 +1,11 @@
+{
+  "name": "Office PC Offline Escalation",
+  "description": "Escalates to a critical alert when an office PC has been offline for more than 15 minutes during the business day.",
+  "metric_name": "device.online",
+  "condition": "below",
+  "threshold": 1,
+  "duration_seconds": 900,
+  "severity": "critical",
+  "enabled": true,
+  "notification_channels": []
+}

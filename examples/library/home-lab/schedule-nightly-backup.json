@@ -1,0 +1,10 @@
+{
+  "name": "Nightly Backup (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "restic backup /data/media --tag nightly --password-file /etc/restic/password && restic forget --keep-daily 7 --keep-weekly 4 --prune --password-file /etc/restic/password"
+  },
+  "target_type": "device",
+  "target_ids": ["nas-01"],
+  "cron_expression": "0 2 * * *"
+}

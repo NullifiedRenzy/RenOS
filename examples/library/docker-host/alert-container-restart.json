@@ -1,0 +1,11 @@
+{
+  "name": "Container Restart Loop",
+  "description": "Warning when a container's restart count exceeds 3 within 5 minutes, indicating a crash loop.",
+  "metric_name": "container.restarts",
+  "condition": "above",
+  "threshold": 3,
+  "duration_seconds": 300,
+  "severity": "warning",
+  "enabled": true,
+  "notification_channels": []
+}

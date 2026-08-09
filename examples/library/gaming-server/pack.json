@@ -1,0 +1,15 @@
+{
+  "id": "gaming-server",
+  "name": "Gaming Server",
+  "description": "Game server status checks, crash auto-restart, and performance metrics for a dedicated gaming box.",
+  "icon": "gamepad",
+  "category": "gaming",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "game-server-status.json"},
+    {"type": "workflow", "file": "auto-restart-on-crash.json"},
+    {"type": "workflow", "file": "performance-metrics.json"},
+    {"type": "alert", "file": "alert-high-latency.json"}
+  ]
+}

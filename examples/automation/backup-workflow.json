@@ -1,0 +1,231 @@
+{
+  "name": "Automated Backup",
+  "description": "Nightly encrypted backup of critical devices with integrity verification and offsite replication",
+  "version": "2.1.0",
+  "tags": ["backup", "disaster-recovery", "encryption"],
+  "triggers": [
+    {
+      "type": "cron",
+      "config": {
+        "expression": "0 2 * * *",
+        "timezone": "America/New_York"
+      }
+    },
+    {
+      "type": "manual",
+      "config": {}
+    }
+  ],
+  "variables": {
+    "backup_targets": {
+      "type": "list",
+      "value": ["nas-01", "db-01", "web-01"],
+      "description": "Devices to back up"
+    },
+    "retention_days": {
+      "type": "integer",
+      "value": 30
+    },
+    "encryption_key_id": {
+      "type": "string",
+      "value": "backup-key-01",
+      "description": "RenVault secret ID for encryption key"
+    },
+    "remote_endpoint": {
+      "type": "string",
+      "value": "s3:us-east-1/renos-backups"
+    },
+    "backup_date": {
+      "type": "string",
+      "value": "{{ now() | date '2006-01-02' }}"
+    }
+  },
+  "nodes": [
+    {
+      "id": "preflight",
+      "type": "action",
+      "name": "Preflight Checks",
+      "config": {
+        "action_type": "command",
+        "device_group": "all",
+        "command": "backup/scripts/preflight.sh --check-disk --check-agent --min-space 50",
+        "timeout": 30
+      },
+      "next_on_success": "lock-database",
+      "next_on_failure": "notify-failure",
+      "retry": { "count": 2, "backoff": "fixed", "delay_seconds": 10 }
+    },
+    {
+      "id": "lock-database",
+      "type": "action",
+      "name": "Lock Database for Snapshot",
+      "config": {
+        "action_type": "command",
+        "device": "db-01",
+        "command": "psql -c 'SELECT pg_start_backup(''renos-nightly-{{ backup_date }}'');'",
+        "timeout": 30
+      },
+      "next_on_success": "backup-database",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "backup-database",
+      "type": "action",
+      "name": "Database Dump",
+      "config": {
+        "action_type": "command",
+        "device": "db-01",
+        "command": "pg_dumpall -U renos --file=/tmp/renos-full-{{ backup_date }}.sql --compress=9",
+        "timeout": 600
+      },
+      "next_on_success": "unlock-database",
+      "next_on_failure": "abort-backup"
+    },
+    {
+      "id": "unlock-database",
+      "type": "action",
+      "name": "Unlock Database",
+      "config": {
+        "action_type": "command",
+        "device": "db-01",
+        "command": "psql -c 'SELECT pg_stop_backup();'",
+        "timeout": 30
+      },
+      "next_on_success": "backup-nas",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "backup-nas",
+      "type": "action",
+      "name": "Backup NAS Data",
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "restic backup /data --tag nightly --host renos --password-file /etc/restic/password",
+        "timeout": 3600
+      },
+      "next_on_success": "backup-web",
+      "next_on_failure": "notify-failure",
+      "retry": { "count": 1, "backoff": "exponential" }
+    },
+    {
+      "id": "backup-web",
+      "type": "action",
+      "name": "Backup Web Assets",
+      "config": {
+        "action_type": "command",
+        "device": "web-01",
+        "command": "tar czf /tmp/web-{{ backup_date }}.tar.gz /var/www /etc/nginx /etc/letsencrypt",
+        "timeout": 300
+      },
+      "next_on_success": "encrypt-backups",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "encrypt-backups",
+      "type": "action",
+      "name": "Encrypt All Backups",
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "backup/scripts/encrypt.sh --key-id={{ encryption_key_id }} --source=/tmp --dest=/backup/encrypted",
+        "timeout": 600
+      },
+      "next_on_success": "verify-integrity",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "verify-integrity",
+      "type": "action",
+      "name": "Verify Backup Integrity",
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "backup/scripts/verify.sh --path=/backup/encrypted --checksum-file=/backup/checksums-{{ backup_date }}.sha256",
+        "timeout": 300
+      },
+      "next_on_success": "replicate-remote",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "replicate-remote",
+      "type": "action",
+      "name": "Replicate to Remote Storage",
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "rclone sync /backup/encrypted {{ remote_endpoint }}/renos-{{ backup_date }} --progress --checksum",
+        "timeout": 7200
+      },
+      "next_on_success": "cleanup-old",
+      "next_on_failure": "notify-warning"
+    },
+    {
+      "id": "cleanup-old",
+      "type": "action",
+      "name": "Prune Old Backups",
+      "config": {
+        "action_type": "command",
+        "device": "nas-01",
+        "command": "restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly {{ retention_days / 30 }} --prune",
+        "timeout": 600
+      },
+      "next_on_success": "notify-success",
+      "next_on_failure": "notify-warning"
+    },
+    {
+      "id": "abort-backup",
+      "type": "action",
+      "name": "Abort and Clean Up",
+      "config": {
+        "action_type": "command",
+        "device": "db-01",
+        "command": "psql -c 'SELECT pg_stop_backup();' && rm -f /tmp/renos-*.sql",
+        "timeout": 30
+      },
+      "next_on_success": "notify-failure",
+      "next_on_failure": "notify-failure"
+    },
+    {
+      "id": "notify-success",
+      "type": "action",
+      "name": "Notify Success",
+      "config": {
+        "action_type": "notify",
+        "title": "Nightly backup completed",
+        "body": "All devices backed up and replicated to {{ remote_endpoint }}",
+        "severity": "success"
+      }
+    },
+    {
+      "id": "notify-warning",
+      "type": "action",
+      "name": "Notify Warning",
+      "config": {
+        "action_type": "notify",
+        "title": "Backup completed with warnings",
+        "body": "Backup finished but some non-critical steps failed. Check logs.",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-failure",
+      "type": "action",
+      "name": "Notify Failure",
+      "config": {
+        "action_type": "notify",
+        "title": "Nightly backup failed",
+        "body": "Backup workflow failed at node {{ node.name }} on device {{ node.device }}",
+        "severity": "error"
+      }
+    }
+  ],
+  "error_handler": {
+    "type": "notify",
+    "config": {
+      "severity": "critical",
+      "title": "Backup workflow crashed",
+      "body": "Unhandled error. Manual intervention required."
+    }
+  }
+}

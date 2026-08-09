@@ -1,0 +1,10 @@
+{
+  "name": "Patch Maintenance Window (schedule)",
+  "type": "update",
+  "payload": {
+    "action": "install"
+  },
+  "target_type": "group",
+  "target_ids": ["servers"],
+  "cron_expression": "0 3 * * 0"
+}

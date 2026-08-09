@@ -1,0 +1,224 @@
+{
+  "name": "Docker Compose Monitor",
+  "description": "Monitor Docker Compose stacks, auto-restart failed services, and notify on status changes",
+  "version": "1.1.0",
+  "tags": ["docker", "monitoring", "containers"],
+  "triggers": [
+    {
+      "type": "cron",
+      "config": {
+        "expression": "*/2 * * * *",
+        "timezone": "UTC"
+      }
+    },
+    {
+      "type": "webhook",
+      "config": {
+        "event": "docker.event",
+        "filters": {
+          "body.Action": { "in": ["start", "stop", "die", "health_status"] }
+        }
+      }
+    }
+  ],
+  "variables": {
+    "monitored_stacks": {
+      "type": "list",
+      "value": ["traefik", "monitoring", "renos", "media-stack"],
+      "description": "Docker Compose project names to monitor"
+    },
+    "restart_threshold": {
+      "type": "integer",
+      "value": 3,
+      "description": "Max restarts before escalation"
+    },
+    "notification_channels": {
+      "type": "list",
+      "value": ["slack", "email"],
+      "description": "Where to send alerts"
+    }
+  },
+  "nodes": [
+    {
+      "id": "discover-stacks",
+      "type": "action",
+      "name": "Discover Compose Stacks",
+      "config": {
+        "action_type": "command",
+        "device_group": "docker-hosts",
+        "command": "docker compose ls --format json",
+        "timeout": 15
+      },
+      "next_on_success": "check-service-health",
+      "next_on_failure": "notify-scan-error"
+    },
+    {
+      "id": "check-service-health",
+      "type": "loop",
+      "name": "Check Each Stack",
+      "config": {
+        "iterate_over": "{{ monitored_stacks }}",
+        "variable": "stack_name",
+        "parallel": true
+      },
+      "loop_node": "inspect-stack",
+      "next_on_complete": "aggregate-results"
+    },
+    {
+      "id": "inspect-stack",
+      "type": "action",
+      "name": "Inspect Stack {{ stack_name }}",
+      "config": {
+        "action_type": "command",
+        "device_group": "docker-hosts",
+        "command": "docker compose -p {{ stack_name }} ps --format json --all",
+        "timeout": 15
+      },
+      "next_on_success": "analyze-services",
+      "next_on_failure": "report-stack-error"
+    },
+    {
+      "id": "analyze-services",
+      "type": "action",
+      "name": "Analyze Service Status",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function analyze(statuses) local failing = {} for _, s in ipairs(statuses) do if s.Status ~= 'running' and s.Status ~= 'healthy' then table.insert(failing, s) end end return failing end",
+        "input": "{{ prev_node_output }}",
+        "timeout": 5
+      },
+      "next_on_success": "handle-failing-services",
+      "next_on_failure": "report-analysis-error"
+    },
+    {
+      "id": "handle-failing-services",
+      "type": "condition",
+      "name": "Handle Failing Services",
+      "config": {
+        "expression": "env('failing_count') > 0"
+      },
+      "next_on_true": "restart-failed",
+      "next_on_false": "log-healthy"
+    },
+    {
+      "id": "restart-failed",
+      "type": "action",
+      "name": "Restart Failed Services",
+      "config": {
+        "action_type": "command",
+        "device_group": "docker-hosts",
+        "command": "docker compose -p {{ stack_name }} up -d --no-deps {{ env('failed_services') | join ' ' }}",
+        "timeout": 60
+      },
+      "next_on_success": "verify-restart",
+      "next_on_failure": "escalate-failure",
+      "retry": { "count": 2, "backoff": "exponential" }
+    },
+    {
+      "id": "verify-restart",
+      "type": "action",
+      "name": "Verify Restart",
+      "config": {
+        "action_type": "command",
+        "device_group": "docker-hosts",
+        "command": "docker compose -p {{ stack_name }} ps --format json --all",
+        "timeout": 15
+      },
+      "next_on_success": "check-restart-count",
+      "next_on_failure": "escalate-failure"
+    },
+    {
+      "id": "check-restart-count",
+      "type": "condition",
+      "name": "Check Restart Count",
+      "config": {
+        "expression": "env('restart_count') >= {{ restart_threshold }}"
+      },
+      "next_on_true": "escalate-failure",
+      "next_on_false": "log-restarted"
+    },
+    {
+      "id": "escalate-failure",
+      "type": "action",
+      "name": "Escalate to Admin",
+      "config": {
+        "action_type": "notify",
+        "title": "Service restart failed for {{ stack_name }}",
+        "body": "Services {{ env('failed_services') }} in stack {{ stack_name }} failed to restart after multiple attempts.",
+        "severity": "error",
+        "channels": "{{ notification_channels }}"
+      }
+    },
+    {
+      "id": "log-restarted",
+      "type": "action",
+      "name": "Log Successful Restart",
+      "config": {
+        "action_type": "notify",
+        "title": "Service restored: {{ stack_name }}",
+        "body": "Services {{ env('failed_services') }} in stack {{ stack_name }} have been restarted successfully.",
+        "severity": "info",
+        "channels": ["slack"]
+      }
+    },
+    {
+      "id": "log-healthy",
+      "type": "action",
+      "name": "Log Healthy Status",
+      "config": {
+        "action_type": "notify",
+        "title": "Stack {{ stack_name }} healthy",
+        "body": "All services in {{ stack_name }} are running normally.",
+        "severity": "success"
+      }
+    },
+    {
+      "id": "aggregate-results",
+      "type": "action",
+      "name": "Aggregate and Report",
+      "config": {
+        "action_type": "script",
+        "language": "lua",
+        "source": "function aggregate(results) local summary = { total = #results, healthy = 0, restarted = 0, failed = 0 } for _, r in ipairs(results) do summary[r.status] = summary[r.status] + 1 end return summary end",
+        "timeout": 5
+      },
+      "next_on_success": "notify-summary",
+      "next_on_failure": "notify-scan-error"
+    },
+    {
+      "id": "notify-summary",
+      "type": "action",
+      "name": "Notify Scan Summary",
+      "config": {
+        "action_type": "notify",
+        "title": "Docker Compose Scan Complete",
+        "body": "Scanned {{ env('summary').total }} stacks. Healthy: {{ env('summary').healthy }}, Restarted: {{ env('summary').restarted }}, Failed: {{ env('summary').failed }}.",
+        "severity": "info",
+        "channels": "{{ notification_channels }}"
+      }
+    },
+    {
+      "id": "notify-scan-error",
+      "type": "action",
+      "name": "Notify Scan Error",
+      "config": {
+        "action_type": "notify",
+        "title": "Docker Compose scan error",
+        "body": "Failed to scan Docker stacks at node {{ node.name }}: {{ node.error }}",
+        "severity": "error"
+      }
+    },
+    {
+      "id": "report-stack-error",
+      "type": "action",
+      "name": "Report Stack Error",
+      "config": {
+        "action_type": "notify",
+        "title": "Cannot inspect stack {{ stack_name }}",
+        "body": "Stack {{ stack_name }} is not responding or does not exist.",
+        "severity": "warning"
+      }
+    }
+  ]
+}

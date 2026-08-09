@@ -1,0 +1,10 @@
+{
+  "name": "Nightly VM Snapshot (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "for vm in 100 101 102; do qm snapshot $vm nightly-$(date +%F) --description 'renos nightly'; done"
+  },
+  "target_type": "device",
+  "target_ids": ["pve-01"],
+  "cron_expression": "0 1 * * *"
+}

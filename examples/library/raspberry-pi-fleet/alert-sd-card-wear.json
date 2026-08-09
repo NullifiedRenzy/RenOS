@@ -1,0 +1,11 @@
+{
+  "name": "SD Card Wear Warning",
+  "description": "Warning when any Pi SD card reports wear above 80% of its rated lifetime.",
+  "metric_name": "sd.wear_level",
+  "condition": "above",
+  "threshold": 80,
+  "duration_seconds": 3600,
+  "severity": "warning",
+  "enabled": true,
+  "notification_channels": []
+}

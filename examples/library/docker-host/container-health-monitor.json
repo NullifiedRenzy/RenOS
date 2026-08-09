@@ -1,0 +1,75 @@
+{
+  "name": "Container Health Monitor",
+  "description": "Every five minutes, restarts containers that are unhealthy or repeatedly restarting and notifies the operator.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/5 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["docker", "monitoring", "containers"],
+  "steps": [
+    {
+      "name": "List unhealthy containers",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker ps -a --filter health=unhealthy --format '{{.Names}}'",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Health scan failed",
+        "body": "Could not list container health states on docker-01"
+      }
+    },
+    {
+      "name": "Restart unhealthy containers",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "for c in $(docker ps -a --filter health=unhealthy --format '{{.Names}}'); do docker restart \"$c\"; done",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Container restart failed",
+        "body": "One or more unhealthy containers could not be restarted on docker-01"
+      }
+    },
+    {
+      "name": "Check restart loops",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "docker-01",
+        "command": "docker ps -a --format '{{.Names}} {{.Status}}' | grep -i 'restarting' || true",
+        "timeout": 30
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Restart loop detected",
+        "body": "One or more containers are stuck in a restart loop on docker-01"
+      }
+    },
+    {
+      "name": "Notify health summary",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Container health check",
+        "body": "Container health sweep finished on docker-01"
+      }
+    }
+  ]
+}

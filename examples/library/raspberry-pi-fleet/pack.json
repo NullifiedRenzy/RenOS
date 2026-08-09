@@ -1,0 +1,16 @@
+{
+  "id": "raspberry-pi-fleet",
+  "name": "Raspberry Pi Fleet",
+  "description": "Fleet health reporting, SD card wear monitoring, and auto-restart for a cluster of Raspberry Pis.",
+  "icon": "cpu",
+  "category": "raspberry-pi",
+  "version": "1.0.0",
+  "one_click": true,
+  "items": [
+    {"type": "workflow", "file": "fleet-health-dashboard.json"},
+    {"type": "workflow", "file": "sd-card-wear-monitor.json"},
+    {"type": "workflow", "file": "auto-restart-on-hang.json"},
+    {"type": "schedule", "file": "schedule-fleet-health.json"},
+    {"type": "alert", "file": "alert-sd-card-wear.json"}
+  ]
+}

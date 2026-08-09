@@ -1,0 +1,77 @@
+{
+  "name": "hello-world",
+  "type": "wasm",
+  "version": "1.0.0",
+  "description": "A minimal RenOS plugin demonstrating routes, workers, and schedules",
+  "author": "RenOS Team <dev@renos.local>",
+  "permissions": [
+    "devices:read",
+    "devices:exec:local",
+    "notifications:send"
+  ],
+  "config_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "greeting": {
+        "type": "string",
+        "default": "Hello from RenOS!",
+        "description": "The greeting message to return"
+      },
+      "interval_seconds": {
+        "type": "integer",
+        "default": 60,
+        "minimum": 10,
+        "maximum": 3600,
+        "description": "How often the background worker runs"
+      }
+    },
+    "required": []
+  },
+  "routes": [
+    {
+      "path": "/api/v1/plugins/hello-world/greet",
+      "method": "GET",
+      "description": "Returns a greeting message"
+    },
+    {
+      "path": "/api/v1/plugins/hello-world/greet",
+      "method": "POST",
+      "request_body": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "description": "Greets a specific person"
+    },
+    {
+      "path": "/api/v1/plugins/hello-world/stats",
+      "method": "GET",
+      "description": "Returns worker run statistics"
+    }
+  ],
+  "sidebar": [
+    {
+      "label": "Hello World",
+      "icon": "hand-wave",
+      "path": "/plugins/hello-world"
+    }
+  ],
+  "workers": [
+    {
+      "name": "greeter-worker",
+      "description": "Periodically logs a greeting",
+      "interval_seconds": 60
+    }
+  ],
+  "schedules": [
+    {
+      "name": "daily-report",
+      "description": "Sends a daily summary of plugin activity",
+      "cron": "0 8 * * *",
+      "timezone": "UTC"
+    }
+  ]
+}

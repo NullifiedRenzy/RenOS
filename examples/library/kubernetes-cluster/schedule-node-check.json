@@ -1,0 +1,10 @@
+{
+  "name": "Node Check (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "kubectl get nodes -o wide && kubectl get pods -A --field-selector status.phase!=Running"
+  },
+  "target_type": "device",
+  "target_ids": ["k8s-master"],
+  "cron_expression": "*/15 * * * *"
+}

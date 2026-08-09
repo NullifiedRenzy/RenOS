@@ -1,0 +1,72 @@
+{
+  "name": "Employee Onboarding",
+  "description": "Runs when an employee joins: creates the account, adds groups and permissions, provisions the device, and notifies HR.",
+  "enabled": true,
+  "trigger_type": "manual",
+  "trigger_config": {},
+  "tags": ["enterprise", "onboarding", "identity"],
+  "steps": [
+    {
+      "name": "Create user account",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "dc-01",
+        "command": "renos-iam user create --first-name {{first_name}} --last-name {{last_name}} --email {{email}}",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Account creation failed",
+        "body": "Could not create the user account for {{email}}"
+      }
+    },
+    {
+      "name": "Add user to groups",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device": "dc-01",
+        "command": "renos-iam user add-groups {{email}} --groups {{groups}}",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Group assignment failed",
+        "body": "Could not assign groups to {{email}}"
+      }
+    },
+    {
+      "name": "Provision device",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "provisioning",
+        "command": "renos-agent provision --user {{email}} --policy default",
+        "timeout": 600
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Device provisioning failed",
+        "body": "Could not provision a device for {{email}}"
+      }
+    },
+    {
+      "name": "Notify HR",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Onboarding complete",
+        "body": "Account, groups, and device provisioned for {{email}} ({{first_name}} {{last_name}})"
+      }
+    }
+  ]
+}

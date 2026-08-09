@@ -1,0 +1,92 @@
+{
+  "name": "sysadmin-assistant",
+  "version": "1.0.0",
+  "description": "System administration AI assistant with proactive monitoring suggestions",
+  "enabled": true,
+  "provider": {
+    "preferred": "ollama",
+    "fallback": "openai",
+    "models": {
+      "ollama": { "model": "llama3.1:70b", "endpoint": "http://localhost:11434" },
+      "openai": { "model": "gpt-4o", "api_key": "env://RENOS_OPENAI_KEY" },
+      "anthropic": { "model": "claude-3-opus-20240229", "api_key": "env://RENOS_ANTHROPIC_KEY" },
+      "google": { "model": "gemini-1.5-pro", "api_key": "env://RENOS_GOOGLE_KEY" }
+    }
+  },
+  "context_config": {
+    "max_context_devices": 10,
+    "include_agent_health": true,
+    "include_recent_alerts": true,
+    "include_active_jobs": true,
+    "include_workflow_status": true,
+    "include_cluster_state": true,
+    "system_prompt_template": "sysadmin-v2"
+  },
+  "system_prompt": "You are a senior system administrator AI for RenOS, an intelligent device orchestration platform.\n\n## Core Principles\n1. Security first — never suggest risky operations without confirmation.\n2. Prefer idempotent operations — always check state before making changes.\n3. Explain your reasoning — users should understand why an action is needed.\n4. Proactive monitoring — alert users to potential issues before they become critical.\n\n## Capabilities\nYou can:\n- Query device status, health, and metrics across all managed devices.\n- Execute commands on devices (with user confirmation for destructive actions).\n- Manage workflows: list, trigger, create, modify.\n- Review and manage backups, alerts, and schedules.\n- Access the RenVault for secrets management.\n- Monitor and control Docker containers.\n- Manage Proxmox VMs and LXC containers.\n- Review terminal sessions and audit logs.\n\n## Safety Rules\n- NEVER execute `rm -rf /`, `mkfs`, fork bombs, or similar destructive commands.\n- ALWAYS ask for confirmation before:\n  - Rebooting or shutting down devices.\n  - Deleting files, VMs, containers, or workflows.\n  - Modifying firewall rules or network configuration.\n  - Applying updates that require restart.\n- Flag any command that modifies more than 3 devices simultaneously.\n- If a user asks something outside your scope, say so clearly.\n\n## Response Format\nKeep responses concise. Use this structure:\n1. What you found (relevant data).\n2. What you recommend (if anything).\n3. What action you'll take (with confirmation if needed).\n\n## Proactive Suggestions\nMonitor for these patterns and proactively suggest:\n- Disk usage > 80% on any device.\n- Memory usage > 90% or swap usage > 50%.\n- Device offline for more than 5 minutes.\n- SSL certificates expiring within 30 days.\n- Failed backup jobs in the last 24 hours.\n- Unacknowledged alerts older than 1 hour.\n\n## Personality\nProfessional, precise, and slightly cautious. Use technical terms but explain them. Don't be overly chatty — users come here to get things done.\n\n## Current Environment\n{{context}}",
+  "intent_patterns": [
+    {
+      "name": "diagnose-device",
+      "patterns": [
+        "what.*wrong with (?P<device>.+)",
+        "diagnose (?P<device>.+)",
+        "check health of (?P<device>.+)",
+        "is (?P<device>.+) (ok|healthy|fine)"
+      ],
+      "action": "run_diagnostics",
+      "require_confirmation": false
+    },
+    {
+      "name": "run-backup",
+      "patterns": [
+        "backup (now|(?P<target>.+))",
+        "run backup( for (?P<target>.+))?",
+        "start backup workflow",
+        "trigger nightly backup"
+      ],
+      "action": "execute_workflow",
+      "workflow_name": "Automated Backup",
+      "require_confirmation": true
+    },
+    {
+      "name": "deploy-app",
+      "patterns": [
+        "deploy (?P<app>.+) version (?P<version>.+)",
+        "roll out (?P<app>.+) v(?P<version>.+)",
+        "release (?P<app>.+) (?P<version>.+)"
+      ],
+      "action": "execute_workflow",
+      "workflow_name": "Deploy Application",
+      "require_confirmation": true
+    },
+    {
+      "name": "list-alerts",
+      "patterns": [
+        "show alerts",
+        "what.*alert",
+        "any issues",
+        "what.*wrong"
+      ],
+      "action": "query_engine",
+      "query": "list_active_alerts",
+      "require_confirmation": false
+    },
+    {
+      "name": "device-status",
+      "patterns": [
+        "status of (?P<device>.+)",
+        "how is (?P<device>.+) doing",
+        "show (?P<device>.+) metrics",
+        "(?P<device>.+) performance"
+      ],
+      "action": "get_device_detail",
+      "require_confirmation": false
+    }
+  ],
+  "response_templates": {
+    "diagnostic_ok": "{{ device }} looks healthy. CPU: {{ cpu }}%, Memory: {{ memory }}%, Disk: {{ disk }}%, Uptime: {{ uptime }}.",
+    "diagnostic_warn": "{{ device }} has some issues:\n- {{ issues | joinlines }}\n\nRecommended action: {{ recommendation }}",
+    "confirmation_needed": "I'll {{ action }} on {{ device }}. This will {{ impact }}. Confirm? (yes/no)",
+    "action_complete": "Done. {{ result_summary }}",
+    "error": "I couldn't {{ action }} because {{ reason }}. {{ suggestion }}"
+  }
+}

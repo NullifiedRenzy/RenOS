@@ -1,0 +1,75 @@
+{
+  "name": "Proxmox Cluster Resource Monitor",
+  "description": "Every five minutes, checks cluster status, per-node CPU/memory, and HA resource health across the Proxmox nodes.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "*/5 * * * *",
+    "timezone": "UTC"
+  },
+  "tags": ["proxmox", "cluster", "monitoring"],
+  "steps": [
+    {
+      "name": "Check cluster status",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "pvecm status || exit 1",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "Proxmox cluster unhealthy",
+        "body": "pvecm status failed on pve-01"
+      }
+    },
+    {
+      "name": "Check node CPU/memory",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device_group": "proxmox-nodes",
+        "command": "free -h | head -n 2 && uptime",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Node resource check failed",
+        "body": "One or more Proxmox nodes did not report CPU/memory data"
+      }
+    },
+    {
+      "name": "Check HA resources",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device": "pve-01",
+        "command": "ha-manager status || exit 1",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "critical",
+        "title": "HA resources degraded",
+        "body": "ha-manager reported a problem on pve-01"
+      }
+    },
+    {
+      "name": "Notify cluster health",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Proxmox cluster healthy",
+        "body": "All nodes and HA resources are healthy"
+      }
+    }
+  ]
+}

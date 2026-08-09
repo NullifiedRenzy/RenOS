@@ -1,0 +1,10 @@
+{
+  "name": "Office Health Check (schedule)",
+  "type": "command",
+  "payload": {
+    "command": "renos-agent health-check --quick"
+  },
+  "target_type": "group",
+  "target_ids": ["office"],
+  "cron_expression": "30 8 * * 1-5"
+}

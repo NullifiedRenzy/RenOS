@@ -1,0 +1,67 @@
+{
+  "name": "GitHub Auto-Deploy",
+  "description": "Trigger deployment workflow on GitHub release publish",
+  "version": "1.0.0",
+  "enabled": true,
+  "source": "github",
+  "workflow": {
+    "name": "Deploy Application",
+    "trigger_on": "webhook"
+  },
+  "endpoint": {
+    "path": "/api/v1/webhooks/github-deploy",
+    "secret": "whsec_your_webhook_secret_here"
+  },
+  "events": [
+    {
+      "github_event": "release",
+      "action": "published",
+      "filters": {
+        "release.prerelease": false,
+        "release.draft": false
+      },
+      "workflow_input": {
+        "app_name": { "source": "repository.name" },
+        "app_version": { "source": "release.tag_name" },
+        "target_group": { "source": "repository.default_branch", "map": { "main": "web", "stable": "web" }, "default": "staging" }
+      }
+    },
+    {
+      "github_event": "push",
+      "action": null,
+      "filters": {
+        "ref": "refs/heads/main",
+        "commits[0].modified": { "pattern": "^deploy/.*" }
+      },
+      "workflow_input": {
+        "app_name": { "source": "repository.name" },
+        "app_version": { "source": "head_commit.id", "truncate": 7 },
+        "target_group": { "value": "staging" }
+      }
+    }
+  ],
+  "headers": {
+    "X-GitHub-Event": "X-GitHub-Event",
+    "X-Hub-Signature-256": "X-Hub-Signature-256",
+    "X-GitHub-Delivery": "X-GitHub-Delivery"
+  },
+  "signature": {
+    "algorithm": "sha256",
+    "header": "X-Hub-Signature-256",
+    "prefix": "sha256="
+  },
+  "rate_limit": {
+    "max_per_minute": 10,
+    "burst": 3
+  },
+  "delivery": {
+    "retry_on_failure": true,
+    "max_retries": 3,
+    "backoff_seconds": 30
+  },
+  "audit": {
+    "log_payload": true,
+    "log_response": true,
+    "log_headers": ["X-GitHub-Delivery", "X-GitHub-Event"]
+  }
+}

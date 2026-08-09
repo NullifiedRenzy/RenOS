@@ -1,0 +1,352 @@
+{
+  "name": "Proxmox VM Lifecycle",
+  "description": "Provision, configure, and decommission Proxmox VMs with approval gates and health validation",
+  "version": "1.0.0",
+  "tags": ["proxmox", "vm", "provisioning", "infrastructure"],
+  "triggers": [
+    {
+      "type": "manual",
+      "config": {}
+    },
+    {
+      "type": "webhook",
+      "config": {
+        "event": "vm.requested",
+        "filters": {
+          "body.template": { "exists": true }
+        }
+      }
+    }
+  ],
+  "variables": {
+    "vm_name": { "type": "string", "required": true, "description": "VM hostname" },
+    "template_name": { "type": "string", "default": "ubuntu-24.04-template", "description": "Proxmox template to clone from" },
+    "target_node": { "type": "string", "default": "pve-01", "description": "Proxmox node name" },
+    "cpu_cores": { "type": "integer", "default": 4 },
+    "memory_mb": { "type": "integer", "default": 8192 },
+    "disk_gb": { "type": "integer", "default": 50 },
+    "network_bridge": { "type": "string", "default": "vmbr0" },
+    "vlan_tag": { "type": "integer", "optional": true },
+    "cloudinit_user": { "type": "string", "default": "renos-admin" },
+    "ssh_key": { "type": "string", "source": "vault", "path": "/infra/ssh-public-key" },
+    "approval_required": { "type": "boolean", "default": true }
+  },
+  "nodes": [
+    {
+      "id": "validate-request",
+      "type": "action",
+      "name": "Validate Request",
+      "config": {
+        "action_type": "api",
+        "method": "GET",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}",
+        "timeout": 10
+      },
+      "next_on_success": "check-quota",
+      "next_on_failure": "notify-validation-failed"
+    },
+    {
+      "id": "check-quota",
+      "type": "action",
+      "name": "Check Resource Quota",
+      "config": {
+        "action_type": "api",
+        "method": "GET",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/resources",
+        "timeout": 10
+      },
+      "next_on_success": "quota-condition",
+      "next_on_failure": "notify-validation-failed"
+    },
+    {
+      "id": "quota-condition",
+      "type": "condition",
+      "name": "Sufficient Resources?",
+      "config": {
+        "expression": "env('available_cpu') >= {{ cpu_cores }} and env('available_memory') >= {{ memory_mb }} and env('available_disk') >= {{ disk_gb }}"
+      },
+      "next_on_true": "approval-gate",
+      "next_on_false": "notify-insufficient-resources"
+    },
+    {
+      "id": "approval-gate",
+      "type": "condition",
+      "name": "Approval Required?",
+      "config": {
+        "expression": "{{ approval_required }} == true"
+      },
+      "next_on_true": "request-approval",
+      "next_on_false": "clone-vm"
+    },
+    {
+      "id": "request-approval",
+      "type": "action",
+      "name": "Request Admin Approval",
+      "config": {
+        "action_type": "notify",
+        "title": "VM provisioning approval needed",
+        "body": "Request to create VM {{ vm_name }} ({{ cpu_cores }}c/{{ memory_mb }}mb/{{ disk_gb }}gb) on {{ target_node }}",
+        "severity": "warning",
+        "require_approval": true,
+        "approval_timeout_hours": 24
+      },
+      "next_on_success": "clone-vm",
+      "next_on_failure": "notify-rejected",
+      "next_on_timeout": "notify-timeout"
+    },
+    {
+      "id": "clone-vm",
+      "type": "action",
+      "name": "Clone VM from Template",
+      "config": {
+        "action_type": "api",
+        "method": "POST",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/clone",
+        "body": {
+          "template": "{{ template_name }}",
+          "name": "{{ vm_name }}",
+          "target": "{{ target_node }}"
+        },
+        "timeout": 300
+      },
+      "next_on_success": "configure-vm",
+      "next_on_failure": "notify-clone-failed"
+    },
+    {
+      "id": "configure-vm",
+      "type": "action",
+      "name": "Configure VM Resources",
+      "config": {
+        "action_type": "api",
+        "method": "PUT",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/vms/{{ env('vm_id') }}/config",
+        "body": {
+          "cores": "{{ cpu_cores }}",
+          "memory": "{{ memory_mb }}",
+          "net0": "virtio,bridge={{ network_bridge }}{% if vlan_tag %},tag={{ vlan_tag }}{% endif %}",
+          "scsihw": "virtio-scsi-single",
+          "ostype": "l26"
+        },
+        "timeout": 60
+      },
+      "next_on_success": "resize-disk",
+      "next_on_failure": "destroy-vm-and-fail"
+    },
+    {
+      "id": "resize-disk",
+      "type": "action",
+      "name": "Resize Disk",
+      "config": {
+        "action_type": "api",
+        "method": "PUT",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/vms/{{ env('vm_id') }}/resize",
+        "body": {
+          "disk": "scsi0",
+          "size": "{{ disk_gb }}G"
+        },
+        "timeout": 120
+      },
+      "next_on_success": "cloudinit-config",
+      "next_on_failure": "destroy-vm-and-fail"
+    },
+    {
+      "id": "cloudinit-config",
+      "type": "action",
+      "name": "Apply Cloud-Init Configuration",
+      "config": {
+        "action_type": "api",
+        "method": "PUT",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/vms/{{ env('vm_id') }}/cloudinit",
+        "body": {
+          "user": "{{ cloudinit_user }}",
+          "ssh_key": "{{ ssh_key }}",
+          "name": "{{ vm_name }}",
+          "searchdomain": "renos.local"
+        },
+        "timeout": 30
+      },
+      "next_on_success": "start-vm",
+      "next_on_failure": "destroy-vm-and-fail"
+    },
+    {
+      "id": "start-vm",
+      "type": "action",
+      "name": "Start VM",
+      "config": {
+        "action_type": "api",
+        "method": "POST",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/vms/{{ env('vm_id') }}/start",
+        "timeout": 60
+      },
+      "next_on_success": "wait-for-agent",
+      "next_on_failure": "destroy-vm-and-fail"
+    },
+    {
+      "id": "wait-for-agent",
+      "type": "action",
+      "name": "Wait for RenOS Agent",
+      "config": {
+        "action_type": "wait",
+        "condition": "device('{{ vm_name }}').status == 'online'",
+        "timeout_seconds": 300,
+        "poll_interval_seconds": 5
+      },
+      "next_on_success": "register-device",
+      "next_on_failure": "notify-agent-timeout"
+    },
+    {
+      "id": "register-device",
+      "type": "action",
+      "name": "Register Device in RenOS",
+      "config": {
+        "action_type": "api",
+        "method": "POST",
+        "url": "/api/v1/devices",
+        "body": {
+          "name": "{{ vm_name }}",
+          "hostname": "{{ vm_name }}.renos.local",
+          "tags": {
+            "provisioned_by": "renos-workflow",
+            "template": "{{ template_name }}",
+            "node": "{{ target_node }}"
+          },
+          "groups": ["proxmox-vms", "linux"]
+        },
+        "timeout": 10
+      },
+      "next_on_success": "notify-success",
+      "next_on_failure": "notify-registration-failed"
+    },
+    {
+      "id": "destroy-vm-and-fail",
+      "type": "action",
+      "name": "Destroy Failed VM",
+      "config": {
+        "action_type": "api",
+        "method": "DELETE",
+        "url": "/api/v1/proxmox/nodes/{{ target_node }}/vms/{{ env('vm_id') }}",
+        "timeout": 120
+      },
+      "next_on_success": "notify-failure",
+      "next_on_failure": "notify-critical"
+    },
+    {
+      "id": "notify-success",
+      "type": "action",
+      "name": "Notify Success",
+      "config": {
+        "action_type": "notify",
+        "title": "VM provisioned: {{ vm_name }}",
+        "body": "VM {{ vm_name }} ({{ cpu_cores }}c/{{ memory_mb }}mb/{{ disk_gb }}gb) created on {{ target_node }}. Agent connected.",
+        "severity": "success"
+      }
+    },
+    {
+      "id": "notify-validation-failed",
+      "type": "action",
+      "name": "Notify Validation Failed",
+      "config": {
+        "action_type": "notify",
+        "title": "VM validation failed",
+        "body": "Node {{ target_node }} is not available or does not exist.",
+        "severity": "error"
+      }
+    },
+    {
+      "id": "notify-insufficient-resources",
+      "type": "action",
+      "name": "Notify Insufficient Resources",
+      "config": {
+        "action_type": "notify",
+        "title": "Insufficient resources on {{ target_node }}",
+        "body": "Not enough resources to create VM {{ vm_name }}. Requested: {{ cpu_cores }}c/{{ memory_mb }}mb/{{ disk_gb }}gb.",
+        "severity": "error"
+      }
+    },
+    {
+      "id": "notify-rejected",
+      "type": "action",
+      "name": "Notify Rejected",
+      "config": {
+        "action_type": "notify",
+        "title": "VM request rejected",
+        "body": "VM {{ vm_name }} was rejected by the approver.",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-timeout",
+      "type": "action",
+      "name": "Notify Approval Timeout",
+      "config": {
+        "action_type": "notify",
+        "title": "VM request timed out",
+        "body": "Approval for VM {{ vm_name }} expired after 24 hours.",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-clone-failed",
+      "type": "action",
+      "name": "Notify Clone Failed",
+      "config": {
+        "action_type": "notify",
+        "title": "VM clone failed",
+        "body": "Failed to clone template {{ template_name }} for VM {{ vm_name }} on {{ target_node }}.",
+        "severity": "error"
+      }
+    },
+    {
+      "id": "notify-agent-timeout",
+      "type": "action",
+      "name": "Notify Agent Timeout",
+      "config": {
+        "action_type": "notify",
+        "title": "Agent connection timeout",
+        "body": "VM {{ vm_name }} started but RenOS agent did not connect within 5 minutes. Manual check needed.",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-registration-failed",
+      "type": "action",
+      "name": "Notify Registration Failed",
+      "config": {
+        "action_type": "notify",
+        "title": "Device registration failed",
+        "body": "VM {{ vm_name }} is running but could not be registered in RenOS inventory.",
+        "severity": "warning"
+      }
+    },
+    {
+      "id": "notify-failure",
+      "type": "action",
+      "name": "Notify Failure",
+      "config": {
+        "action_type": "notify",
+        "title": "VM provisioning failed",
+        "body": "VM {{ vm_name }} provisioning failed at step {{ node.name }}. Resources have been cleaned up.",
+        "severity": "error"
+      }
+    },
+    {
+      "id": "notify-critical",
+      "type": "action",
+      "name": "Notify Critical Failure",
+      "config": {
+        "action_type": "notify",
+        "title": "VM provisioning CRITICAL",
+        "body": "VM {{ vm_name }} failed and cleanup also failed. Manual intervention required on {{ target_node }}.",
+        "severity": "critical"
+      }
+    }
+  ],
+  "error_handler": {
+    "type": "notify",
+    "config": {
+      "severity": "critical",
+      "title": "VM lifecycle workflow crashed",
+      "body": "Unhandled error in VM lifecycle workflow. Check logs for {{ vm_name }}."
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "name": "Office PC Health Check",
+  "description": "Weekday-morning health sweep of office PCs: CPU, memory, disk, and pending updates, with a summary report.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 8 * * 1-5",
+    "timezone": "UTC"
+  },
+  "tags": ["business", "monitoring", "endpoint"],
+  "steps": [
+    {
+      "name": "Check CPU and memory",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "uptime && free -h | head -n 2",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "PC CPU/memory check failed",
+        "body": "One or more office PCs did not respond to the CPU/memory check"
+      }
+    },
+    {
+      "name": "Check disk health",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "df -h / | awk 'NR==2 { print $5 }'",
+        "timeout": 60
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Disk check failed",
+        "body": "Could not read disk usage on one or more office PCs"
+      }
+    },
+    {
+      "name": "Check pending updates",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "office",
+        "command": "renos-agent check-updates",
+        "timeout": 120
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Update check failed",
+        "body": "Could not query pending updates on one or more office PCs"
+      }
+    },
+    {
+      "name": "Notify health summary",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Office morning health check",
+        "body": "Morning health sweep completed. Review device dashboard for details."
+      }
+    }
+  ]
+}

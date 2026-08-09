@@ -1,0 +1,92 @@
+{
+  "name": "Weekly Compliance Audit",
+  "description": "Weekly audit of the fleet: password policy, installed patches, USB/media policy, and inventory drift, with a report for the security team.",
+  "enabled": true,
+  "trigger_type": "cron",
+  "trigger_config": {
+    "expression": "0 6 * * 1",
+    "timezone": "UTC"
+  },
+  "tags": ["enterprise", "compliance", "security"],
+  "steps": [
+    {
+      "name": "Collect system inventory",
+      "step_type": "action",
+      "step_order": 0,
+      "config": {
+        "action_type": "command",
+        "device_group": "all",
+        "command": "renos-agent inventory --json",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "error",
+        "title": "Inventory collection failed",
+        "body": "Could not collect inventory from one or more devices"
+      }
+    },
+    {
+      "name": "Check password policy compliance",
+      "step_type": "action",
+      "step_order": 1,
+      "config": {
+        "action_type": "command",
+        "device_group": "all",
+        "command": "renos-agent audit password-policy",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Password policy drift",
+        "body": "One or more devices are out of compliance with the password policy"
+      }
+    },
+    {
+      "name": "Check installed patches",
+      "step_type": "action",
+      "step_order": 2,
+      "config": {
+        "action_type": "command",
+        "device_group": "all",
+        "command": "renos-agent audit patches",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Patch drift detected",
+        "body": "One or more devices are missing required security patches"
+      }
+    },
+    {
+      "name": "Check USB/media policy",
+      "step_type": "action",
+      "step_order": 3,
+      "config": {
+        "action_type": "command",
+        "device_group": "all",
+        "command": "renos-agent audit media-policy",
+        "timeout": 300
+      },
+      "error_handler": {
+        "action_type": "notify",
+        "severity": "warning",
+        "title": "Media policy violations",
+        "body": "USB/media policy violations found on one or more devices"
+      }
+    },
+    {
+      "name": "Notify compliance report",
+      "step_type": "action",
+      "step_order": 4,
+      "config": {
+        "action_type": "notify",
+        "severity": "success",
+        "title": "Weekly compliance audit complete",
+        "body": "Audit report generated. Review findings in the compliance dashboard."
+      }
+    }
+  ]
+}
