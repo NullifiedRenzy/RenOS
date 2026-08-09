@@ -5,8 +5,8 @@
 RenOS is an AI-powered operating ecosystem that unifies desktops, servers,
 Raspberry Pis, NAS devices, Docker containers, and VMs into one platform.
 
-[![CI](https://github.com/renos-project/renos/actions/workflows/ci.yml/badge.svg)](https://github.com/renos-project/renos/actions/workflows/ci.yml)
-[![Release](https://github.com/renos-project/renos/actions/workflows/release.yml/badge.svg)](https://github.com/renos-project/renos/releases)
+[![CI](https://github.com/NullifiedRenzy/RenOS/actions/workflows/ci.yml/badge.svg)](https://github.com/NullifiedRenzy/RenOS/actions/workflows/ci.yml)
+[![Release](https://github.com/NullifiedRenzy/RenOS/actions/workflows/release.yml/badge.svg)](https://github.com/NullifiedRenzy/RenOS/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -21,6 +21,15 @@ Raspberry Pis, NAS devices, Docker containers, and VMs into one platform.
 - **RBAC** — Role-based access control (admin, operator, viewer)
 - **Agent-based** — Lightweight Rust daemon on each managed device
 - **PWA Support** — Installable as a Progressive Web App
+- **Language SDKs** — Official Go, Python, TypeScript, C#, and Rust clients
+- **Cluster & Fleet** — Group devices, run fleet-wide commands and jobs
+- **Proxmox & Docker** — VM lifecycle and container/compose management
+- **Terminal & Files** — Live sessions, file browsing, and transfers
+- **Secrets Vault** — Encrypted secrets storage with policy controls
+- **Observability** — Prometheus metrics, Grafana dashboards, alerts
+- **Marketplace & Plugins** — Installable plugins with lifecycle management
+- **Mobile & Notifications** — Push registrations and in-app notifications
+- **renctl CLI** — Manage RenOS from the command line
 
 ## Architecture
 
@@ -48,6 +57,7 @@ Raspberry Pis, NAS devices, Docker containers, and VMs into one platform.
 | **RenCore** | Go | `core/` | Central server: REST API, auth, WebSocket, job scheduling |
 | **RenAgent** | Rust | `agent/` | Lightweight daemon on each managed device |
 | **RenHub** | TypeScript | `hub/` | Web UI (Next.js 15, React 19, Tailwind CSS) |
+| **RenCtl** | Go | `renctl/` | Command-line client for the RenOS API |
 
 ### Infrastructure
 
@@ -70,7 +80,7 @@ Raspberry Pis, NAS devices, Docker containers, and VMs into one platform.
 ### Production (one command)
 
 ```bash
-git clone https://github.com/renos-project/renos.git
+git clone https://github.com/NullifiedRenzy/RenOS.git
 cd renos
 ./install.sh
 ```
@@ -187,9 +197,9 @@ This runs all services: PostgreSQL, Redis, NATS, Core, Hub, and Nginx.
 Pre-built images are available on GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/renos-project/renos-core:latest
-docker pull ghcr.io/renos-project/renos-agent:latest
-docker pull ghcr.io/renos-project/renos-hub:latest
+docker pull ghcr.io/NullifiedRenzy/renos-core:latest
+docker pull ghcr.io/NullifiedRenzy/renos-agent:latest
+docker pull ghcr.io/NullifiedRenzy/renos-hub:latest
 ```
 
 Build locally:
@@ -261,10 +271,15 @@ RenOS/
 │   ├── components/ # React components
 │   ├── hooks/      # React hooks
 │   └── lib/        # Utilities and types
+├── renctl/         # Command-line client
+├── sdk/            # Language SDKs (Go, Python, TypeScript, C#, Rust)
+├── installer/      # Installers (Linux, macOS, Windows, Kubernetes, upgrade)
+├── release/        # Release tooling, audit, SBOM, test reports
+├── examples/       # Usage examples and workflows
 ├── proto/          # Protocol Buffer definitions
 ├── docs/           # Documentation
 ├── scripts/        # Dev and ops scripts
-└── deploy/         # Deployment configs (nginx)
+└── deploy/         # Deployment configs (nginx, prometheus, grafana)
 ```
 
 ### Testing
@@ -346,7 +361,7 @@ See [RELEASE.md](RELEASE.md) for the release process and [docs/operations/](docs
 ### Production Topology
 
 ```
-Browser → Nginx (:443)
+Browser → Nginx (:80)
             ├── /api/v1/*  → Core (:8443)    [HTTP + WebSocket]
             ├── /_next/*   → Hub (:3000)     [Static assets]
             └── /*         → Hub (:3000)     [Pages]
