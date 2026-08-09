@@ -1,0 +1,277 @@
+# RenOS Production Deployment
+# ===========================
+# Full production stack: PostgreSQL, Redis, NATS, Core, Hub, Agent, Nginx.
+#
+# Usage:
+#   cp .env.example .env
+#   # Edit .env with production values
+#   docker compose up -d
+#
+# Networks:
+#   renos-backend  - internal service-to-service communication
+#   renos-frontend - external-facing (nginx only)
+
+networks:
+  renos-backend:
+    driver: bridge
+    internal: true
+  renos-frontend:
+    driver: bridge
+
+services:
+  # ─── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: renos-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-renos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-renos}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-renos} -d ${POSTGRES_DB:-renos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: renos-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      - --requirepass ${REDIS_PASSWORD}
+      - --maxmemory 128mb
+      - --maxmemory-policy allkeys-lru
+      - --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ─── NATS 2.10 ──────────────────────────────────────────────────────────────
+  nats:
+    image: nats:2.10-alpine
+    container_name: renos-nats
+    restart: always
+    ports:
+      - "4222:4222"
+      - "6222:6222"
+      - "8222:8222"
+    command:
+      - --jetstream
+      - --http_port=8222
+      - --cluster_name=renos
+      - --cluster=nats://0.0.0.0:6222
+      - --store_dir=/data
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q http://localhost:8222/healthz -O /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ─── RenOS Core ─────────────────────────────────────────────────────────────
+  renos-core:
+    build:
+      context: ../..
+      dockerfile: core/Dockerfile
+      network: host
+      args:
+        VERSION: ${RENOS_VERSION:-dev}
+        COMMIT: ${BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    container_name: renos-core
+    restart: always
+    ports:
+      - "8443:8443"
+      - "8444:8444"
+    command: ["sh", "-c", "renos-core migrate && renos-core"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      RENOS_DATABASE_URL: postgres://${POSTGRES_USER:-renos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-renos}?sslmode=disable
+      RENOS_NATS_URL: nats://nats:4222
+      RENOS_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RENOS_PORT: "8443"
+      RENOS_GRPC_PORT: "8444"
+      RENOS_EXTERNAL_URL: ${RENOS_EXTERNAL_URL:?Set RENOS_EXTERNAL_URL in .env}
+      RENOS_JWT_SECRET: ${RENOS_JWT_SECRET:?Set RENOS_JWT_SECRET in .env}
+      RENOS_ENCRYPTION_KEY: ${RENOS_ENCRYPTION_KEY:?Set RENOS_ENCRYPTION_KEY in .env}
+      RENOS_CA_CERT_DIR: /var/lib/renos/ca
+      RENOS_ADMIN_EMAIL: ${RENOS_ADMIN_EMAIL:-admin@renos.local}
+      RENOS_ADMIN_PASSWORD: ${RENOS_ADMIN_PASSWORD:?Set RENOS_ADMIN_PASSWORD in .env}
+      RENOS_LOG_LEVEL: ${RENOS_LOG_LEVEL:-info}
+      RENOS_DATA_DIR: /var/lib/renos/data
+    volumes:
+      - renos-data:/var/lib/renos/data
+      - renos-ca:/var/lib/renos/ca
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q http://localhost:8443/api/v1/healthz -O /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ─── RenOS Hub ──────────────────────────────────────────────────────────────
+  renos-hub:
+    build:
+      context: ../../hub
+      dockerfile: Dockerfile
+      network: host
+      args:
+        NODE_ENV: production
+    container_name: renos-hub
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      renos-core:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      RENOS_API_URL: http://renos-core:8443
+      RENOS_EXTERNAL_URL: ${RENOS_EXTERNAL_URL}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ─── RenOS Agent ────────────────────────────────────────────────────────────
+  renos-agent:
+    build:
+      context: ../..
+      dockerfile: agent/Dockerfile
+      network: host
+    container_name: renos-agent
+    restart: always
+    command: ["run"]
+    privileged: true
+    depends_on:
+      renos-core:
+        condition: service_healthy
+    environment:
+      RENOS_CORE_URL: http://renos-core:8443
+      RENOS_NATS_URL: nats://nats:4222
+      RENOS_LOG_LEVEL: ${RENOS_LOG_LEVEL:-info}
+      RENOS_DATA_DIR: /var/lib/renos/agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - renos-data:/var/lib/renos/agent
+    networks:
+      - renos-backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ─── Nginx (Reverse Proxy) ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: renos-nginx
+    restart: always
+    ports:
+      - "${RENOS_HTTP_PORT:-80}:80"
+      - "${RENOS_HTTPS_PORT:-443}:443"
+    depends_on:
+      renos-core:
+        condition: service_healthy
+      renos-hub:
+        condition: service_healthy
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - renos-ca:/etc/nginx/ssl:ro
+    networks:
+      - renos-backend
+      - renos-frontend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          memory: 64M
+
+volumes:
+  pgdata:
+    driver: local
+  redis-data:
+    driver: local
+  nats-data:
+    driver: local
+  renos-data:
+    driver: local
+  renos-ca:
+    driver: local
+  renos-backups:
+    driver: local

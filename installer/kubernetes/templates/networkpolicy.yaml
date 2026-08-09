@@ -1,0 +1,194 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-core
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: core
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: hub
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: agent
+      ports:
+        - port: {{ .Values.core.service.port }}
+        - port: {{ .Values.core.service.metricsPort }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: nats
+      ports:
+        - port: {{ .Values.postgres.service.port }}
+        - port: {{ .Values.redis.service.port }}
+        - port: {{ .Values.nats.service.clientPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-hub
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: hub
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: core
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: agent
+      ports:
+        - port: {{ .Values.hub.service.port }}
+        - port: {{ .Values.hub.service.metricsPort }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: nats
+      ports:
+        - port: {{ .Values.postgres.service.port }}
+        - port: {{ .Values.redis.service.port }}
+        - port: {{ .Values.nats.service.clientPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-agent
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: core
+      ports:
+        - port: 9000
+  egress:
+    - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-data-services
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: core
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: hub
+      ports:
+        - port: {{ .Values.postgres.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-redis
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: core
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: hub
+      ports:
+        - port: {{ .Values.redis.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "renos.fullname" . }}-allow-nats
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: nats
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: core
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: hub
+      ports:
+        - port: {{ .Values.nats.service.clientPort }}
+        - port: {{ .Values.nats.service.clusterPort }}
+        - port: {{ .Values.nats.service.monitorPort }}
+{{- end }}

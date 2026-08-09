@@ -1,0 +1,4 @@
+# RenOS e2e run 2026-08-02T23:47:00Z
+url=http://localhost:8443
+SKIP	install	--skip-install requested
+PASS	health	core healthy

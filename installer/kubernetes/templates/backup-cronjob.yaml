@@ -1,0 +1,103 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "renos.fullname" . }}-backup
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - {{ .Values.backup.storage.accessMode }}
+  {{- if .Values.backup.storage.storageClass }}
+  storageClassName: {{ .Values.backup.storage.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage.size }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "renos.fullname" . }}-backup
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "{{ .Values.backup.schedule }}"
+  successfulJobsHistoryLimit: {{ .Values.backup.retention.copies | default 14 }}
+  failedJobsHistoryLimit: 5
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "renos.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          {{- include "renos.imagePullSecret" . | nindent 10 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+              env:
+                - name: PGHOST
+                  value: {{ include "renos.postgres.fullname" . }}
+                - name: PGPORT
+                  value: {{ .Values.postgres.service.port | quote }}
+                - name: PGDATABASE
+                  value: {{ .Values.postgres.auth.database }}
+                - name: PGUSER
+                  value: {{ .Values.postgres.auth.username }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      {{- if .Values.postgres.auth.existingSecret }}
+                      name: {{ .Values.postgres.auth.existingSecret }}
+                      key: postgres-password
+                      {{- else }}
+                      name: {{ include "renos.fullname" . }}
+                      key: postgres-password
+                      {{- end }}
+                - name: BACKUP_DIR
+                  value: /backup
+                - name: RETENTION_DAYS
+                  value: {{ .Values.backup.retention.days | quote }}
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="${BACKUP_DIR}/renos_backup_${TIMESTAMP}.sql.gz"
+                  
+                  echo "Starting backup to ${BACKUP_FILE}..."
+                  pg_dumpall -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" \
+                    | gzip > "${BACKUP_FILE}"
+                  
+                  if [ $? -eq 0 ]; then
+                    echo "Backup completed: ${BACKUP_FILE}"
+                    ls -lh "${BACKUP_FILE}"
+                    
+                    # Cleanup old backups
+                    echo "Cleaning backups older than ${RETENTION_DAYS} days..."
+                    find "${BACKUP_DIR}" -name "renos_backup_*.sql.gz" -type f \
+                      -mtime +${RETENTION_DAYS} -delete
+                    echo "Cleanup complete."
+                  else
+                    echo "Backup failed!"
+                    exit 1
+                  fi
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              volumeMounts:
+                - name: backup-data
+                  mountPath: /backup
+          volumes:
+            - name: backup-data
+              persistentVolumeClaim:
+                claimName: {{ include "renos.fullname" . }}-backup
+{{- end }}

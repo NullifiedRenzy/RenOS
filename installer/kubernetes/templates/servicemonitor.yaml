@@ -1,0 +1,99 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "renos.core.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    app.kubernetes.io/component: core
+spec:
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      path: /metrics
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace | default "renos" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "renos.hub.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    app.kubernetes.io/component: hub
+spec:
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      path: /metrics
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: hub
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace | default "renos" }}
+{{- if .Values.monitoring.prometheusRules.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "renos.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRules.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: renos
+      interval: 30s
+      rules:
+        - alert: RenOSCoreDown
+          expr: up{app_kubernetes_component="core"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "RenOS Core is down"
+            description: "RenOS Core pod has been down for more than 1 minute."
+        - alert: RenOSHubDown
+          expr: up{app_kubernetes_component="hub"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "RenOS Hub is down"
+            description: "RenOS Hub pod has been down for more than 1 minute."
+        - alert: RenOSHighCPUUsage
+          expr: avg(rate(container_cpu_usage_seconds_total{namespace="{{ .Release.Namespace | default "renos" }}"}[5m])) by (pod) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage on RenOS pod {{ $labels.pod }}"
+        - alert: RenOSHighMemoryUsage
+          expr: avg(container_memory_working_set_bytes{namespace="{{ .Release.Namespace | default "renos" }}"}) by (pod) / avg(kube_pod_container_resource_limits_memory_bytes{namespace="{{ .Release.Namespace | default "renos" }}"}) by (pod) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on RenOS pod {{ $labels.pod }}"
+{{- end }}
+{{- end }}

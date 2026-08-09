@@ -1,0 +1,15 @@
+# RenOS e2e run 2026-08-02T23:47:54Z
+url=http://localhost:8443
+SKIP	install	--skip-install requested
+PASS	health	core healthy
+FAIL	login	login failed (HTTP 401) — check ADMIN_EMAIL/ADMIN_PASSWORD and backend
+SKIP	enroll	no auth token (login phase failed/skipped)
+SKIP	command	no auth token (login phase failed/skipped)
+SKIP	workflow	no auth token (login phase failed/skipped)
+SKIP	terminal	no auth token (login phase failed/skipped)
+SKIP	plugin	no auth token (login phase failed/skipped)
+SKIP	ai	no auth token (login phase failed/skipped)
+SKIP	backup	--quick: backup skipped
+SKIP	restore	--quick: restore skipped
+PASS	upgrade	upgrade verifier + update API checks passed
+PASS	rollback	rollback verifier + rollback API checks passed

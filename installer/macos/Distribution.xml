@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<installer-gui-script minSpecVersion="2">
+    <title>RenOS Agent</title>
+    <version>1.0.0</version>
+    <identifier>com.renos.agent</identifier>
+
+    <!-- Architecture: Universal (Intel + Apple Silicon) -->
+    <options
+        customize="allow"
+        allow-external-scripts="no"
+        hostArchitectures="i386,x86_64,arm64"
+        rootVolumeOnly="true"
+        require-scripts="true" />
+
+    <!-- Distribution Method -->
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true" />
+
+    <!-- Minimum OS Version Check -->
+    <installation-check script="installCheck();" />
+    <script>
+        function installCheck() {
+            var result = true;
+            var system = system.version.ProductVersion;
+            var major = parseInt(system.split(".")[0]);
+            if (major &lt; 12) {
+                result = false;
+                my.result.message = "This installer requires macOS 12 Monterey or later.";
+                my.result.type = "Fatal";
+            }
+            return result;
+        }
+    </script>
+
+    <!-- Volume Check: 10GB+ free space -->
+    <volume-check>
+        <allowedOSVersion>
+            <osVersion min="12.0" />
+        </allowedOSVersion>
+        <requiredDiskSpace>
+            <freeSpace>10</freeSpace>
+            <unit>GB</unit>
+        </requiredDiskSpace>
+    </volume-check>
+
+    <!-- RAM Check via JavaScript -->
+    <script>
+        function hasEnoughRAM() {
+            var mem = system.hardware.PhysicalMemory;
+            if (mem &lt; 2048) {
+                my.result.message = "RenOS Agent requires at least 2 GB of RAM.";
+                my.result.type = "Fatal";
+                return false;
+            }
+            return true;
+        }
+    </script>
+
+    <!-- Welcome -->
+    <pkg-ref id="com.renos.agent.welcome">
+        <bundle-version>
+            <bundle id="com.renos.agent" CFBundleVersion="1.0.0" />
+        </bundle-version>
+    </pkg-ref>
+
+    <!-- Choices -->
+    <choice
+        id="renos-core"
+        title="RenOS Agent"
+        description="Core RenOS Agent service for device enrollment and management."
+        selected="true"
+        enabled="true"
+        start_selected="true"
+        start_enabled="true">
+        <pkg-ref id="com.renos.agent.core" />
+    </choice>
+
+    <choice
+        id="renos-launchagent"
+        title="LaunchAgent"
+        description="LaunchAgent plist for automatic startup and keep-alive."
+        selected="true"
+        enabled="true"
+        start_selected="true"
+        start_enabled="true">
+        <pkg-ref id="com.renos.agent.launchagent" />
+    </choice>
+
+    <choice
+        id="renos-keychain"
+        title="Keychain Integration"
+        description="macOS Keychain integration for secure credential storage."
+        selected="true"
+        enabled="true"
+        start_selected="true"
+        start_enabled="true">
+        <pkg-ref id="com.renos.agent.keychain" />
+    </choice>
+
+    <!-- Package References -->
+    <pkg-ref id="com.renos.agent.core"
+             version="1.0.0"
+             installKBytes="50000"
+             auth="Root"
+             onConclusion="RequireRestart">RenOS-Agent-1.0.0-component.pkg</pkg-ref>
+
+    <!-- Localized Strings -->
+    <locale lang="en">
+        <strings>
+            <string key="WelcomeTitle" value="Welcome to RenOS Agent" />
+            <string key="WelcomeDescription" value="Install RenOS Agent on your Mac." />
+            <string key="ReadMeTitle" value="Before You Install" />
+            <string key="ReadMeDescription" value="Important information before installing." />
+            <string key="LicenseTitle" value="Software License Agreement" />
+            <string key="LicenseDescription" value="Please read the license agreement." />
+            <string key="ConclusionTitle" value="Installation Complete" />
+            <string key="ConclusionDescription" value="RenOS Agent has been installed successfully." />
+        </strings>
+    </locale>
+
+    <!-- Installer Sections -->
+    <pkg-ref id="com.renos.agent.welcome" />
+    <pkg-ref id="com.renos.agent.readme" />
+    <pkg-ref id="com.renos.agent.license" />
+    <pkg-ref id="com.renos.agent.conclusion" />
+
+    <!-- Custom Background -->
+    <background file="background.png"
+                alignment="bottomleft"
+                scaling="aspectfit"
+                mime-type="image/png" />
+
+    <!-- Script checks -->
+    <script>
+        function installation_check() {
+            return hasEnoughRAM();
+        }
+    </script>
+</installer-gui-script>

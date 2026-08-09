@@ -1,0 +1,29 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "renos.core.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "renos.hub.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: hub

@@ -1,0 +1,15 @@
+# RenOS e2e run 2026-08-03T00:06:15Z
+url=http://localhost:8444
+PASS	install	backend already reachable at http://localhost:8444/api/v1/healthz
+PASS	login	logged in as admin@renos.local
+PASS	health	core healthy
+PASS	enroll	device enrolled, connected, and listed (15c0b304-5169-4e6b-bc30-bf314e70690e)
+FAIL	command	command flow assertions failed
+PASS	workflow	workflow created, executed, and listed (2645a42a-89a7-494b-8e00-386ad4a14ab8)
+PASS	terminal	terminal session endpoints responding
+PASS	plugin	plugin/marketplace endpoints responding
+PASS	ai	AI endpoints responding
+SKIP	backup	renos-backup.sh requires root and no completed backup exists to validate
+SKIP	restore	no completed backup to validate
+PASS	upgrade	upgrade verifier + update API checks passed
+PASS	rollback	rollback verifier + rollback API checks passed

@@ -1,0 +1,130 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.postgres.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.postgres.service.port }}
+      targetPort: 5432
+      name: postgres
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.postgres.fullname" . }}-headless
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: {{ .Values.postgres.service.port }}
+      targetPort: 5432
+      name: postgres
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "renos.postgres.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "renos.postgres.fullname" . }}-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "renos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      {{- include "renos.imagePullSecret" . | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ include "renos.image" (dict "repository" .Values.images.postgres.repository "tag" .Values.images.postgres.tag "defaultTag" "16-alpine" "Values" .Values) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.auth.username }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.auth.database }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.postgres.auth.existingSecret }}
+                  name: {{ .Values.postgres.auth.existingSecret }}
+                  key: postgres-password
+                  {{- else }}
+                  name: {{ include "renos.fullname" . }}
+                  key: postgres-password
+                  {{- end }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.auth.username }}
+                - -d
+                - {{ .Values.postgres.auth.database }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.auth.username }}
+                - -d
+                - {{ .Values.postgres.auth.database }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  {{- if .Values.postgres.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "renos.labels" . | nindent 10 }}
+          app.kubernetes.io/component: postgres
+      spec:
+        accessModes:
+          - {{ .Values.postgres.persistence.accessMode }}
+        {{- if .Values.postgres.persistence.storageClass }}
+        storageClassName: {{ .Values.postgres.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.persistence.size }}
+  {{- end }}
+{{- end }}

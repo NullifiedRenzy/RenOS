@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "renos.agent.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+        {{- include "renos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
+    spec:
+      {{- include "renos.imagePullSecret" . | nindent 6 }}
+      hostPID: true
+      hostIPC: true
+      containers:
+        - name: agent
+          image: {{ include "renos.image" (dict "repository" .Values.images.agent.repository "tag" .Values.images.agent.tag "defaultTag" .Chart.AppVersion "Values" .Values) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - SYS_PTRACE
+                - NET_ADMIN
+                - ALL
+          ports:
+            - containerPort: 9000
+              name: grpc
+              protocol: TCP
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - configMapRef:
+                name: {{ include "renos.fullname" . }}-config
+            - secretRef:
+                {{- if .Values.secrets.existingSecret }}
+                name: {{ .Values.secrets.existingSecret }}
+                {{- else }}
+                name: {{ include "renos.fullname" . }}
+                {{- end }}
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+          volumeMounts:
+            - name: docker-socket
+              mountPath: {{ .Values.agent.dockerSocketPath }}
+            - name: host-root
+              mountPath: /host
+              readOnly: true
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: grpc
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: grpc
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+      tolerations:
+        {{- toYaml .Values.agent.tolerations | nindent 8 }}
+      nodeSelector:
+        {{- toYaml .Values.agent.nodeSelector | nindent 8 }}
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: {{ .Values.agent.dockerSocketPath }}
+            type: Socket
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory

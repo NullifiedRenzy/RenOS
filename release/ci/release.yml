@@ -1,0 +1,447 @@
+name: RenOS Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  VERSION: "1.0.0"
+  GO_VERSION: "1.25"
+  RUST_VERSION: "stable"
+  NODE_VERSION: "20"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate tag and source
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      commit: ${{ steps.parse.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag format
+        run: |
+          if ! echo "${{ github.ref_name }}" | grep -qP '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+            echo "Invalid tag format: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+      - name: Validate CHANGELOG entry
+        run: |
+          VER="${{ steps.parse.outputs.version }}"
+          grep -q "^## \[${VER}\]" CHANGELOG.md || {
+            echo "CHANGELOG.md missing entry for v${VER}"
+            exit 1
+          }
+
+  build-linux:
+    name: Build Linux (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    needs: [validate]
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      GOARCH: ${{ matrix.arch }}
+      GOOS: linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            core/go.sum
+            renctl/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            ${{ matrix.arch == 'amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent/target
+          key: ${{ runner.os }}-cargo-${{ matrix.arch }}-${{ hashFiles('agent/Cargo.lock') }}
+
+      - name: Install cross-compilation deps (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Set build environment
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Build Go components
+        run: |
+          mkdir -p artifacts/linux-${{ matrix.arch }}
+          for dir in core renctl; do
+            cd "$dir"
+            go build -trimpath \
+              -ldflags="-s -w \
+                -X github.com/renos-project/renos/core/api.Version=${{ needs.validate.outputs.version }} \
+                -X github.com/renos-project/renos/core/api.Commit=${GIT_COMMIT} \
+                -X github.com/renos-project/renos/core/api.BuildTime=${BUILD_TIME}" \
+              -buildvcs=false \
+              -o "../artifacts/linux-${{ matrix.arch }}/${{ dir == 'core' && 'renos-core' || 'renctl' }}" \
+              "${{ dir == 'core' && './cmd/renos-core' || '.' }}"
+            cd ..
+          done
+          cd core
+          go build -trimpath \
+            -ldflags="-s -w \
+              -X github.com/renos-project/renos/core/api.Version=${{ needs.validate.outputs.version }} \
+              -X github.com/renos-project/renos/core/api.Commit=${GIT_COMMIT} \
+              -X github.com/renos-project/renos/core/api.BuildTime=${BUILD_TIME}" \
+            -buildvcs=false \
+            -o "../artifacts/linux-${{ matrix.arch }}/renos-plugin" \
+            "./cmd/renos-plugin"
+          cd ..
+
+      - name: Build Rust agent
+        run: |
+          TARGET="${{ matrix.arch == 'amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}"
+          cd agent
+          cargo build --release --target "$TARGET"
+          cp "target/${TARGET}/release/renos-agent" "../artifacts/linux-${{ matrix.arch }}/"
+          cd ..
+
+      - name: Package artifacts
+        run: |
+          cd artifacts/linux-${{ matrix.arch }}
+          for bin in renos-core renctl renos-plugin renos-agent; do
+            [ -f "$bin" ] || continue
+            gpg --batch --yes --detach-sign --armor -u "${{ vars.GPG_KEY_ID || 'RENOS_RELEASE' }}" "$bin" 2>/dev/null || true
+          done
+          cd ../..
+
+      - name: Create tarball
+        run: |
+          tar -czf "artifacts/renos-linux-${{ matrix.arch }}-${{ needs.validate.outputs.version }}.tar.gz" \
+            -C artifacts/linux-${{ matrix.arch }} .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: artifacts/linux-${{ matrix.arch }}/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-linux-${{ matrix.arch }}
+          path: artifacts/renos-linux-${{ matrix.arch }}-${{ needs.validate.outputs.version }}.tar.gz
+          retention-days: 7
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-latest' || 'macos-13' }}
+    needs: [validate]
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      GOARCH: ${{ matrix.arch }}
+      GOOS: darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            ${{ matrix.arch == 'amd64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent/target
+          key: ${{ runner.os }}-cargo-${{ matrix.arch }}-${{ hashFiles('agent/Cargo.lock') }}
+
+      - name: Set build environment
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Build Rust agent
+        run: |
+          TARGET="${{ matrix.arch == 'amd64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}"
+          mkdir -p "artifacts/darwin-${{ matrix.arch }}"
+          cd agent
+          cargo build --release --target "$TARGET"
+          cp "target/${TARGET}/release/renos-agent" "../artifacts/darwin-${{ matrix.arch }}/"
+          cd ..
+
+      - name: Sign binaries
+        run: |
+          cd artifacts/darwin-${{ matrix.arch }}
+          for bin in renos-agent; do
+            [ -f "$bin" ] || continue
+            gpg --batch --yes --detach-sign --armor -u "${{ vars.GPG_KEY_ID || 'RENOS_RELEASE' }}" "$bin" 2>/dev/null || true
+          done
+          cd ../..
+
+      - name: Create tarball
+        run: |
+          tar -czf "artifacts/renos-agent-1.0.0-darwin-${{ matrix.arch }}.tar.gz" \
+            -C artifacts/darwin-${{ matrix.arch }} .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: darwin-${{ matrix.arch }}
+          path: artifacts/darwin-${{ matrix.arch }}/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-darwin-${{ matrix.arch }}
+          path: artifacts/renos-agent-1.0.0-darwin-${{ matrix.arch }}.tar.gz
+          retention-days: 7
+
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: ubuntu-latest
+    needs: [validate]
+    env:
+      GOARCH: amd64
+      GOOS: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent/target
+          key: ${{ runner.os }}-cargo-windows-${{ hashFiles('agent/Cargo.lock') }}
+
+      - name: Install cross-compilation deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+
+      - name: Set build environment
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Build Rust agent
+        run: |
+          mkdir -p artifacts/windows-amd64
+          cd agent
+          cargo build --release --target x86_64-pc-windows-gnu
+          cp "target/x86_64-pc-windows-gnu/release/renos-agent.exe" "../artifacts/windows-amd64/"
+          cd ..
+
+      - name: Sign binaries
+        run: |
+          cd artifacts/windows-amd64
+          for bin in renos-agent.exe; do
+            [ -f "$bin" ] || continue
+            gpg --batch --yes --detach-sign --armor -u "${{ vars.GPG_KEY_ID || 'RENOS_RELEASE' }}" "$bin" 2>/dev/null || true
+          done
+          cd ../..
+
+      - name: Create tarball
+        run: |
+          tar -czf "artifacts/renos-agent-1.0.0-windows-amd64.tar.gz" \
+            -C artifacts/windows-amd64 .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-amd64
+          path: artifacts/windows-amd64/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-windows-amd64
+          path: artifacts/renos-agent-1.0.0-windows-amd64.tar.gz
+          retention-days: 7
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SPDX SBOM
+        run: |
+          syft dir:. \
+            --output spdx-json \
+            --file "release/sbom/renos-${{ needs.validate.outputs.version }}.spdx.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: release/sbom/
+          retention-days: 7
+
+  sign:
+    name: Sign artifacts
+    runs-on: ubuntu-latest
+    needs: [validate, build-linux, build-macos, build-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Import signing key
+        if: vars.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "${{ vars.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          echo "${{ vars.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
+            --sign /dev/null 2>/dev/null || true
+
+      - name: Sign all binaries
+        run: |
+          find artifacts -type f \( -name "renos-*" -o -name "renctl" -o -name "renos-agent*" \) \
+            ! -name "*.asc" ! -name "*.sha256" ! -name "*.json" | while read -r f; do
+            if file "$f" | grep -qE "ELF|Mach-O|PE32|executable"; then
+              gpg --batch --yes --detach-sign --armor \
+                -u "${GPG_KEY_ID:-RENOS_RELEASE}" "$f" 2>/dev/null || true
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signatures
+          path: artifacts/**/*.asc
+          retention-days: 7
+
+  checksums:
+    name: Generate checksums
+    runs-on: ubuntu-latest
+    needs: [validate, build-linux, build-macos, build-windows, sign]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Gather tarballs
+        run: |
+          mkdir -p dist
+          find artifacts -name "*.tar.gz" -exec cp {} dist/ \;
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          echo "# RenOS ${{ needs.validate.outputs.version }} - SHA256 Checksums" > SHA256SUMS
+          echo "# Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> SHA256SUMS
+          echo "" >> SHA256SUMS
+          sha256sum *.tar.gz >> SHA256SUMS
+
+      - name: Sign checksums
+        run: |
+          cd dist
+          gpg --batch --yes --detach-sign --armor \
+            -u "${GPG_KEY_ID:-RENOS_RELEASE}" SHA256SUMS 2>/dev/null || true
+
+      - name: Generate build-info.json
+        run: |
+          cd dist
+          cat > build-info.json <<-EOF
+          {
+            "project": "renos",
+            "version": "${{ needs.validate.outputs.version }}",
+            "commit": "${{ needs.validate.outputs.commit }}",
+            "buildTime": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, checksums, sbom]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: sbom
+
+      - name: Generate release notes
+        run: |
+          VER="${{ needs.validate.outputs.version }}"
+          if [[ -f "release/docs/release-notes.md" ]]; then
+            # Extract section for this version
+            awk "/^## \\[${VER}\\]/,/^## /" release/docs/release-notes.md | head -n -1 > /tmp/release-notes.md
+          fi
+          if [[ ! -s /tmp/release-notes.md ]]; then
+            cat > /tmp/release-notes.md <<-EOF
+          ## RenOS v${VER}
+
+          Release artifacts for RenOS ${VER}.
+          EOF
+          fi
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "RenOS ${{ github.ref_name }}" \
+            --notes-file /tmp/release-notes.md \
+            dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.asc dist/build-info.json \
+            sbom/renos-${{ needs.validate.outputs.version }}.spdx.json

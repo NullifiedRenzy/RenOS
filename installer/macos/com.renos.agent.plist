@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service label -->
+    <key>Label</key>
+    <string>com.renos.agent</string>
+
+    <!-- Executable path -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Application Support/RenOS/renos-agent</string>
+        <string>--config</string>
+        <string>/Library/Application Support/RenOS/config.json</string>
+    </array>
+
+    <!-- Start agent immediately upon load -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Keep agent alive; always restart on exit -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>CrashedAfterExit</key>
+        <true/>
+    </dict>
+
+    <!-- Watch for config changes and restart agent -->
+    <key>WatchPaths</key>
+    <array>
+        <string>/Library/Application Support/RenOS/config.json</string>
+        <string>/Library/Application Support/RenOS/state</string>
+    </array>
+
+    <!-- Queue directories for on-demand file system events -->
+    <key>QueueDirectories</key>
+    <array>
+        <string>/Library/Application Support/RenOS/state</string>
+    </array>
+
+    <!-- Throttle restart attempts to prevent rapid cycling -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- Standard I/O paths for logging -->
+    <key>StandardOutPath</key>
+    <string>/var/log/renos/agent-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/renos/agent-stderr.log</string>
+
+    <!-- Environment variables loaded from a file via config; defaults -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>RENOS_CONFIG_PATH</key>
+        <string>/Library/Application Support/RenOS/config.json</string>
+        <key>RENOS_LOG_DIR</key>
+        <string>/var/log/renos</string>
+        <key>RENOS_HOME</key>
+        <string>/Library/Application Support/RenOS</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Run at system level (not per-user) -->
+    <key>UserName</key>
+    <string>root</string>
+
+    <!-- Group -->
+    <key>GroupName</key>
+    <string>wheel</string>
+
+    <!-- Process type: Background (lowest priority impact on system) -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Limit number of times launchd will respawn the job -->
+    <key>TimeOut</key>
+    <integer>30</integer>
+
+    <!-- Disable sudden termination for clean shutdown -->
+    <key>EnableTransactions</key>
+    <true/>
+
+    <!-- Do not spawn job if system is in a low-memory state -->
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <!-- Log to unified log system for diagnostics -->
+    <key>StandardOutPath</key>
+    <string>/var/log/renos/agent-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/renos/agent-stderr.log</string>
+</dict>
+</plist>

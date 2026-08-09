@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "renos.hub.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+spec:
+  replicas: {{ .Values.hub.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: hub
+  template:
+    metadata:
+      labels:
+        {{- include "renos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: hub
+      {{- if .Values.monitoring.serviceMonitor.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.hub.service.metricsPort | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
+    spec:
+      {{- include "renos.imagePullSecret" . | nindent 6 }}
+      containers:
+        - name: hub
+          image: {{ include "renos.image" (dict "repository" .Values.images.hub.repository "tag" .Values.images.hub.tag "defaultTag" .Chart.AppVersion "Values" .Values) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.hub.service.port }}
+              name: http
+              protocol: TCP
+            - containerPort: {{ .Values.hub.service.metricsPort }}
+              name: metrics
+              protocol: TCP
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - configMapRef:
+                name: {{ include "renos.fullname" . }}-config
+            - secretRef:
+                {{- if .Values.secrets.existingSecret }}
+                name: {{ .Values.secrets.existingSecret }}
+                {{- else }}
+                name: {{ include "renos.fullname" . }}
+                {{- end }}
+          resources:
+            {{- toYaml .Values.hub.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.hub.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+  {{- if .Values.monitoring.serviceMonitor.enabled }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.hub.service.metricsPort | quote }}
+  {{- end }}
+spec:
+  type: {{ .Values.hub.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.hub.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.hub.service.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+---
+{{- if .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "renos.hub.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hub
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "renos.hub.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}

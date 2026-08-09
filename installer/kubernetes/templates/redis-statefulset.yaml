@@ -1,0 +1,114 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.redis.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.redis.service.port }}
+      targetPort: 6379
+      name: redis
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "renos.redis.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "renos.redis.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "renos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      {{- include "renos.imagePullSecret" . | nindent 6 }}
+      containers:
+        - name: redis
+          image: {{ include "renos.image" (dict "repository" .Values.images.redis.repository "tag" .Values.images.redis.tag "defaultTag" "7-alpine" "Values" .Values) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 6379
+              name: redis
+          env:
+            {{- if .Values.redis.auth.enabled }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.redis.auth.existingSecret }}
+                  name: {{ .Values.redis.auth.existingSecret }}
+                  key: redis-password
+                  {{- else }}
+                  name: {{ include "renos.fullname" . }}
+                  key: redis-password
+                  {{- end }}
+            {{- end }}
+          args:
+            - redis-server
+            {{- if .Values.redis.auth.enabled }}
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            {{- end }}
+            - --appendonly
+            - "yes"
+            - --save
+            - "900 1"
+            - --save
+            - "300 10"
+            - --save
+            - "60 10000"
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  {{- if .Values.redis.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "renos.labels" . | nindent 10 }}
+          app.kubernetes.io/component: redis
+      spec:
+        accessModes:
+          - {{ .Values.redis.persistence.accessMode }}
+        {{- if .Values.redis.persistence.storageClass }}
+        storageClassName: {{ .Values.redis.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "renos.fullname" . }}-config
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
+data:
+  NODE_ENV: {{ .Values.core.env.NODE_ENV | default "production" }}
+  RENOS_LOG_LEVEL: {{ .Values.core.logLevel }}
+  RENOS_LOG_FORMAT: {{ .Values.core.env.RENOS_LOG_FORMAT | default "json" }}
+  RENOS_DB_HOST: {{ include "renos.postgres.fullname" . }}
+  RENOS_DB_PORT: {{ .Values.postgres.service.port | quote }}
+  RENOS_DB_NAME: {{ .Values.postgres.auth.database }}
+  RENOS_DB_USER: {{ .Values.postgres.auth.username }}
+  RENOS_REDIS_HOST: {{ include "renos.redis.fullname" . }}
+  RENOS_REDIS_PORT: {{ .Values.redis.service.port | quote }}
+  RENOS_NATS_HOST: {{ include "renos.nats.fullname" . }}
+  RENOS_NATS_CLIENT_PORT: {{ .Values.nats.service.clientPort | quote }}
+  RENOS_NATS_CLUSTER_PORT: {{ .Values.nats.service.clusterPort | quote }}
+  RENOS_NATS_MONITOR_PORT: {{ .Values.nats.service.monitorPort | quote }}

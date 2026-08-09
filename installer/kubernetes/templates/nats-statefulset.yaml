@@ -1,0 +1,169 @@
+{{- if .Values.nats.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.nats.fullname" . }}-client
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.nats.service.clientPort }}
+      targetPort: 4222
+      name: client
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.nats.fullname" . }}-cluster
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: {{ .Values.nats.service.clusterPort }}
+      targetPort: 6222
+      name: cluster
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "renos.nats.fullname" . }}-monitor
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.nats.service.monitorPort }}
+      targetPort: 8222
+      name: monitor
+  selector:
+    {{- include "renos.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "renos.nats.fullname" . }}
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+spec:
+  serviceName: {{ include "renos.nats.fullname" . }}-cluster
+  replicas: {{ .Values.nats.cluster.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "renos.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nats
+  template:
+    metadata:
+      labels:
+        {{- include "renos.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nats
+    spec:
+      {{- include "renos.imagePullSecret" . | nindent 6 }}
+      containers:
+        - name: nats
+          image: {{ include "renos.image" (dict "repository" .Values.images.nats.repository "tag" .Values.images.nats.tag "defaultTag" "2-alpine" "Values" .Values) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 4222
+              name: client
+            - containerPort: 6222
+              name: cluster
+            - containerPort: 8222
+              name: monitor
+          args:
+            - --config
+            - /etc/nats/nats.conf
+          resources:
+            {{- toYaml .Values.nats.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nats
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "renos.fullname" . }}-nats-config
+  {{- if .Values.nats.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "renos.labels" . | nindent 10 }}
+          app.kubernetes.io/component: nats
+      spec:
+        accessModes:
+          - {{ .Values.nats.persistence.accessMode }}
+        {{- if .Values.nats.persistence.storageClass }}
+        storageClassName: {{ .Values.nats.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.nats.persistence.size }}
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "renos.fullname" . }}-nats-config
+  namespace: {{ .Release.Namespace | default "renos" }}
+  labels:
+    {{- include "renos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+data:
+  nats.conf: |
+    port: 4222
+    http_port: 8222
+    cluster {
+      port: 6222
+      {{- if .Values.nats.cluster.enabled }}
+      name: {{ include "renos.nats.fullname" . }}
+      routes [
+        {{- $name := include "renos.nats.fullname" . }}
+        {{- $replicas := .Values.nats.cluster.replicas | int }}
+        {{- range $i := until $replicas }}
+        nats://{{ $name }}-{{ $i }}.{{ $name }}-cluster.{{ $.Release.Namespace }}:6222
+        {{- end }}
+      ]
+      {{- end }}
+    }
+    store_dir: /data
+    {{- if .Values.nats.persistence.enabled }}
+    jetstream {
+      store_dir: /data
+      max_memory_store: 1GB
+    }
+    {{- end }}
+{{- end }}
