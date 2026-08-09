@@ -1,25 +1,36 @@
 mod commands;
 mod config;
+mod container_stats;
 mod docker;
 mod docker_actions;
+mod docker_compose;
 mod docker_images;
 mod docker_networks;
 mod docker_volumes;
 mod enroll;
 mod files;
+mod file_transfers;
 mod grpc_client;
 mod health;
 mod identity;
 mod network;
+mod nats_exec;
+mod nats_process;
+mod nats_proxmox;
+mod nats_terminal;
 mod platform;
+mod plugins;
+mod processes;
+mod proxmox;
+mod pty_exec;
 mod proto;
+mod retry;
 mod service_actions;
 mod storage;
 mod systemd;
 mod systemd_services;
 mod updates;
 mod virtualization;
-mod plugins;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -51,7 +62,11 @@ enum Command {
         core: Option<String>,
     },
     /// Run the agent daemon (default)
-    Run,
+    Run {
+        /// Core server URL (e.g., http://192.168.0.117)
+        #[arg(long)]
+        core: Option<String>,
+    },
     /// Print version information
     Version,
 }
@@ -72,7 +87,7 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    match cli.command.unwrap_or(Command::Run) {
+    match cli.command.unwrap_or(Command::Run { core: None }) {
         Command::Enroll { token, core } => {
             let mut cfg = config::load();
             if let Some(core_url) = core {
@@ -117,8 +132,11 @@ async fn main() {
             );
             println!("data dir: {}", platform::resolve_data_dir());
         }
-        Command::Run => {
-            let cfg = config::load();
+        Command::Run { core } => {
+            let mut cfg = config::load();
+            if let Some(core_url) = core {
+                cfg.api_url = core_url;
+            }
             let data_dir = platform::resolve_data_dir();
             tracing::info!("starting RenOS Agent v{}", env!("CARGO_PKG_VERSION"));
             tracing::info!("data dir: {data_dir} (set RENOS_DATA_DIR to override)");
@@ -135,9 +153,15 @@ async fn main() {
             );
 
             if identity.is_enrolled {
-                let device_secret = load_device_secret().expect(
-                    "device is enrolled but no device-secret.txt found — re-enroll the agent",
-                );
+                let device_secret = match load_device_secret() {
+                    Some(s) => s,
+                    None => {
+                        tracing::error!(
+                            "device is enrolled but device-secret.txt is missing — re-enroll the agent"
+                        );
+                        return;
+                    }
+                };
 
                 let device_id = identity.device_id.clone();
                 let api_url = cfg.api_url.clone();
@@ -160,6 +184,36 @@ async fn main() {
                         let health_data = health::collect();
                         if let Err(e) = client.send_heartbeat(&health_data).await {
                             tracing::warn!("heartbeat failed: {}", e);
+                        }
+                    }
+                });
+
+                // NATS executor for real-time command execution
+                let nats_url = cfg.nats_url.clone();
+                let nats_device_id = device_id.clone();
+                tokio::spawn(async move {
+                    match async_nats::connect(&nats_url).await {
+                        Ok(nc) => {
+                            tracing::info!("connected to NATS at {}", nats_url);
+                            let _ = nats_exec::start_nats_executor(nc, nats_device_id).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!("failed to connect to NATS: {} (executions disabled)", e);
+                        }
+                    }
+                });
+
+                // NATS process handler for live process management
+                let nats_proc_url = cfg.nats_url.clone();
+                let nats_proc_device_id = device_id.clone();
+                tokio::spawn(async move {
+                    match async_nats::connect(&nats_proc_url).await {
+                        Ok(nc) => {
+                            tracing::info!("connected to NATS for process management at {}", nats_proc_url);
+                            let _ = nats_process::start_nats_process_handler(nc, nats_proc_device_id).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!("failed to connect to NATS for process management: {}", e);
                         }
                     }
                 });
@@ -334,6 +388,68 @@ async fn main() {
                                 }
                             }
                             Err(e) => tracing::warn!("failed to list Docker networks: {}", e),
+                        }
+                    }
+                });
+
+                // Compose stacks
+                let cmp_api_url = api_url.clone();
+                let cmp_device_id = device_id.clone();
+                let cmp_device_secret = device_secret.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+                    loop {
+                        interval.tick().await;
+                        if !docker_compose::is_compose_available() {
+                            continue;
+                        }
+                        match docker_compose::list_compose_stacks() {
+                            Ok(stacks) => {
+                                tracing::info!("reporting {} compose stack(s)", stacks.len());
+                                if let Err(e) = docker_compose::submit_compose_stacks(
+                                    &cmp_api_url,
+                                    &cmp_device_id,
+                                    &cmp_device_secret,
+                                    &stacks,
+                                )
+                                .await
+                                {
+                                    tracing::warn!("failed to submit compose stacks: {}", e);
+                                }
+                            }
+                            Err(e) => tracing::warn!("failed to list compose stacks: {}", e),
+                        }
+                    }
+                });
+
+                // Container metrics (live stats)
+                let cms_api_url = api_url.clone();
+                let cms_device_id = device_id.clone();
+                let cms_device_secret = device_secret.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                    loop {
+                        interval.tick().await;
+                        if !docker::is_installed() {
+                            continue;
+                        }
+                        match container_stats::collect_container_stats() {
+                            Ok(metrics) => {
+                                if !metrics.is_empty() {
+                                    tracing::info!("reporting metrics for {} container(s)", metrics.len());
+                                    if let Err(e) = container_stats::submit_container_metrics(
+                                        &cms_api_url,
+                                        &cms_device_id,
+                                        &cms_device_secret,
+                                        &metrics,
+                                    )
+                                    .await
+                                    {
+                                        tracing::warn!("failed to submit container metrics: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => tracing::warn!("failed to collect container stats: {}", e),
                         }
                     }
                 });
@@ -585,7 +701,7 @@ async fn main() {
                     }
                 });
 
-                // File actions (browse, read, search)
+                // File actions (browse, read, search, create, delete, rename, move, copy, preview)
                 let file_api_url = api_url.clone();
                 let file_device_id = device_id.clone();
                 let file_device_secret = device_secret.clone();
@@ -604,9 +720,10 @@ async fn main() {
                                         act.path
                                     );
                                     let (exit_code, stdout, stderr, result_json) =
-                                        files::execute_action(
+                                        files::execute_action_with_target(
                                             &act.action_type,
                                             &act.path,
+                                            &act.target_path,
                                             &act.query,
                                         );
                                     tracing::info!(
@@ -638,6 +755,59 @@ async fn main() {
                                 }
                             }
                             Err(e) => tracing::warn!("file actions poll failed: {}", e),
+                        }
+                    }
+                });
+
+                // File transfers (upload/download chunks)
+                let ft_api_url = api_url.clone();
+                let ft_device_id = device_id.clone();
+                let ft_device_secret = device_secret.clone();
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+                    loop {
+                        interval.tick().await;
+
+                        match file_transfers::poll_pending(&ft_api_url, &ft_device_id, &ft_device_secret).await {
+                            Ok(pending) => {
+                                for transfer in &pending {
+                                    tracing::info!(
+                                        "processing file transfer {} ({})",
+                                        transfer.id,
+                                        transfer.transfer_type
+                                    );
+                                    let result = match transfer.transfer_type.as_str() {
+                                        "upload" => {
+                                            file_transfers::process_upload(
+                                                &ft_api_url,
+                                                &ft_device_id,
+                                                &ft_device_secret,
+                                                transfer,
+                                            ).await
+                                        }
+                                        "download" => {
+                                            file_transfers::process_download(
+                                                &ft_api_url,
+                                                &ft_device_id,
+                                                &ft_device_secret,
+                                                transfer,
+                                            ).await
+                                        }
+                                        _ => {
+                                            tracing::warn!("unknown transfer type: {}", transfer.transfer_type);
+                                            Ok(())
+                                        }
+                                    };
+                                    if let Err(e) = result {
+                                        tracing::warn!(
+                                            "file transfer {} failed: {}",
+                                            transfer.id,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => tracing::warn!("file transfers poll failed: {}", e),
                         }
                     }
                 });
@@ -702,6 +872,113 @@ async fn main() {
                                 }
                             }
                             Err(e) => tracing::warn!("docker actions poll failed: {}", e),
+                        }
+                    }
+                });
+
+                // ─── Proxmox state sync ──────────────────────────────────────────
+
+                if proxmox::is_proxmox() {
+                    tracing::info!("Proxmox host detected, starting proxmox sync");
+
+                    // Proxmox data collection
+                    let px_api_url = api_url.clone();
+                    let px_device_id = device_id.clone();
+                    let px_device_secret = device_secret.clone();
+                    let px_conns = cfg.proxmox_connections.clone();
+                    tokio::spawn(async move {
+                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+                        loop {
+                            interval.tick().await;
+
+                            for conn_cfg in &px_conns {
+                                let conn = proxmox::ProxmoxConnection {
+                                    host: conn_cfg.host.clone(),
+                                    port: conn_cfg.port.unwrap_or(8006),
+                                    auth: match conn_cfg.auth_type.as_deref().unwrap_or("token") {
+                                        "password" => proxmox::AuthMethod::Password {
+                                            username: conn_cfg.username.clone().unwrap_or_default(),
+                                            password: conn_cfg.password.clone().unwrap_or_default(),
+                                        },
+                                        _ => proxmox::AuthMethod::Token {
+                                            token_id: conn_cfg.token_id.clone().unwrap_or_default(),
+                                            token_secret: conn_cfg.token_secret.clone().unwrap_or_default(),
+                                        },
+                                    },
+                                    verify_ssl: conn_cfg.verify_ssl.unwrap_or(true),
+                                };
+
+                                let mut client = proxmox::ProxmoxClient::new(conn);
+                                match client.collect_all().await {
+                                    Ok(data) => {
+                                        tracing::info!(
+                                            "collected proxmox: {} nodes, {} vms, {} lxcs, {} storage, {} networks",
+                                            data.nodes.len(), data.vms.len(), data.lxcs.len(),
+                                            data.storage.len(), data.networks.len()
+                                        );
+                                        if let Err(e) = proxmox::submit_proxmox_data(
+                                            &px_api_url,
+                                            &px_device_id,
+                                            &px_device_secret,
+                                            &data,
+                                        ).await {
+                                            tracing::warn!("failed to submit proxmox data: {}", e);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("proxmox collection failed: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // NATS proxmox power action handler
+                    let nats_px_url = cfg.nats_url.clone();
+                    let nats_px_device_id = device_id.clone();
+                    let nats_px_conns: Vec<proxmox::ProxmoxConnection> = cfg.proxmox_connections.iter().map(|c| {
+                        proxmox::ProxmoxConnection {
+                            host: c.host.clone(),
+                            port: c.port.unwrap_or(8006),
+                            auth: match c.auth_type.as_deref().unwrap_or("token") {
+                                "password" => proxmox::AuthMethod::Password {
+                                    username: c.username.clone().unwrap_or_default(),
+                                    password: c.password.clone().unwrap_or_default(),
+                                },
+                                _ => proxmox::AuthMethod::Token {
+                                    token_id: c.token_id.clone().unwrap_or_default(),
+                                    token_secret: c.token_secret.clone().unwrap_or_default(),
+                                },
+                            },
+                            verify_ssl: c.verify_ssl.unwrap_or(true),
+                        }
+                    }).collect();
+                    tokio::spawn(async move {
+                        match async_nats::connect(&nats_px_url).await {
+                            Ok(nc) => {
+                                tracing::info!("connected to NATS for proxmox management at {}", nats_px_url);
+                                let _ = nats_proxmox::start_nats_proxmox_handler(nc, nats_px_device_id, nats_px_conns).await;
+                            }
+                            Err(e) => {
+                                tracing::warn!("failed to connect to NATS for proxmox: {}", e);
+                            }
+                        }
+                    });
+                }
+
+                // ─── Terminal (PTY) via NATS ─────────────────────────────────────
+
+                let term_nats_url = cfg.nats_url.clone();
+                let term_device_id = device_id.clone();
+                let pty_manager = pty_exec::PtyManager::new();
+                tokio::spawn(async move {
+                    match async_nats::connect(&term_nats_url).await {
+                        Ok(nc) => {
+                            tracing::info!("connected to NATS for terminal management at {}", term_nats_url);
+                            let _ = nats_terminal::start_nats_terminal_handler(nc, term_device_id, pty_manager).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!("failed to connect to NATS for terminal: {}", e);
                         }
                     }
                 });

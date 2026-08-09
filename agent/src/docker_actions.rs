@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use crate::docker;
+use crate::retry;
 
 #[derive(Debug, serde::Deserialize)]
 struct PendingActionsResponse {
@@ -89,33 +90,49 @@ pub async fn submit_result(
     output: &str,
     error: &str,
 ) -> Result<(), Error> {
-    let client = reqwest::Client::new();
     let url = format!("{}/api/v1/container-actions/{}/result", api_url, action_id);
+    let mut backoff = retry::Backoff::new(
+        std::time::Duration::from_millis(500),
+        std::time::Duration::from_secs(30),
+    );
+    let mut last_err = None;
 
-    let resp = client
-        .post(&url)
-        .json(&SubmitBody {
-            device_id,
-            device_secret,
-            exit_code,
-            output,
-            error,
-        })
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| Error::Http(format!("submit failed: {e}")))?;
+    for attempt in 1..=3 {
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(&url)
+            .json(&SubmitBody {
+                device_id,
+                device_secret,
+                exit_code,
+                output,
+                error,
+            })
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await;
 
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!(
-            "submit rejected ({}): {}",
-            status, body
-        )));
+        match resp {
+            Ok(r) if r.status().is_success() => return Ok(()),
+            Ok(r) => {
+                let status = r.status();
+                let body = r.text().await.unwrap_or_default();
+                last_err = Some(Error::Rejected(format!("submit rejected ({status}): {body}")));
+            }
+            Err(e) => {
+                last_err = Some(Error::Http(format!("submit failed: {e}")));
+            }
+        }
+
+        tracing::warn!("attempt {}/3 failed", attempt);
+        if attempt < 3 {
+            let delay = backoff.next_with_jitter();
+            tracing::info!("retrying in {}ms", delay.as_millis());
+            tokio::time::sleep(delay).await;
+        }
     }
 
-    Ok(())
+    Err(last_err.unwrap_or_else(|| Error::Http("submit failed".to_string())))
 }
 
 fn run_docker_command(args: &[&str]) -> (i32, String, String) {
@@ -143,8 +160,35 @@ pub fn execute_action(action: &str, container_id: &str) -> (i32, String, String)
         "start" => run_docker_command(&["start", container_id]),
         "stop" => run_docker_command(&["stop", container_id]),
         "restart" => run_docker_command(&["restart", container_id]),
+        "kill" => run_docker_command(&["kill", container_id]),
+        "remove" => run_docker_command(&["rm", "-f", container_id]),
+        "pause" => run_docker_command(&["pause", container_id]),
+        "unpause" => run_docker_command(&["unpause", container_id]),
+        "inspect" => run_docker_command(&["inspect", container_id]),
         "logs" => run_docker_command(&["logs", "--tail", "200", container_id]),
         "stats" => run_docker_command(&["stats", "--no-stream", "--no-trunc", container_id]),
+        "image_pull" => run_docker_command(&["pull", container_id]),
+        "image_remove" => run_docker_command(&["rmi", "-f", container_id]),
+        "image_prune" => run_docker_command(&["image", "prune", "-a", "-f"]),
+        "volume_remove" => run_docker_command(&["volume", "rm", container_id]),
+        "volume_prune" => run_docker_command(&["volume", "prune", "-f"]),
+        "network_disconnect" => {
+            let parts: Vec<&str> = container_id.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                run_docker_command(&["network", "disconnect", "-f", parts[0], parts[1]])
+            } else {
+                (1, String::new(), "network_disconnect requires format 'network_id:container_id'".to_string())
+            }
+        }
+        "network_connect" => {
+            let parts: Vec<&str> = container_id.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                run_docker_command(&["network", "connect", parts[0], parts[1]])
+            } else {
+                (1, String::new(), "network_connect requires format 'network_id:container_id'".to_string())
+            }
+        }
+        "system_prune" => run_docker_command(&["system", "prune", "-a", "-f"]),
         _ => (1, String::new(), format!("unknown action: {action}")),
     }
 }

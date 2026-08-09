@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use crate::retry;
 use crate::systemd;
 
 #[derive(Debug, serde::Deserialize)]
@@ -89,33 +90,49 @@ pub async fn submit_result(
     output: &str,
     error: &str,
 ) -> Result<(), Error> {
-    let client = reqwest::Client::new();
     let url = format!("{}/api/v1/service-actions/{}/result", api_url, action_id);
+    let mut backoff = retry::Backoff::new(
+        std::time::Duration::from_millis(500),
+        std::time::Duration::from_secs(30),
+    );
+    let mut last_err = None;
 
-    let resp = client
-        .post(&url)
-        .json(&SubmitBody {
-            device_id,
-            device_secret,
-            exit_code,
-            output,
-            error,
-        })
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| Error::Http(format!("submit failed: {e}")))?;
+    for attempt in 1..=3 {
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(&url)
+            .json(&SubmitBody {
+                device_id,
+                device_secret,
+                exit_code,
+                output,
+                error,
+            })
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await;
 
-    let status = resp.status();
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(Error::Rejected(format!(
-            "submit rejected ({}): {}",
-            status, body
-        )));
+        match resp {
+            Ok(r) if r.status().is_success() => return Ok(()),
+            Ok(r) => {
+                let status = r.status();
+                let body = r.text().await.unwrap_or_default();
+                last_err = Some(Error::Rejected(format!("submit rejected ({status}): {body}")));
+            }
+            Err(e) => {
+                last_err = Some(Error::Http(format!("submit failed: {e}")));
+            }
+        }
+
+        tracing::warn!("attempt {}/3 failed", attempt);
+        if attempt < 3 {
+            let delay = backoff.next_with_jitter();
+            tracing::info!("retrying in {}ms", delay.as_millis());
+            tokio::time::sleep(delay).await;
+        }
     }
 
-    Ok(())
+    Err(last_err.unwrap_or_else(|| Error::Http("submit failed".to_string())))
 }
 
 pub fn validate_unit_name(unit_name: &str) -> Result<(), String> {

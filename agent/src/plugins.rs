@@ -1,6 +1,10 @@
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PluginInfo {
@@ -75,7 +79,12 @@ pub fn list_plugins() -> Result<Vec<PluginInfo>, PluginError> {
 
         // Check if executable
         let is_exec = std::fs::metadata(&path)
-            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .map(|m| {
+                #[cfg(unix)]
+                { m.permissions().mode() & 0o111 != 0 }
+                #[cfg(not(unix))]
+                { m.len() > 0 }
+            })
             .unwrap_or(false);
 
         if !is_exec {
@@ -110,20 +119,52 @@ pub fn list_plugins() -> Result<Vec<PluginInfo>, PluginError> {
 #[allow(dead_code)]
 pub fn run_plugin(name: &str) -> Result<(String, i32), PluginError> {
     let dir_path = get_plugin_dir().ok_or(PluginError::DirMissing)?;
+
+    // Prevent path traversal — reject names with path separators
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return Err(PluginError::CommandFailed(format!("invalid plugin name: {name}")));
+    }
+
     let path = Path::new(&dir_path).join(name);
 
-    if !path.is_file() {
+    // Verify the resolved path is still within the plugin directory
+    let canonical = std::fs::canonicalize(&path).map_err(|_| {
+        PluginError::CommandFailed(format!("plugin not found: {name}"))
+    })?;
+    let canonical_dir = std::fs::canonicalize(&dir_path).map_err(|_| {
+        PluginError::DirMissing
+    })?;
+    if !canonical.starts_with(&canonical_dir) {
+        return Err(PluginError::CommandFailed(format!("plugin path escape denied: {name}")));
+    }
+
+    if !canonical.is_file() {
         return Err(PluginError::CommandFailed(format!("plugin not found: {name}")));
     }
 
-    let output = Command::new(&path)
-        .output()
-        .map_err(|e| PluginError::CommandFailed(e.to_string()))?;
+    let (tx, rx) = mpsc::channel();
+    let child_path = canonical.clone();
+    thread::spawn(move || {
+        let output = Command::new(&child_path)
+            .env_clear()
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            .output();
+        let _ = tx.send(output);
+    });
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let exit_code = output.status.code().unwrap_or(-1);
-
-    Ok((stdout, exit_code))
+    let timeout = Duration::from_secs(30);
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(output)) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let exit_code = output.status.code().unwrap_or(-1);
+            Ok((stdout, exit_code))
+        }
+        Ok(Err(e)) => Err(PluginError::CommandFailed(e.to_string())),
+        Err(_) => Err(PluginError::CommandFailed(format!(
+            "plugin {name} timed out after {}s",
+            timeout.as_secs()
+        ))),
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -166,6 +207,7 @@ pub async fn submit_plugins(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
@@ -177,6 +219,7 @@ mod tests {
             format!("# Description: {desc}\n{content}")
         };
         std::fs::write(&path, script).unwrap();
+        #[cfg(unix)]
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
@@ -208,6 +251,7 @@ mod tests {
 
         let path = tmpdir.join("hello.sh");
         std::fs::write(&path, "#!/bin/sh\necho hello").unwrap();
+        #[cfg(unix)]
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         let result = run_plugin_in_dir(&tmpdir.to_string_lossy(), "hello.sh");
@@ -238,7 +282,12 @@ mod tests {
             }
 
             let is_exec = std::fs::metadata(&path)
-                .map(|m| m.permissions().mode() & 0o111 != 0)
+                .map(|m| {
+                    #[cfg(unix)]
+                    { m.permissions().mode() & 0o111 != 0 }
+                    #[cfg(not(unix))]
+                    { m.len() > 0 }
+                })
                 .unwrap_or(false);
 
             if !is_exec {
@@ -276,13 +325,28 @@ mod tests {
             return Err(PluginError::CommandFailed(format!("plugin not found: {name}")));
         }
 
-        let output = Command::new(&path)
-            .output()
-            .map_err(|e| PluginError::CommandFailed(e.to_string()))?;
+        let (tx, rx) = mpsc::channel();
+        let child_path = path.clone();
+        thread::spawn(move || {
+            let output = Command::new(&child_path)
+                .env_clear()
+                .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                .output();
+            let _ = tx.send(output);
+        });
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let exit_code = output.status.code().unwrap_or(-1);
-
-        Ok((stdout, exit_code))
+        let timeout = Duration::from_secs(10);
+        match rx.recv_timeout(timeout) {
+            Ok(Ok(output)) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let exit_code = output.status.code().unwrap_or(-1);
+                Ok((stdout, exit_code))
+            }
+            Ok(Err(e)) => Err(PluginError::CommandFailed(e.to_string())),
+            Err(_) => Err(PluginError::CommandFailed(format!(
+                "plugin {name} timed out after {}s",
+                timeout.as_secs()
+            ))),
+        }
     }
 }

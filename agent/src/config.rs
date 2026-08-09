@@ -7,15 +7,30 @@ use crate::platform;
 struct ConfigFile {
     core_url: Option<String>,
     api_url: Option<String>,
+    nats_url: Option<String>,
     heartbeat_interval_secs: Option<u64>,
     log_level: Option<String>,
     protected_services: Option<Vec<String>>,
+    proxmox_connections: Option<Vec<ProxmoxConfig>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProxmoxConfig {
+    pub host: String,
+    pub port: Option<u16>,
+    pub auth_type: Option<String>,
+    pub token_id: Option<String>,
+    pub token_secret: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub verify_ssl: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub core_url: String,
     pub api_url: String,
+    pub nats_url: String,
     pub identity_path: PathBuf,
     #[allow(dead_code)]
     pub key_path: PathBuf,
@@ -26,6 +41,7 @@ pub struct Config {
     pub heartbeat_interval_secs: u64,
     pub log_level: String,
     pub protected_services: Vec<String>,
+    pub proxmox_connections: Vec<ProxmoxConfig>,
 }
 
 impl Default for Config {
@@ -34,6 +50,7 @@ impl Default for Config {
         Self {
             core_url: "http://localhost:8444".to_string(),
             api_url: "http://localhost:8443".to_string(),
+            nats_url: "nats://localhost:4222".to_string(),
             identity_path: PathBuf::from(&data).join("identity.json"),
             key_path: PathBuf::from(&data).join("device-key.pem"),
             cert_path: PathBuf::from(&data).join("device-cert.pem"),
@@ -55,6 +72,7 @@ impl Default for Config {
                 "renos-core.service".to_string(),
                 "renos-hub.service".to_string(),
             ],
+            proxmox_connections: Vec::new(),
         }
     }
 }
@@ -74,6 +92,9 @@ fn apply_env_overrides(cfg: &mut Config) {
     }
     if let Ok(v) = std::env::var("RENOS_API_URL") {
         cfg.api_url = v;
+    }
+    if let Ok(v) = std::env::var("RENOS_NATS_URL") {
+        cfg.nats_url = v;
     }
     if let Ok(v) = std::env::var("RENOS_HEARTBEAT_INTERVAL") {
         if let Ok(n) = v.parse() {
@@ -110,6 +131,9 @@ pub fn load() -> Config {
         if let Some(v) = file_cfg.api_url {
             cfg.api_url = v;
         }
+        if let Some(v) = file_cfg.nats_url {
+            cfg.nats_url = v;
+        }
         if let Some(v) = file_cfg.heartbeat_interval_secs {
             cfg.heartbeat_interval_secs = v;
         }
@@ -125,6 +149,9 @@ pub fn load() -> Config {
             if !v.is_empty() {
                 cfg.protected_services = v;
             }
+        }
+        if let Some(v) = file_cfg.proxmox_connections {
+            cfg.proxmox_connections = v;
         }
     }
 
@@ -156,6 +183,7 @@ mod tests {
         let cfg = Config::default();
         assert_eq!(cfg.core_url, "http://localhost:8444");
         assert_eq!(cfg.api_url, "http://localhost:8443");
+        assert_eq!(cfg.nats_url, "nats://localhost:4222");
         assert_eq!(cfg.heartbeat_interval_secs, 30);
         assert_eq!(cfg.log_level, "info");
     }
@@ -164,8 +192,10 @@ mod tests {
     fn test_load_returns_defaults_without_env_or_file() {
         let _guard = ENV_MUTEX.lock().unwrap();
         std::env::remove_var("RENOS_CORE_URL");
+        std::env::remove_var("RENOS_NATS_URL");
         let cfg = load();
         assert_eq!(cfg.core_url, "http://localhost:8444");
+        assert_eq!(cfg.nats_url, "nats://localhost:4222");
     }
 
     #[test]
