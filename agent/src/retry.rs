@@ -33,8 +33,4 @@ impl Backoff {
         let jitter = rand::thread_rng().gen_range(0..=range);
         Duration::from_nanos(base_ns + jitter)
     }
-
-    pub fn reset(&mut self) {
-        self.current = Duration::from_millis(500);
-    }
 }

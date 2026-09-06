@@ -1,5 +1,5 @@
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
@@ -89,7 +89,10 @@ pub async fn start_nats_terminal_handler(
 
         tracing::info!(
             "NATS terminal handler subscribed to open={}, input={}, resize={}, close={}",
-            open_subject, input_subject, resize_subject, close_subject
+            open_subject,
+            input_subject,
+            resize_subject,
+            close_subject
         );
 
         loop {
@@ -197,9 +200,4 @@ pub async fn start_nats_terminal_handler(
             }
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

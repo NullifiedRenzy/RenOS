@@ -4,14 +4,11 @@ use serde::{Deserialize, Serialize};
 use crate::processes;
 
 #[derive(Debug, Deserialize)]
-struct ProcessListRequest {
-    device_id: String,
-}
+struct ProcessListRequest {}
 
 #[derive(Debug, Deserialize)]
 struct ProcessActionRequest {
     action_id: String,
-    device_id: String,
     pid: u32,
     action: String,
 }
@@ -55,7 +52,11 @@ pub async fn start_nats_process_handler(
             }
         };
 
-        tracing::info!("NATS process handler subscribed to {} and {}", list_subject, action_subject);
+        tracing::info!(
+            "NATS process handler subscribed to {} and {}",
+            list_subject,
+            action_subject
+        );
 
         // Handle list requests and action requests concurrently
         loop {
@@ -120,9 +121,4 @@ pub async fn start_nats_process_handler(
             }
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

@@ -9,15 +9,17 @@ import (
 )
 
 type User struct {
-	ID           string     `json:"id"`
-	Email        string     `json:"email"`
-	Password     string     `json:"-"`
-	DisplayName  string     `json:"display_name"`
-	Role         string     `json:"role"`
-	Settings     string     `json:"settings"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+	ID          string     `json:"id"`
+	Email       string     `json:"email"`
+	Password    string     `json:"-"`
+	DisplayName string     `json:"display_name"`
+	Role        string     `json:"role"`
+	Settings    string     `json:"settings"`
+	TOTPSecret  *string    `json:"-"`
+	TOTPEnabled bool       `json:"totp_enabled"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
 type UserRepository struct {
@@ -32,12 +34,12 @@ func (r *UserRepository) Create(ctx context.Context, email, password, displayNam
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password, display_name, role)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, email, password, display_name, role, settings, created_at, updated_at, deleted_at`,
+		 RETURNING id, email, password, display_name, role, settings, totp_secret, totp_enabled, created_at, updated_at, deleted_at`,
 		email, password, displayName, role,
 	)
 
 	u := &User{}
-	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -46,13 +48,13 @@ func (r *UserRepository) Create(ctx context.Context, email, password, displayNam
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, email, password, display_name, role, settings, created_at, updated_at, deleted_at
+		`SELECT id, email, password, display_name, role, settings, totp_secret, totp_enabled, created_at, updated_at, deleted_at
 		 FROM users WHERE email = $1 AND deleted_at IS NULL`,
 		email,
 	)
 
 	u := &User{}
-	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
 	if err != nil {
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
@@ -61,12 +63,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*User, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, email, password, display_name, role, settings, created_at, updated_at, deleted_at
+		`SELECT id, email, password, display_name, role, settings, totp_secret, totp_enabled, created_at, updated_at, deleted_at
 		 FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 	u := &User{}
-	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.DisplayName, &u.Role, &u.Settings, &u.TOTPSecret, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
 	if err != nil {
 		return nil, fmt.Errorf("find user by id: %w", err)
 	}
@@ -84,13 +86,49 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID, role string) er
 	return nil
 }
 
+func (r *UserRepository) SetTOTPSecret(ctx context.Context, userID, secret string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET totp_secret = $2, totp_enabled = false, updated_at = NOW()
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		userID, secret,
+	)
+	if err != nil {
+		return fmt.Errorf("set totp secret: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) EnableTOTP(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET totp_enabled = true, updated_at = NOW()
+		 WHERE id = $1 AND deleted_at IS NULL AND totp_secret IS NOT NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("enable totp: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) DisableTOTP(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET totp_secret = NULL, totp_enabled = false, updated_at = NOW()
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("disable totp: %w", err)
+	}
+	return nil
+}
+
 func (r *UserRepository) ListAll(ctx context.Context, limit, offset int) ([]*User, error) {
 	var lim *int
 	if limit > 0 {
 		lim = &limit
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, email, display_name, role, settings, created_at, updated_at, deleted_at
+		`SELECT id, email, display_name, role, settings, totp_enabled, created_at, updated_at, deleted_at
 		 FROM users WHERE deleted_at IS NULL ORDER BY created_at ASC LIMIT $1 OFFSET $2`,
 		lim, offset,
 	)
@@ -102,7 +140,7 @@ func (r *UserRepository) ListAll(ctx context.Context, limit, offset int) ([]*Use
 	var list []*User
 	for rows.Next() {
 		u := &User{}
-		err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Settings, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
+		err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role, &u.Settings, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}

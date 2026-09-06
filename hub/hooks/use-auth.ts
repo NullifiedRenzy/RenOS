@@ -7,12 +7,22 @@ import { api } from "@/lib/api-client";
 
 export function useAuth() {
   const router = useRouter();
-  const { setAuth, logout: clearAuth, isAuthenticated, user, token, hasRole, can } = useAuthStore();
+  const {
+    setAuth,
+    logout: clearAuth,
+    isAuthenticated,
+    user,
+    token,
+    hasRole,
+    can,
+  } = useAuthStore();
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const result = await api.login(email, password);
-      setAuth(result.user, result.token);
+    async (email: string, password: string, totpCode?: string) => {
+      const result = await api.login(email, password, totpCode);
+      if (result.user && result.token) {
+        setAuth(result.user, result.token);
+      }
       return result;
     },
     [setAuth],

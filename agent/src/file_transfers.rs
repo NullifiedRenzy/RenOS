@@ -15,7 +15,10 @@ fn validate_remote_path(path: &str) -> Result<PathBuf, String> {
         // Allow paths under /tmp or /var/tmp as a safety net
         let allowed_prefixes = ["/tmp/", "/var/tmp/"];
         let path_str = path.to_string();
-        if !allowed_prefixes.iter().any(|prefix| path_str.starts_with(prefix)) {
+        if !allowed_prefixes
+            .iter()
+            .any(|prefix| path_str.starts_with(prefix))
+        {
             return Err(format!("absolute path not in allowed directory: {}", path));
         }
     }
@@ -35,12 +38,10 @@ struct PendingTransfersResponse {
 pub struct PendingTransfer {
     pub id: String,
     pub transfer_type: String,
-    pub filename: String,
     pub remote_path: String,
     pub total_size: i64,
     pub chunk_size: i32,
     pub total_chunks: i32,
-    pub uploaded_chunks: i32,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -155,10 +156,7 @@ pub async fn assemble_transfer(
     transfer_id: &str,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
-    let url = format!(
-        "{}/api/v1/file-transfers/{}/assemble",
-        api_url, transfer_id
-    );
+    let url = format!("{}/api/v1/file-transfers/{}/assemble", api_url, transfer_id);
 
     let resp = client
         .post(&url)
@@ -225,12 +223,6 @@ pub async fn process_download(
     device_secret: &str,
     transfer: &PendingTransfer,
 ) -> Result<(), String> {
-    let chunk_size = if transfer.chunk_size > 0 {
-        transfer.chunk_size as usize
-    } else {
-        DEFAULT_CHUNK_SIZE
-    };
-
     // Validate remote path to prevent path traversal attacks
     validate_remote_path(&transfer.remote_path)?;
 

@@ -8,22 +8,22 @@ mod docker_images;
 mod docker_networks;
 mod docker_volumes;
 mod enroll;
-mod files;
 mod file_transfers;
+mod files;
 mod grpc_client;
 mod health;
 mod identity;
-mod network;
 mod nats_exec;
 mod nats_process;
 mod nats_proxmox;
 mod nats_terminal;
+mod network;
 mod platform;
 mod plugins;
 mod processes;
+mod proto;
 mod proxmox;
 mod pty_exec;
-mod proto;
 mod retry;
 mod service_actions;
 mod storage;
@@ -198,7 +198,10 @@ async fn main() {
                             let _ = nats_exec::start_nats_executor(nc, nats_device_id).await;
                         }
                         Err(e) => {
-                            tracing::warn!("failed to connect to NATS: {} (executions disabled)", e);
+                            tracing::warn!(
+                                "failed to connect to NATS: {} (executions disabled)",
+                                e
+                            );
                         }
                     }
                 });
@@ -209,11 +212,19 @@ async fn main() {
                 tokio::spawn(async move {
                     match async_nats::connect(&nats_proc_url).await {
                         Ok(nc) => {
-                            tracing::info!("connected to NATS for process management at {}", nats_proc_url);
-                            let _ = nats_process::start_nats_process_handler(nc, nats_proc_device_id).await;
+                            tracing::info!(
+                                "connected to NATS for process management at {}",
+                                nats_proc_url
+                            );
+                            let _handler =
+                                nats_process::start_nats_process_handler(nc, nats_proc_device_id)
+                                    .await;
                         }
                         Err(e) => {
-                            tracing::warn!("failed to connect to NATS for process management: {}", e);
+                            tracing::warn!(
+                                "failed to connect to NATS for process management: {}",
+                                e
+                            );
                         }
                     }
                 });
@@ -436,7 +447,10 @@ async fn main() {
                         match container_stats::collect_container_stats() {
                             Ok(metrics) => {
                                 if !metrics.is_empty() {
-                                    tracing::info!("reporting metrics for {} container(s)", metrics.len());
+                                    tracing::info!(
+                                        "reporting metrics for {} container(s)",
+                                        metrics.len()
+                                    );
                                     if let Err(e) = container_stats::submit_container_metrics(
                                         &cms_api_url,
                                         &cms_device_id,
@@ -768,7 +782,13 @@ async fn main() {
                     loop {
                         interval.tick().await;
 
-                        match file_transfers::poll_pending(&ft_api_url, &ft_device_id, &ft_device_secret).await {
+                        match file_transfers::poll_pending(
+                            &ft_api_url,
+                            &ft_device_id,
+                            &ft_device_secret,
+                        )
+                        .await
+                        {
                             Ok(pending) => {
                                 for transfer in &pending {
                                     tracing::info!(
@@ -783,7 +803,8 @@ async fn main() {
                                                 &ft_device_id,
                                                 &ft_device_secret,
                                                 transfer,
-                                            ).await
+                                            )
+                                            .await
                                         }
                                         "download" => {
                                             file_transfers::process_download(
@@ -791,10 +812,14 @@ async fn main() {
                                                 &ft_device_id,
                                                 &ft_device_secret,
                                                 transfer,
-                                            ).await
+                                            )
+                                            .await
                                         }
                                         _ => {
-                                            tracing::warn!("unknown transfer type: {}", transfer.transfer_type);
+                                            tracing::warn!(
+                                                "unknown transfer type: {}",
+                                                transfer.transfer_type
+                                            );
                                             Ok(())
                                         }
                                     };
@@ -887,7 +912,8 @@ async fn main() {
                     let px_device_secret = device_secret.clone();
                     let px_conns = cfg.proxmox_connections.clone();
                     tokio::spawn(async move {
-                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+                        let mut interval =
+                            tokio::time::interval(std::time::Duration::from_secs(60));
                         loop {
                             interval.tick().await;
 
@@ -902,7 +928,10 @@ async fn main() {
                                         },
                                         _ => proxmox::AuthMethod::Token {
                                             token_id: conn_cfg.token_id.clone().unwrap_or_default(),
-                                            token_secret: conn_cfg.token_secret.clone().unwrap_or_default(),
+                                            token_secret: conn_cfg
+                                                .token_secret
+                                                .clone()
+                                                .unwrap_or_default(),
                                         },
                                     },
                                     verify_ssl: conn_cfg.verify_ssl.unwrap_or(true),
@@ -921,7 +950,9 @@ async fn main() {
                                             &px_device_id,
                                             &px_device_secret,
                                             &data,
-                                        ).await {
+                                        )
+                                        .await
+                                        {
                                             tracing::warn!("failed to submit proxmox data: {}", e);
                                         }
                                     }
@@ -936,8 +967,10 @@ async fn main() {
                     // NATS proxmox power action handler
                     let nats_px_url = cfg.nats_url.clone();
                     let nats_px_device_id = device_id.clone();
-                    let nats_px_conns: Vec<proxmox::ProxmoxConnection> = cfg.proxmox_connections.iter().map(|c| {
-                        proxmox::ProxmoxConnection {
+                    let nats_px_conns: Vec<proxmox::ProxmoxConnection> = cfg
+                        .proxmox_connections
+                        .iter()
+                        .map(|c| proxmox::ProxmoxConnection {
                             host: c.host.clone(),
                             port: c.port.unwrap_or(8006),
                             auth: match c.auth_type.as_deref().unwrap_or("token") {
@@ -951,13 +984,21 @@ async fn main() {
                                 },
                             },
                             verify_ssl: c.verify_ssl.unwrap_or(true),
-                        }
-                    }).collect();
+                        })
+                        .collect();
                     tokio::spawn(async move {
                         match async_nats::connect(&nats_px_url).await {
                             Ok(nc) => {
-                                tracing::info!("connected to NATS for proxmox management at {}", nats_px_url);
-                                let _ = nats_proxmox::start_nats_proxmox_handler(nc, nats_px_device_id, nats_px_conns).await;
+                                tracing::info!(
+                                    "connected to NATS for proxmox management at {}",
+                                    nats_px_url
+                                );
+                                let _handler = nats_proxmox::start_nats_proxmox_handler(
+                                    nc,
+                                    nats_px_device_id,
+                                    nats_px_conns,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 tracing::warn!("failed to connect to NATS for proxmox: {}", e);
@@ -974,8 +1015,16 @@ async fn main() {
                 tokio::spawn(async move {
                     match async_nats::connect(&term_nats_url).await {
                         Ok(nc) => {
-                            tracing::info!("connected to NATS for terminal management at {}", term_nats_url);
-                            let _ = nats_terminal::start_nats_terminal_handler(nc, term_device_id, pty_manager).await;
+                            tracing::info!(
+                                "connected to NATS for terminal management at {}",
+                                term_nats_url
+                            );
+                            let _handler = nats_terminal::start_nats_terminal_handler(
+                                nc,
+                                term_device_id,
+                                pty_manager,
+                            )
+                            .await;
                         }
                         Err(e) => {
                             tracing::warn!("failed to connect to NATS for terminal: {}", e);

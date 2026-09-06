@@ -25,8 +25,8 @@ import (
 	"github.com/renos-project/renos/core/internal/db"
 	"github.com/renos-project/renos/core/internal/developer"
 	"github.com/renos-project/renos/core/internal/execctrl"
-	"github.com/renos-project/renos/core/internal/observability"
 	"github.com/renos-project/renos/core/internal/notify"
+	"github.com/renos-project/renos/core/internal/observability"
 	"github.com/renos-project/renos/core/internal/plugin"
 	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/scheduler"
@@ -265,7 +265,7 @@ func main() {
 	}
 	slog.Info("admin user ready", "email", cfg.AdminEmail)
 
-	notifier := notify.New(inAppNotifications, adminID)
+	notifier := notify.New(inAppNotifications, adminID).WithEmail(notifProviders, notifHistory, users)
 
 	// ── Initialize Observability & SRE subsystems ──
 	obsCfg := &observability.ObservabilityConfig{

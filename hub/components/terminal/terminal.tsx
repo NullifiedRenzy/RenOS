@@ -34,7 +34,9 @@ export function Terminal({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [connected, setConnected] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -45,7 +47,8 @@ export function Terminal({
       cursorBlink: true,
       cursorStyle: "bar",
       fontSize: 14,
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
+      fontFamily:
+        "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
       theme: {
         background: "#1a1b26",
         foreground: "#c0caf5",
@@ -115,7 +118,9 @@ export function Terminal({
             break;
           case "output":
             const outputData = msg.data.data as string;
-            const bytes = Uint8Array.from(atob(outputData), (c) => c.charCodeAt(0));
+            const bytes = Uint8Array.from(atob(outputData), (c) =>
+              c.charCodeAt(0),
+            );
             xterm.write(bytes);
             break;
           case "error":
@@ -154,7 +159,7 @@ export function Terminal({
           JSON.stringify({
             type: "input",
             data: { data: encoded },
-          })
+          }),
         );
       }
     });
@@ -166,7 +171,7 @@ export function Terminal({
           JSON.stringify({
             type: "resize",
             data: { cols, rows },
-          })
+          }),
         );
       }
     });
@@ -191,7 +196,8 @@ export function Terminal({
     };
 
     // Store cleanup on the ref for external access
-    (terminalRef.current as unknown as Record<string, unknown>).__cleanup = cleanup;
+    (terminalRef.current as unknown as Record<string, unknown>).__cleanup =
+      cleanup;
   }, [deviceId, token, shell, onSessionId, onDisconnect]);
 
   // Initialize on mount
@@ -200,12 +206,15 @@ export function Terminal({
       connect();
     }
 
+    const terminal = terminalRef.current;
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      const cleanup = (terminalRef.current as unknown as Record<string, unknown>)
-        .__cleanup as (() => void) | undefined;
+      const cleanup = terminal
+        ? ((terminal as unknown as Record<string, unknown>).__cleanup as
+            (() => void) | undefined)
+        : undefined;
       cleanup?.();
       xtermRef.current?.dispose();
       xtermRef.current = null;
@@ -234,14 +243,20 @@ export function Terminal({
           {connected ? "Connected" : "Disconnected"}
           {sessionId && ` · ${sessionId.slice(0, 8)}`}
         </span>
-        <span>{xtermRef.current?.cols ?? 80}x{xtermRef.current?.rows ?? 24}</span>
+        <span>
+          {xtermRef.current?.cols ?? 80}x{xtermRef.current?.rows ?? 24}
+        </span>
       </div>
     </div>
   );
 }
 
 // Search toolbar component
-export function TerminalSearch({ searchAddonRef }: { searchAddonRef: React.RefObject<SearchAddon | null> }) {
+export function TerminalSearch({
+  searchAddonRef,
+}: {
+  searchAddonRef: React.RefObject<SearchAddon | null>;
+}) {
   const [query, setQuery] = useState("");
 
   const handleSearch = (direction: "next" | "prev") => {
@@ -256,7 +271,10 @@ export function TerminalSearch({ searchAddonRef }: { searchAddonRef: React.RefOb
   };
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1" style={{ backgroundColor: "var(--color-surface)" }}>
+    <div
+      className="flex items-center gap-1 px-2 py-1"
+      style={{ backgroundColor: "var(--color-surface)" }}
+    >
       <input
         type="text"
         value={query}
@@ -270,8 +288,20 @@ export function TerminalSearch({ searchAddonRef }: { searchAddonRef: React.RefOb
           color: "var(--color-text-primary)",
         }}
       />
-      <button onClick={() => handleSearch("prev")} className="text-xs px-1" style={{ color: "var(--color-text-secondary)" }}>↑</button>
-      <button onClick={() => handleSearch("next")} className="text-xs px-1" style={{ color: "var(--color-text-secondary)" }}>↓</button>
+      <button
+        onClick={() => handleSearch("prev")}
+        className="text-xs px-1"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        ↑
+      </button>
+      <button
+        onClick={() => handleSearch("next")}
+        className="text-xs px-1"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        ↓
+      </button>
     </div>
   );
 }

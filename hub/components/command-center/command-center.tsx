@@ -4,9 +4,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowUpRight, Boxes, ChevronRight, ClipboardList, Command as CommandIcon, CornerDownLeft,
-  Cpu, KeySquare, Logs, MonitorCog, Package, Rocket, Search, Server,
-  ShieldCheck, Users, Vault, Workflow, type LucideIcon,
+  ArrowUpRight,
+  Boxes,
+  ChevronRight,
+  ClipboardList,
+  Command as CommandIcon,
+  CornerDownLeft,
+  Cpu,
+  KeySquare,
+  Logs,
+  MonitorCog,
+  Package,
+  Rocket,
+  Search,
+  Server,
+  ShieldCheck,
+  Users,
+  Vault,
+  Workflow,
+  type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { fuzzyRank } from "@/lib/fuzzy";
@@ -72,7 +88,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
   return (
-    tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
     el.isContentEditable ||
     (el.getAttribute && el.getAttribute("role") === "combobox")
   );
@@ -98,7 +116,9 @@ export function CommandCenter() {
 
   const commandPrefix = query.trimStart().startsWith(">");
   const effectiveMode: "search" | "command" = commandPrefix ? "command" : mode;
-  const searchQuery = commandPrefix ? query.trimStart().slice(1).trimStart() : query.trim();
+  const searchQuery = commandPrefix
+    ? query.trimStart().slice(1).trimStart()
+    : query.trim();
 
   // Reset state on open/close.
   useEffect(() => {
@@ -135,7 +155,8 @@ export function CommandCenter() {
   }, [isOpen, open]);
 
   // Debounced backend search via react-query.
-  const searchEnabled = isOpen && effectiveMode === "search" && searchQuery.length > 0;
+  const searchEnabled =
+    isOpen && effectiveMode === "search" && searchQuery.length > 0;
   const { data: searchData, isFetching: searching } = useQuery({
     queryKey: ["global-search", searchQuery],
     queryFn: () => api.search(searchQuery, 10),
@@ -147,7 +168,12 @@ export function CommandCenter() {
   const commands = useMemo(() => getCommands(), []);
   const filteredCommands = useMemo(() => {
     if (effectiveMode !== "command") return [];
-    return fuzzyRank(commands, commandPrefix ? searchQuery : query, (c) => `${c.title} ${c.keywords}`, 14);
+    return fuzzyRank(
+      commands,
+      commandPrefix ? searchQuery : query,
+      (c) => `${c.title} ${c.keywords}`,
+      14,
+    );
   }, [commands, effectiveMode, commandPrefix, searchQuery, query]);
 
   // Load pick items when a command needs a device/workflow.
@@ -197,7 +223,13 @@ export function CommandCenter() {
   const entries = useMemo<ListEntry[]>(() => {
     if (picking) {
       return [
-        { kind: "header", label: picking.type === "devices" ? "Select a device" : "Select a workflow" },
+        {
+          kind: "header",
+          label:
+            picking.type === "devices"
+              ? "Select a device"
+              : "Select a workflow",
+        },
         ...filteredPicks.map((item) => ({ kind: "pick" as const, item })),
       ];
     }
@@ -219,7 +251,11 @@ export function CommandCenter() {
     if (data && data.total > 0) {
       for (const [cat, results] of Object.entries(data.results)) {
         if (results.length === 0) continue;
-        out.push({ kind: "header", label: CATEGORY_LABELS[cat] ?? cat, icon: CATEGORY_ICONS[cat] });
+        out.push({
+          kind: "header",
+          label: CATEGORY_LABELS[cat] ?? cat,
+          icon: CATEGORY_ICONS[cat],
+        });
         for (const result of results) out.push({ kind: "result", result });
       }
     }
@@ -265,7 +301,11 @@ export function CommandCenter() {
               if (a) router.push(`/devices/${a.id}`);
               break;
             case "toggle-theme":
-              setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark");
+              setTheme(
+                document.documentElement.classList.contains("dark")
+                  ? "light"
+                  : "dark",
+              );
               break;
             case "light-mode":
               setTheme("light");
@@ -274,7 +314,9 @@ export function CommandCenter() {
               toggleSidebar();
               break;
             case "help-shortcuts":
-              setNotice("Keyboard: Ctrl+K search · > commands · ↑/↓ navigate · Enter run · Esc close");
+              setNotice(
+                "Keyboard: Ctrl+K search · > commands · ↑/↓ navigate · Enter run · Esc close",
+              );
               window.setTimeout(() => setNotice(null), 4000);
               break;
           }
@@ -311,7 +353,7 @@ export function CommandCenter() {
         }
       }
     },
-    [close, router, picking],
+    [close, picking, router, runCommand],
   );
 
   const onKeyDown = useCallback(
@@ -377,7 +419,10 @@ export function CommandCenter() {
         style={{ animation: "fade-in-up 120ms ease-out" }}
       >
         <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)]">
-          <span className="text-[var(--color-text-tertiary)]" aria-hidden="true">
+          <span
+            className="text-[var(--color-text-tertiary)]"
+            aria-hidden="true"
+          >
             {commandPrefix ? ">" : <Search size={18} />}
           </span>
           <input
@@ -393,12 +438,25 @@ export function CommandCenter() {
                   ? "Type a command…"
                   : "Search devices, workflows, plugins, policies, logs…"
             }
-            aria-label={picking ? "Filter list" : effectiveMode === "command" ? "Command" : "Search the platform"}
+            aria-label={
+              picking
+                ? "Filter list"
+                : effectiveMode === "command"
+                  ? "Command"
+                  : "Search the platform"
+            }
             className="flex-1 bg-transparent border-none outline-none h-12 text-body text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)]"
           />
-          <div className="flex items-center gap-1" role="tablist" aria-label="Command center mode">
+          <div
+            className="flex items-center gap-1"
+            role="tablist"
+            aria-label="Command center mode"
+          >
             <button
-              onClick={() => { setMode("search"); setQuery((q) => q.replace(/^>\s*/, "")); }}
+              onClick={() => {
+                setMode("search");
+                setQuery((q) => q.replace(/^>\s*/, ""));
+              }}
               aria-label="Search mode"
               aria-selected={effectiveMode === "search"}
               role="tab"
@@ -412,7 +470,10 @@ export function CommandCenter() {
               <Search size={15} />
             </button>
             <button
-              onClick={() => { setMode("command"); if (!commandPrefix) setQuery("> "); }}
+              onClick={() => {
+                setMode("command");
+                if (!commandPrefix) setQuery("> ");
+              }}
               aria-label="Command palette"
               aria-selected={effectiveMode === "command"}
               role="tab"
@@ -440,16 +501,23 @@ export function CommandCenter() {
                     </div>
                   ) : searchQuery ? (
                     <p className="text-caption text-[var(--color-text-tertiary)]">
-                      No results for “{searchQuery}”. Try a device, workflow, or policy name.
+                      No results for “{searchQuery}”. Try a device, workflow, or
+                      policy name.
                     </p>
                   ) : (
                     <>
-                      <Search size={28} className="mx-auto mb-3 text-[var(--color-text-tertiary)]" />
+                      <Search
+                        size={28}
+                        className="mx-auto mb-3 text-[var(--color-text-tertiary)]"
+                      />
                       <p className="text-caption text-[var(--color-text-tertiary)]">
-                        Search devices, workflows, plugins, policies, secrets, logs and more.
+                        Search devices, workflows, plugins, policies, secrets,
+                        logs and more.
                       </p>
                       <p className="mt-2 text-caption text-[var(--color-text-tertiary)] opacity-70">
-                        Type <kbd className="kbd">Ctrl</kbd> <kbd className="kbd">K</kbd> to open · type <kbd className="kbd">&gt;</kbd> for commands
+                        Type <kbd className="kbd">Ctrl</kbd>{" "}
+                        <kbd className="kbd">K</kbd> to open · type{" "}
+                        <kbd className="kbd">&gt;</kbd> for commands
                       </p>
                     </>
                   )}
@@ -465,8 +533,16 @@ export function CommandCenter() {
           {entries.map((entry, i) => {
             if (entry.kind === "header") {
               return (
-                <div key={`h-${i}`} className="px-4 pt-3 pb-1.5 flex items-center gap-2">
-                  {entry.icon && <entry.icon size={12} className="text-[var(--color-text-tertiary)]" />}
+                <div
+                  key={`h-${i}`}
+                  className="px-4 pt-3 pb-1.5 flex items-center gap-2"
+                >
+                  {entry.icon && (
+                    <entry.icon
+                      size={12}
+                      className="text-[var(--color-text-tertiary)]"
+                    />
+                  )}
                   <span className="text-caption uppercase tracking-wider text-[var(--color-text-tertiary)]">
                     {entry.label}
                   </span>
@@ -485,15 +561,27 @@ export function CommandCenter() {
                   onClick={() => runEntry(entry)}
                   className={cn(
                     "w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors",
-                    isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-surface-hover)]",
+                    isActive
+                      ? "bg-[var(--color-accent)]/10"
+                      : "hover:bg-[var(--color-surface-hover)]",
                   )}
                 >
-                  <Icon size={16} className="text-[var(--color-text-tertiary)] flex-shrink-0" />
+                  <Icon
+                    size={16}
+                    className="text-[var(--color-text-tertiary)] flex-shrink-0"
+                  />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-body truncate text-[var(--color-text-primary)]">{entry.result.title}</span>
-                    <span className="block text-caption truncate text-[var(--color-text-tertiary)]">{entry.result.subtitle}</span>
+                    <span className="block text-body truncate text-[var(--color-text-primary)]">
+                      {entry.result.title}
+                    </span>
+                    <span className="block text-caption truncate text-[var(--color-text-tertiary)]">
+                      {entry.result.subtitle}
+                    </span>
                   </span>
-                  <ArrowUpRight size={14} className="text-[var(--color-text-tertiary)] flex-shrink-0" />
+                  <ArrowUpRight
+                    size={14}
+                    className="text-[var(--color-text-tertiary)] flex-shrink-0"
+                  />
                 </button>
               );
             }
@@ -507,17 +595,29 @@ export function CommandCenter() {
                   onClick={() => runEntry(entry)}
                   className={cn(
                     "w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors",
-                    isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-surface-hover)]",
+                    isActive
+                      ? "bg-[var(--color-accent)]/10"
+                      : "hover:bg-[var(--color-surface-hover)]",
                   )}
                 >
-                  <Icon size={16} className="text-[var(--color-text-tertiary)] flex-shrink-0" />
-                  <span className="flex-1 text-body text-[var(--color-text-primary)]">{entry.command.title}</span>
+                  <Icon
+                    size={16}
+                    className="text-[var(--color-text-tertiary)] flex-shrink-0"
+                  />
+                  <span className="flex-1 text-body text-[var(--color-text-primary)]">
+                    {entry.command.title}
+                  </span>
                   {entry.command.shortcut && (
                     <span className="text-caption text-[var(--color-text-tertiary)] whitespace-nowrap">
                       {entry.command.shortcut}
                     </span>
                   )}
-                  {entry.command.pick && <ChevronRight size={14} className="text-[var(--color-text-tertiary)]" />}
+                  {entry.command.pick && (
+                    <ChevronRight
+                      size={14}
+                      className="text-[var(--color-text-tertiary)]"
+                    />
+                  )}
                 </button>
               );
             }
@@ -529,17 +629,29 @@ export function CommandCenter() {
                 onClick={() => runEntry(entry)}
                 className={cn(
                   "w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors",
-                  isActive ? "bg-[var(--color-accent)]/10" : "hover:bg-[var(--color-surface-hover)]",
+                  isActive
+                    ? "bg-[var(--color-accent)]/10"
+                    : "hover:bg-[var(--color-surface-hover)]",
                 )}
               >
                 {picking?.type === "devices" ? (
-                  <MonitorCog size={16} className="text-[var(--color-text-tertiary)] flex-shrink-0" />
+                  <MonitorCog
+                    size={16}
+                    className="text-[var(--color-text-tertiary)] flex-shrink-0"
+                  />
                 ) : (
-                  <Workflow size={16} className="text-[var(--color-text-tertiary)] flex-shrink-0" />
+                  <Workflow
+                    size={16}
+                    className="text-[var(--color-text-tertiary)] flex-shrink-0"
+                  />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block text-body truncate text-[var(--color-text-primary)]">{entry.item.title}</span>
-                  <span className="block text-caption truncate text-[var(--color-text-tertiary)]">{entry.item.subtitle}</span>
+                  <span className="block text-body truncate text-[var(--color-text-primary)]">
+                    {entry.item.title}
+                  </span>
+                  <span className="block text-caption truncate text-[var(--color-text-tertiary)]">
+                    {entry.item.subtitle}
+                  </span>
                 </span>
               </button>
             );
@@ -548,14 +660,20 @@ export function CommandCenter() {
 
         <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
           {notice ? (
-            <span className="text-caption text-[var(--color-text-tertiary)]">{notice}</span>
+            <span className="text-caption text-[var(--color-text-tertiary)]">
+              {notice}
+            </span>
           ) : (
             <div className="flex items-center gap-3 text-caption text-[var(--color-text-tertiary)]">
               <span className="flex items-center gap-1">
-                <kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd> navigate
+                <kbd className="kbd">↑</kbd>
+                <kbd className="kbd">↓</kbd> navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="kbd"><CornerDownLeft size={11} /></kbd> select
+                <kbd className="kbd">
+                  <CornerDownLeft size={11} />
+                </kbd>{" "}
+                select
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="kbd">esc</kbd> close

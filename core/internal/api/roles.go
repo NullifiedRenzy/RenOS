@@ -14,6 +14,7 @@ type listUserItem struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+	TOTPEnabled bool   `json:"totp_enabled"`
 	CreatedAt   string `json:"created_at"`
 }
 
@@ -32,6 +33,7 @@ func listUsersHandler(users *db.UserRepository) http.HandlerFunc {
 				Email:       u.Email,
 				DisplayName: u.DisplayName,
 				Role:        u.Role,
+				TOTPEnabled: u.TOTPEnabled,
 				CreatedAt:   u.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			})
 		}
@@ -99,9 +101,9 @@ func updateUserRoleHandler(users *db.UserRepository, audits *db.AuditRepository)
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"status": "updated",
 			"user": map[string]string{
-				"id":         targetUserID,
-				"role":       req.Role,
-				"previous":   prevRole.Role,
+				"id":       targetUserID,
+				"role":     req.Role,
+				"previous": prevRole.Role,
 			},
 		})
 	}

@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sysinfo::{System, Users, ProcessStatus, Uid};
+use sysinfo::{ProcessStatus, System, Users};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ProcessInfo {
@@ -18,12 +18,6 @@ pub struct ProcessInfo {
     pub start_time: u64,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ProcessSnapshot {
-    pub device_id: String,
-    pub processes: Vec<ProcessInfo>,
-}
-
 pub fn collect_processes() -> Vec<ProcessInfo> {
     let mut system = System::new_all();
     system.refresh_all();
@@ -35,10 +29,19 @@ pub fn collect_processes() -> Vec<ProcessInfo> {
 
     for (pid, process) in system.processes() {
         let name = process.name().to_string_lossy().to_string();
-        let exe = process.exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-        let cmd: String = process.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect::<Vec<_>>().join(" ");
+        let exe = process
+            .exe()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let cmd: String = process
+            .cmd()
+            .iter()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
 
-        let owner_name = process.user_id()
+        let owner_name = process
+            .user_id()
             .and_then(|uid| users.get_user_by_id(uid))
             .map(|u| u.name().to_string())
             .unwrap_or_default();
@@ -55,7 +58,11 @@ pub fn collect_processes() -> Vec<ProcessInfo> {
             command_line: cmd,
             cpu_usage: process.cpu_usage() as f64,
             memory_bytes: process.memory(),
-            memory_usage: if total_memory > 0 { process.memory() as f64 / total_memory as f64 * 100.0 } else { 0.0 },
+            memory_usage: if total_memory > 0 {
+                process.memory() as f64 / total_memory as f64 * 100.0
+            } else {
+                0.0
+            },
             threads,
             open_handles: 0,
             parent_pid: process.parent().map(|p| p.as_u32()).unwrap_or(0),
@@ -65,7 +72,11 @@ pub fn collect_processes() -> Vec<ProcessInfo> {
         });
     }
 
-    processes.sort_by(|a, b| b.cpu_usage.partial_cmp(&a.cpu_usage).unwrap_or(std::cmp::Ordering::Equal));
+    processes.sort_by(|a, b| {
+        b.cpu_usage
+            .partial_cmp(&a.cpu_usage)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     processes
 }
 
@@ -96,7 +107,15 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                     if libc::kill(pid as i32, libc::SIGKILL) == 0 {
                         (0, format!("Sent SIGKILL to PID {}", pid), String::new())
                     } else {
-                        (1, String::new(), format!("Failed to kill PID {}: {}", pid, std::io::Error::last_os_error()))
+                        (
+                            1,
+                            String::new(),
+                            format!(
+                                "Failed to kill PID {}: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            ),
+                        )
                     }
                 }
             }
@@ -111,7 +130,11 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                         (output.status.code().unwrap_or(1), stdout, stderr)
                     }
-                    Err(e) => (1, String::new(), format!("Failed to kill PID {}: {}", pid, e)),
+                    Err(e) => (
+                        1,
+                        String::new(),
+                        format!("Failed to kill PID {}: {}", pid, e),
+                    ),
                 }
             }
         }
@@ -122,7 +145,15 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                     if libc::kill(pid as i32, libc::SIGTERM) == 0 {
                         (0, format!("Sent SIGTERM to PID {}", pid), String::new())
                     } else {
-                        (1, String::new(), format!("Failed to terminate PID {}: {}", pid, std::io::Error::last_os_error()))
+                        (
+                            1,
+                            String::new(),
+                            format!(
+                                "Failed to terminate PID {}: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            ),
+                        )
                     }
                 }
             }
@@ -137,7 +168,11 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                         (output.status.code().unwrap_or(1), stdout, stderr)
                     }
-                    Err(e) => (1, String::new(), format!("Failed to terminate PID {}: {}", pid, e)),
+                    Err(e) => (
+                        1,
+                        String::new(),
+                        format!("Failed to terminate PID {}: {}", pid, e),
+                    ),
                 }
             }
         }
@@ -148,13 +183,25 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                     if libc::kill(pid as i32, libc::SIGSTOP) == 0 {
                         (0, format!("Sent SIGSTOP to PID {}", pid), String::new())
                     } else {
-                        (1, String::new(), format!("Failed to suspend PID {}: {}", pid, std::io::Error::last_os_error()))
+                        (
+                            1,
+                            String::new(),
+                            format!(
+                                "Failed to suspend PID {}: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            ),
+                        )
                     }
                 }
             }
             #[cfg(not(unix))]
             {
-                (1, String::new(), "Suspend not supported on Windows".to_string())
+                (
+                    1,
+                    String::new(),
+                    "Suspend not supported on Windows".to_string(),
+                )
             }
         }
         "resume" => {
@@ -164,13 +211,25 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                     if libc::kill(pid as i32, libc::SIGCONT) == 0 {
                         (0, format!("Sent SIGCONT to PID {}", pid), String::new())
                     } else {
-                        (1, String::new(), format!("Failed to resume PID {}: {}", pid, std::io::Error::last_os_error()))
+                        (
+                            1,
+                            String::new(),
+                            format!(
+                                "Failed to resume PID {}: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            ),
+                        )
                     }
                 }
             }
             #[cfg(not(unix))]
             {
-                (1, String::new(), "Resume not supported on Windows".to_string())
+                (
+                    1,
+                    String::new(),
+                    "Resume not supported on Windows".to_string(),
+                )
             }
         }
         "restart" => {
@@ -180,13 +239,25 @@ pub fn execute_process_action(action: &str, pid: u32) -> (i32, String, String) {
                     if libc::kill(pid as i32, libc::SIGHUP) == 0 {
                         (0, format!("Sent SIGHUP to PID {}", pid), String::new())
                     } else {
-                        (1, String::new(), format!("Failed to restart PID {}: {}", pid, std::io::Error::last_os_error()))
+                        (
+                            1,
+                            String::new(),
+                            format!(
+                                "Failed to restart PID {}: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            ),
+                        )
                     }
                 }
             }
             #[cfg(not(unix))]
             {
-                (1, String::new(), "Restart not supported on Windows".to_string())
+                (
+                    1,
+                    String::new(),
+                    "Restart not supported on Windows".to_string(),
+                )
             }
         }
         _ => (1, String::new(), format!("Unknown action: {}", action)),

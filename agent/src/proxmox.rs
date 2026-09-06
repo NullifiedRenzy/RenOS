@@ -5,8 +5,14 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum AuthMethod {
-    Token { token_id: String, token_secret: String },
-    Password { username: String, password: String },
+    Token {
+        token_id: String,
+        token_secret: String,
+    },
+    Password {
+        username: String,
+        password: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -47,11 +53,7 @@ struct QemuStatus {
     cpu: Option<f64>,
     cpus: Option<u64>,
     mem: Option<u64>,
-    maxmem: Option<u64>,
     disk: Option<u64>,
-    maxdisk: Option<u64>,
-    netin: Option<u64>,
-    netout: Option<u64>,
     ipaddress: Option<String>,
     ostype: Option<String>,
     template: Option<u64>,
@@ -73,9 +75,7 @@ struct LxcStatus {
     cpu: Option<f64>,
     cpus: Option<u64>,
     mem: Option<u64>,
-    maxmem: Option<u64>,
     disk: Option<u64>,
-    maxdisk: Option<u64>,
     ipaddress: Option<String>,
     ostype: Option<String>,
     template: Option<u64>,
@@ -246,8 +246,7 @@ impl ProxmoxClient {
         let client_builder = if conn.verify_ssl {
             reqwest::Client::builder()
         } else {
-            reqwest::Client::builder()
-                .danger_accept_invalid_certs(true)
+            reqwest::Client::builder().danger_accept_invalid_certs(true)
         };
 
         Self {
@@ -261,13 +260,18 @@ impl ProxmoxClient {
         match &self.conn.auth {
             AuthMethod::Token { .. } => Ok(()),
             AuthMethod::Password { username, password } => {
-                let url = format!("https://{}:{}/api2/json/access/ticket", self.conn.host, self.conn.port);
+                let url = format!(
+                    "https://{}:{}/api2/json/access/ticket",
+                    self.conn.host, self.conn.port
+                );
                 let params = HashMap::from([
                     ("username", username.as_str()),
                     ("password", password.as_str()),
                 ]);
 
-                let resp: ApiResponse<serde_json::Value> = self.client.post(&url)
+                let resp: ApiResponse<serde_json::Value> = self
+                    .client
+                    .post(&url)
                     .form(&params)
                     .send()
                     .await
@@ -292,7 +296,10 @@ impl ProxmoxClient {
         let mut req = self.client.get(&url);
 
         match &self.conn.auth {
-            AuthMethod::Token { token_id, token_secret } => {
+            AuthMethod::Token {
+                token_id,
+                token_secret,
+            } => {
                 req = req.header("PVEAPIToken", format!("{}={}", token_id, token_secret));
             }
             AuthMethod::Password { .. } => {
@@ -364,90 +371,117 @@ impl ProxmoxClient {
     async fn get_nodes(&mut self) -> Result<Vec<SyncNode>, String> {
         let raw: ApiResponse<Vec<NodeInfo>> = self.get("/nodes").await?;
 
-        Ok(raw.data.into_iter().map(|n| SyncNode {
-            node_name: n.node.clone(),
-            status: if n.status == "online" { "online".to_string() } else { "offline".to_string() },
-            cpu: n.cpu.unwrap_or(0.0),
-            max_cpu: n.maxcpu.unwrap_or(0) as i64,
-            memory: n.mem.unwrap_or(0) as i64,
-            max_memory: n.maxmem.unwrap_or(0) as i64,
-            disk: n.disk.unwrap_or(0) as i64,
-            max_disk: n.maxdisk.unwrap_or(0) as i64,
-            uptime: n.uptime.unwrap_or(0) as i64,
-            ssl_fingerprint: n.ssl_fingerprint.unwrap_or_default(),
-            version: n.version.unwrap_or_default(),
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|n| SyncNode {
+                node_name: n.node.clone(),
+                status: if n.status == "online" {
+                    "online".to_string()
+                } else {
+                    "offline".to_string()
+                },
+                cpu: n.cpu.unwrap_or(0.0),
+                max_cpu: n.maxcpu.unwrap_or(0) as i64,
+                memory: n.mem.unwrap_or(0) as i64,
+                max_memory: n.maxmem.unwrap_or(0) as i64,
+                disk: n.disk.unwrap_or(0) as i64,
+                max_disk: n.maxdisk.unwrap_or(0) as i64,
+                uptime: n.uptime.unwrap_or(0) as i64,
+                ssl_fingerprint: n.ssl_fingerprint.unwrap_or_default(),
+                version: n.version.unwrap_or_default(),
+            })
+            .collect())
     }
 
     async fn get_vms(&mut self, node: &str) -> Result<Vec<SyncVM>, String> {
         let path = format!("/nodes/{}/qemu", node);
         let raw: ApiResponse<Vec<QemuStatus>> = self.get(&path).await?;
 
-        Ok(raw.data.into_iter().map(|v| SyncVM {
-            node_name: node.to_string(),
-            vm_id: v.vmid.parse().unwrap_or(0),
-            name: v.name.unwrap_or_default(),
-            status: v.status.unwrap_or_default(),
-            cpu: v.cpu.unwrap_or(0.0) as i64,
-            cores: v.cpus.unwrap_or(0) as i64,
-            memory: v.mem.unwrap_or(0) as i64,
-            disk: v.disk.unwrap_or(0) as i64,
-            ip_address: v.ipaddress.unwrap_or_default(),
-            os_type: v.ostype.unwrap_or_default(),
-            template: v.template.unwrap_or(0) == 1,
-            ha_state: v.ha.map(|h| h.status.unwrap_or_default()).unwrap_or_default(),
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|v| SyncVM {
+                node_name: node.to_string(),
+                vm_id: v.vmid.parse().unwrap_or(0),
+                name: v.name.unwrap_or_default(),
+                status: v.status.unwrap_or_default(),
+                cpu: v.cpu.unwrap_or(0.0) as i64,
+                cores: v.cpus.unwrap_or(0) as i64,
+                memory: v.mem.unwrap_or(0) as i64,
+                disk: v.disk.unwrap_or(0) as i64,
+                ip_address: v.ipaddress.unwrap_or_default(),
+                os_type: v.ostype.unwrap_or_default(),
+                template: v.template.unwrap_or(0) == 1,
+                ha_state: v
+                    .ha
+                    .map(|h| h.status.unwrap_or_default())
+                    .unwrap_or_default(),
+            })
+            .collect())
     }
 
     async fn get_lxcs(&mut self, node: &str) -> Result<Vec<SyncLXC>, String> {
         let path = format!("/nodes/{}/lxc", node);
         let raw: ApiResponse<Vec<LxcStatus>> = self.get(&path).await?;
 
-        Ok(raw.data.into_iter().map(|l| SyncLXC {
-            node_name: node.to_string(),
-            vm_id: l.vmid.parse().unwrap_or(0),
-            name: l.name.unwrap_or_default(),
-            status: l.status.unwrap_or_default(),
-            cpu: l.cpu.unwrap_or(0.0) as i64,
-            cores: l.cpus.unwrap_or(0) as i64,
-            memory: l.mem.unwrap_or(0) as i64,
-            disk: l.disk.unwrap_or(0) as i64,
-            ip_address: l.ipaddress.unwrap_or_default(),
-            os_type: l.ostype.unwrap_or_default(),
-            template: l.template.unwrap_or(0) == 1,
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|l| SyncLXC {
+                node_name: node.to_string(),
+                vm_id: l.vmid.parse().unwrap_or(0),
+                name: l.name.unwrap_or_default(),
+                status: l.status.unwrap_or_default(),
+                cpu: l.cpu.unwrap_or(0.0) as i64,
+                cores: l.cpus.unwrap_or(0) as i64,
+                memory: l.mem.unwrap_or(0) as i64,
+                disk: l.disk.unwrap_or(0) as i64,
+                ip_address: l.ipaddress.unwrap_or_default(),
+                os_type: l.ostype.unwrap_or_default(),
+                template: l.template.unwrap_or(0) == 1,
+            })
+            .collect())
     }
 
     async fn get_storage(&mut self, node: &str) -> Result<Vec<SyncStorage>, String> {
         let path = format!("/nodes/{}/storage", node);
         let raw: ApiResponse<Vec<StorageInfo>> = self.get(&path).await?;
 
-        Ok(raw.data.into_iter().map(|s| SyncStorage {
-            node_name: node.to_string(),
-            storage_id: s.storage,
-            storage_type: s.storage_type.unwrap_or_default(),
-            status: s.status.unwrap_or_default(),
-            total: s.total.unwrap_or(0) as i64,
-            used: s.used.unwrap_or(0) as i64,
-            content: s.content.unwrap_or_default(),
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|s| SyncStorage {
+                node_name: node.to_string(),
+                storage_id: s.storage,
+                storage_type: s.storage_type.unwrap_or_default(),
+                status: s.status.unwrap_or_default(),
+                total: s.total.unwrap_or(0) as i64,
+                used: s.used.unwrap_or(0) as i64,
+                content: s.content.unwrap_or_default(),
+            })
+            .collect())
     }
 
     async fn get_networks(&mut self, node: &str) -> Result<Vec<SyncNetwork>, String> {
         let path = format!("/nodes/{}/network", node);
         let raw: ApiResponse<Vec<NetworkInfo>> = self.get(&path).await?;
 
-        Ok(raw.data.into_iter().map(|n| SyncNetwork {
-            node_name: node.to_string(),
-            interface: n.iface,
-            iface_type: n.iface_type.unwrap_or_default(),
-            address: n.address.unwrap_or_default(),
-            netmask: n.netmask.unwrap_or_default(),
-            gateway: n.gateway.unwrap_or_default(),
-            bridge: n.bridge.unwrap_or_default(),
-            vlan: n.vlan.map(|v| v as i64),
-            active: n.active.unwrap_or(0) == 1,
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|n| SyncNetwork {
+                node_name: node.to_string(),
+                interface: n.iface,
+                iface_type: n.iface_type.unwrap_or_default(),
+                address: n.address.unwrap_or_default(),
+                netmask: n.netmask.unwrap_or_default(),
+                gateway: n.gateway.unwrap_or_default(),
+                bridge: n.bridge.unwrap_or_default(),
+                vlan: n.vlan.map(|v| v as i64),
+                active: n.active.unwrap_or(0) == 1,
+            })
+            .collect())
     }
 
     async fn get_snapshots(&mut self, node: &str) -> Result<Vec<SyncSnapshot>, String> {
@@ -471,7 +505,12 @@ impl ProxmoxClient {
                         });
                     }
                 }
-                Err(e) => tracing::warn!("failed to get snapshots for vm {} on {}: {}", vm.vmid, node, e),
+                Err(e) => tracing::warn!(
+                    "failed to get snapshots for vm {} on {}: {}",
+                    vm.vmid,
+                    node,
+                    e
+                ),
             }
         }
 
@@ -494,7 +533,12 @@ impl ProxmoxClient {
                         });
                     }
                 }
-                Err(e) => tracing::warn!("failed to get snapshots for lxc {} on {}: {}", lxc.vmid, node, e),
+                Err(e) => tracing::warn!(
+                    "failed to get snapshots for lxc {} on {}: {}",
+                    lxc.vmid,
+                    node,
+                    e
+                ),
             }
         }
 
@@ -505,19 +549,29 @@ impl ProxmoxClient {
         let path = format!("/nodes/{}/tasks", node);
         let raw: ApiResponse<Vec<TaskInfo>> = self.get(&path).await?;
 
-        Ok(raw.data.into_iter().map(|t| SyncTask {
-            node_name: node.to_string(),
-            upid: t.upid,
-            task_type: t.task_type.unwrap_or_default(),
-            status: t.status.unwrap_or_default(),
-            user_name: t.user_name.unwrap_or_default(),
-            start_time: t.starttime.unwrap_or(0) as i64,
-            end_time: t.endtime.unwrap_or(0) as i64,
-            exit_status: t.exitstatus.unwrap_or_default(),
-        }).collect())
+        Ok(raw
+            .data
+            .into_iter()
+            .map(|t| SyncTask {
+                node_name: node.to_string(),
+                upid: t.upid,
+                task_type: t.task_type.unwrap_or_default(),
+                status: t.status.unwrap_or_default(),
+                user_name: t.user_name.unwrap_or_default(),
+                start_time: t.starttime.unwrap_or(0) as i64,
+                end_time: t.endtime.unwrap_or(0) as i64,
+                exit_status: t.exitstatus.unwrap_or_default(),
+            })
+            .collect())
     }
 
-    pub async fn power_action(&mut self, node: &str, vmid: i64, action: &str, vm_type: &str) -> Result<(), String> {
+    pub async fn power_action(
+        &mut self,
+        node: &str,
+        vmid: i64,
+        action: &str,
+        vm_type: &str,
+    ) -> Result<(), String> {
         let endpoint = match vm_type {
             "qemu" => format!("/nodes/{}/qemu/{}/status/{}", node, vmid, action),
             "lxc" => format!("/nodes/{}/lxc/{}/status/{}", node, vmid, action),
@@ -528,7 +582,10 @@ impl ProxmoxClient {
 
         let mut req = self.client.post(&url);
         match &self.conn.auth {
-            AuthMethod::Token { token_id, token_secret } => {
+            AuthMethod::Token {
+                token_id,
+                token_secret,
+            } => {
                 req = req.header("PVEAPIToken", format!("{}={}", token_id, token_secret));
             }
             AuthMethod::Password { .. } => {

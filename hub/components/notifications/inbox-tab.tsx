@@ -13,7 +13,8 @@ import { cn, formatDate } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
 
-type InboxFilter = "all" | "unread" | "alert" | "workflow" | "job" | "ai" | "system";
+type InboxFilter =
+  "all" | "unread" | "alert" | "workflow" | "job" | "ai" | "system";
 
 const FILTERS: { id: InboxFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -47,9 +48,15 @@ export function InboxTab() {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [search, setSearch] = useState("");
 
-  const { data: notifications, isLoading, error } = useInAppNotifications({
+  const {
+    data: notifications,
+    isLoading,
+    error,
+  } = useInAppNotifications({
     unread: filter === "unread" || undefined,
-    type: ["alert", "workflow", "job", "ai", "system"].includes(filter) ? filter : undefined,
+    type: ["alert", "workflow", "job", "ai", "system"].includes(filter)
+      ? filter
+      : undefined,
     search: search.trim() || undefined,
     limit: 100,
   });
@@ -58,7 +65,7 @@ export function InboxTab() {
   const markAll = useMarkAllInAppRead();
 
   const unreadCount = unread?.count ?? 0;
-  const list = notifications ?? [];
+  const list = useMemo(() => notifications ?? [], [notifications]);
 
   const summary = useMemo(() => {
     const byType = new Map<string, number>();
@@ -95,7 +102,10 @@ export function InboxTab() {
         <div className="flex items-center gap-2">
           <label className="relative flex-1 sm:flex-none">
             <span className="sr-only">Search notifications</span>
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
+            <Search
+              size={14}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+            />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -104,7 +114,10 @@ export function InboxTab() {
             />
           </label>
           {unreadCount > 0 && (
-            <button onClick={() => markAll.mutate()} className="btn-ghost text-caption flex items-center gap-1.5">
+            <button
+              onClick={() => markAll.mutate()}
+              className="btn-ghost text-caption flex items-center gap-1.5"
+            >
               <CheckCheck size={14} aria-hidden="true" />
               Mark all read
             </button>
@@ -114,7 +127,10 @@ export function InboxTab() {
 
       {Object.keys(summary).length > 0 && (
         <p className="text-caption text-[var(--color-text-tertiary)]">
-          {list.length} shown · {Object.entries(summary).map(([t, c]) => `${TYPE_LABELS[t] ?? t}: ${c}`).join(" · ")}
+          {list.length} shown ·{" "}
+          {Object.entries(summary)
+            .map(([t, c]) => `${TYPE_LABELS[t] ?? t}: ${c}`)
+            .join(" · ")}
         </p>
       )}
 
@@ -125,7 +141,9 @@ export function InboxTab() {
       ) : list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Bell size={28} className="mb-3 text-[var(--color-text-tertiary)]" />
-          <p className="text-body text-[var(--color-text-primary)]">No notifications</p>
+          <p className="text-body text-[var(--color-text-primary)]">
+            No notifications
+          </p>
           <p className="text-caption text-[var(--color-text-tertiary)] mt-1">
             {filter === "all" && !search
               ? "You'll see alerts, workflow and job updates here."
@@ -139,7 +157,8 @@ export function InboxTab() {
               key={n.id}
               className={cn(
                 "flex items-start gap-3 p-3.5 rounded-lg border border-[var(--color-border)]",
-                !n.is_read && "border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5",
+                !n.is_read &&
+                  "border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5",
               )}
             >
               <span
@@ -152,13 +171,24 @@ export function InboxTab() {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-body font-medium text-[var(--color-text-primary)]">{n.title}</h3>
+                  <h3 className="text-body font-medium text-[var(--color-text-primary)]">
+                    {n.title}
+                  </h3>
                   {!n.is_read && (
-                    <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] shrink-0" aria-label="Unread" />
+                    <span
+                      className="w-2 h-2 rounded-full bg-[var(--color-accent)] shrink-0"
+                      aria-label="Unread"
+                    />
                   )}
                 </div>
-                {n.body && <p className="text-caption text-[var(--color-text-secondary)] mt-0.5">{n.body}</p>}
-                <p className="text-caption text-[var(--color-text-tertiary)] mt-1">{formatDate(n.created_at)}</p>
+                {n.body && (
+                  <p className="text-caption text-[var(--color-text-secondary)] mt-0.5">
+                    {n.body}
+                  </p>
+                )}
+                <p className="text-caption text-[var(--color-text-tertiary)] mt-1">
+                  {formatDate(n.created_at)}
+                </p>
               </div>
               {!n.is_read && (
                 <button

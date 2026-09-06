@@ -36,11 +36,18 @@ export interface User {
   email: string;
   display_name: string;
   role: string;
+  totp_enabled?: boolean;
 }
 
 export interface LoginResponse {
-  token: string;
-  user: User;
+  token?: string;
+  user?: User;
+  mfa_required?: boolean;
+}
+
+export interface MFASetupResponse {
+  secret: string;
+  otpauth_url: string;
 }
 
 export interface ListDevicesResponse {
@@ -97,7 +104,27 @@ export interface ContainerAction {
   device_id: string;
   user_id: string;
   container_id: string;
-  action: "start" | "stop" | "restart" | "logs" | "stats" | "kill" | "remove" | "exec" | "inspect" | "pause" | "unpause" | "rename" | "image_pull" | "image_remove" | "image_prune" | "volume_remove" | "volume_prune" | "network_disconnect" | "network_connect" | "system_prune";
+  action:
+    | "start"
+    | "stop"
+    | "restart"
+    | "logs"
+    | "stats"
+    | "kill"
+    | "remove"
+    | "exec"
+    | "inspect"
+    | "pause"
+    | "unpause"
+    | "rename"
+    | "image_pull"
+    | "image_remove"
+    | "image_prune"
+    | "volume_remove"
+    | "volume_prune"
+    | "network_disconnect"
+    | "network_connect"
+    | "system_prune";
   status: "pending" | "running" | "completed" | "failed";
   exit_code: number | null;
   output: string | null;
@@ -244,7 +271,19 @@ export interface FileAction {
   id: string;
   device_id: string;
   user_id: string;
-  action_type: "list_directory" | "read_file" | "search_files" | "create_directory" | "delete_path" | "rename_path" | "move_path" | "copy_path" | "set_permissions" | "upload_file" | "download_file" | "preview_file";
+  action_type:
+    | "list_directory"
+    | "read_file"
+    | "search_files"
+    | "create_directory"
+    | "delete_path"
+    | "rename_path"
+    | "move_path"
+    | "copy_path"
+    | "set_permissions"
+    | "upload_file"
+    | "download_file"
+    | "preview_file";
   path: string;
   target_path: string;
   query: string;
@@ -253,7 +292,16 @@ export interface FileAction {
   exit_code: number | null;
   output: string | null;
   error: string | null;
-  result_json: FileEntry[] | { content: string; size: number; path: string } | { created: boolean; path: string } | { deleted: boolean; path: string } | { renamed: boolean; from: string; to: string } | { moved: boolean; from: string; to: string } | { copied: boolean; from: string; to: string } | { permissions_set: boolean; path: string; mode: string } | null;
+  result_json:
+    | FileEntry[]
+    | { content: string; size: number; path: string }
+    | { created: boolean; path: string }
+    | { deleted: boolean; path: string }
+    | { renamed: boolean; from: string; to: string }
+    | { moved: boolean; from: string; to: string }
+    | { copied: boolean; from: string; to: string }
+    | { permissions_set: boolean; path: string; mode: string }
+    | null;
   requested_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -277,7 +325,14 @@ export interface FileTransfer {
   chunk_size: number;
   total_chunks: number;
   uploaded_chunks: number;
-  status: "pending" | "uploading" | "downloading" | "assembling" | "completed" | "failed" | "cancelled";
+  status:
+    | "pending"
+    | "uploading"
+    | "downloading"
+    | "assembling"
+    | "completed"
+    | "failed"
+    | "cancelled";
   mime_type: string;
   error: string;
   created_at: string;
@@ -538,7 +593,8 @@ export interface Job {
   id: string;
   type: string;
   payload: Record<string, unknown>;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled" | "stopped";
+  status:
+    "pending" | "running" | "completed" | "failed" | "cancelled" | "stopped";
   total_devices: number;
   completed_devices: number;
   failed_devices: number;
@@ -588,6 +644,7 @@ export interface UserListItem {
   email: string;
   display_name: string;
   role: string;
+  totp_enabled: boolean;
   created_at: string;
 }
 
@@ -1880,14 +1937,30 @@ export interface IAMAuditEntry {
   created_at: string;
 }
 
-export interface IdentityProvidersResponse { data: IdentityProvider[]; }
-export interface OAuth2AppsResponse { data: OAuth2App[]; }
-export interface APITokensResponse { data: APIToken[]; }
-export interface IAMRolesResponse { data: IAMRole[]; }
-export interface IAMRoleAssignmentsResponse { data: IAMRoleAssignment[]; }
-export interface ApprovalWorkflowsResponse { data: ApprovalWorkflow[]; }
-export interface ApprovalRequestsResponse { data: ApprovalRequest[]; }
-export interface IAMAuditLogResponse { data: IAMAuditEntry[]; }
+export interface IdentityProvidersResponse {
+  data: IdentityProvider[];
+}
+export interface OAuth2AppsResponse {
+  data: OAuth2App[];
+}
+export interface APITokensResponse {
+  data: APIToken[];
+}
+export interface IAMRolesResponse {
+  data: IAMRole[];
+}
+export interface IAMRoleAssignmentsResponse {
+  data: IAMRoleAssignment[];
+}
+export interface ApprovalWorkflowsResponse {
+  data: ApprovalWorkflow[];
+}
+export interface ApprovalRequestsResponse {
+  data: ApprovalRequest[];
+}
+export interface IAMAuditLogResponse {
+  data: IAMAuditEntry[];
+}
 
 // --- Deployment Platform Types ---
 
@@ -1930,9 +2003,15 @@ export interface SystemInfo {
   docker_compose: string;
 }
 
-export interface PreflightResponse { data: PreflightReport; }
-export interface SystemInfoResponse { data: SystemInfo; }
-export interface InstallationStatusResponse { data: InstallationStatus; }
+export interface PreflightResponse {
+  data: PreflightReport;
+}
+export interface SystemInfoResponse {
+  data: SystemInfo;
+}
+export interface InstallationStatusResponse {
+  data: InstallationStatus;
+}
 
 // --- Update Platform Types ---
 
@@ -1990,11 +2069,21 @@ export interface UpdateBackup {
   expires_at?: string;
 }
 
-export interface VersionInfoResponse { data: VersionInfo; }
-export interface UpdateCheckResponse { data: { update_available: boolean; release?: Record<string, unknown> }; }
-export interface UpdatePlanResponse { data: UpdatePlan; }
-export interface UpdateHistoryResponse { data: UpdateHistoryEntry[]; }
-export interface UpdateBackupsResponse { data: UpdateBackup[]; }
+export interface VersionInfoResponse {
+  data: VersionInfo;
+}
+export interface UpdateCheckResponse {
+  data: { update_available: boolean; release?: Record<string, unknown> };
+}
+export interface UpdatePlanResponse {
+  data: UpdatePlan;
+}
+export interface UpdateHistoryResponse {
+  data: UpdateHistoryEntry[];
+}
+export interface UpdateBackupsResponse {
+  data: UpdateBackup[];
+}
 
 // --- Cluster Types ---
 
@@ -2069,11 +2158,21 @@ export interface ClusterDashboard {
   metrics: ClusterMetric[];
 }
 
-export interface ClusterDashboardResponse { data: ClusterDashboard; }
-export interface ClusterNodesResponse { data: ClusterNode[]; }
-export interface ClusterTasksResponse { data: ClusterTask[]; }
-export interface ClusterStateResponse { data: ClusterState[]; }
-export interface ClusterElectionsResponse { data: ClusterElection[]; }
+export interface ClusterDashboardResponse {
+  data: ClusterDashboard;
+}
+export interface ClusterNodesResponse {
+  data: ClusterNode[];
+}
+export interface ClusterTasksResponse {
+  data: ClusterTask[];
+}
+export interface ClusterStateResponse {
+  data: ClusterState[];
+}
+export interface ClusterElectionsResponse {
+  data: ClusterElection[];
+}
 
 // --- Mobile Platform Types ---
 
@@ -2149,10 +2248,18 @@ export interface MobileDashboard {
   updated_at: string;
 }
 
-export interface PushRegistrationsResponse { data: PushRegistration[]; }
-export interface MobileSessionsResponse { data: MobileSession[]; }
-export interface OfflineSyncResponse { data: OfflineSyncItem[]; }
-export interface DeviceApprovalsResponse { data: DeviceApproval[]; }
+export interface PushRegistrationsResponse {
+  data: PushRegistration[];
+}
+export interface MobileSessionsResponse {
+  data: MobileSession[];
+}
+export interface OfflineSyncResponse {
+  data: OfflineSyncItem[];
+}
+export interface DeviceApprovalsResponse {
+  data: DeviceApproval[];
+}
 
 // --- Developer Platform Types ---
 
@@ -2194,10 +2301,18 @@ export interface DeveloperAPIKey {
   created_at: string;
 }
 
-export interface WebhookSubscriptionsResponse { data: WebhookSubscription[]; }
-export interface WebhookDeliveriesResponse { data: WebhookDelivery[]; }
-export interface WebhookEventsResponse { data: string[]; }
-export interface DeveloperAPIKeysResponse { data: DeveloperAPIKey[]; }
+export interface WebhookSubscriptionsResponse {
+  data: WebhookSubscription[];
+}
+export interface WebhookDeliveriesResponse {
+  data: WebhookDelivery[];
+}
+export interface WebhookEventsResponse {
+  data: string[];
+}
+export interface DeveloperAPIKeysResponse {
+  data: DeveloperAPIKey[];
+}
 
 // --- Onboarding ---
 
@@ -2294,7 +2409,8 @@ export interface SearchResponse {
 
 // --- In-app notification center ---
 
-export type InAppNotificationType = "alert" | "workflow" | "job" | "ai" | "system" | "mention";
+export type InAppNotificationType =
+  "alert" | "workflow" | "job" | "ai" | "system" | "mention";
 
 export interface InAppNotification {
   id: string;

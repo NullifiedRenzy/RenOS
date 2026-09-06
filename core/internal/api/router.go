@@ -13,11 +13,11 @@ import (
 	"github.com/renos-project/renos/core/internal/db"
 	"github.com/renos-project/renos/core/internal/developer"
 	"github.com/renos-project/renos/core/internal/docs"
+	"github.com/renos-project/renos/core/internal/notify"
 	"github.com/renos-project/renos/core/internal/observability"
 	"github.com/renos-project/renos/core/internal/plugin"
 	"github.com/renos-project/renos/core/internal/policy"
 	"github.com/renos-project/renos/core/internal/ws"
-	"github.com/renos-project/renos/core/internal/notify"
 )
 
 type Dependencies struct {
@@ -223,6 +223,13 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 
 		// Rate limit login specifically
 		r.With(rateLimitMW(loginLimiter)).Post("/auth/login", loginHandler(deps.Users, deps.Cfg.JWTSecret, deps.Audits))
+		r.Group(func(r chi.Router) {
+			r.Use(authRequired(deps.Cfg.JWTSecret))
+			r.Use(rateLimitMW(apiLimiter))
+			r.Post("/auth/mfa/setup", setupMFAHandler(deps.Users, deps.Audits))
+			r.Post("/auth/mfa/enable", enableMFAHandler(deps.Users, deps.Audits))
+			r.Post("/auth/mfa/disable", disableMFAHandler(deps.Users, deps.Audits))
+		})
 
 		// WebSocket — JWT auth via query param, rate limited
 		r.With(rateLimitMW(wsConnectLimiter)).Get("/ws", ws.ServeWS(deps.Hub, deps.Cfg.JWTSecret))

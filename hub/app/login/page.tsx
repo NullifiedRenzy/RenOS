@@ -11,6 +11,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
@@ -39,11 +41,27 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      const result = await login(
+        email,
+        password,
+        mfaRequired ? totpCode : undefined,
+      );
+      if (result.mfa_required) {
+        setMfaRequired(true);
+        setTotpCode("");
+        return;
+      }
       router.push("/dashboard");
     } catch (err) {
-      if (err instanceof ApiRequestError && (err.status === 401 || err.status === 400)) {
-        setError("Invalid email or password. Double-check your email and password.");
+      if (
+        err instanceof ApiRequestError &&
+        (err.status === 401 || err.status === 400)
+      ) {
+        setError(
+          mfaRequired
+            ? "Invalid authentication code."
+            : "Invalid email or password. Double-check your email and password.",
+        );
       } else {
         const copy = getErrorMessage(err);
         setError(copy.hint ? `${copy.message} ${copy.hint}` : copy.message);
@@ -57,7 +75,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-headline-1 text-[var(--color-text-primary)]">RenOS</h1>
+          <h1 className="text-headline-1 text-[var(--color-text-primary)]">
+            RenOS
+          </h1>
           <p className="text-body text-[var(--color-text-secondary)] mt-2">
             Sign in to your device mesh
           </p>
@@ -75,7 +95,10 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-body-small text-[var(--color-text-secondary)] mb-1">
+            <label
+              htmlFor="email"
+              className="block text-body-small text-[var(--color-text-secondary)] mb-1"
+            >
               Email
             </label>
             <input
@@ -95,7 +118,10 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-body-small text-[var(--color-text-secondary)] mb-1">
+            <label
+              htmlFor="password"
+              className="block text-body-small text-[var(--color-text-secondary)] mb-1"
+            >
               Password
             </label>
             <input
@@ -113,8 +139,42 @@ export default function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
+          {mfaRequired && (
+            <div>
+              <label
+                htmlFor="totp-code"
+                className="block text-body-small text-[var(--color-text-secondary)] mb-1"
+              >
+                Authentication code
+              </label>
+              <input
+                id="totp-code"
+                name="totp-code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9 ]*"
+                className="input"
+                placeholder="000000"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                required
+                autoComplete="one-time-code"
+                aria-required="true"
+                aria-describedby={error ? "login-error" : undefined}
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={loading}
+          >
+            {loading
+              ? "Signing in..."
+              : mfaRequired
+                ? "Verify code"
+                : "Sign in"}
           </button>
         </form>
 

@@ -19,7 +19,7 @@ func listNotificationProvidersHandler(providers *db.NotificationProviderReposito
 		if list == nil {
 			list = []*db.NotificationProvider{}
 		}
-		writeJSON(w, http.StatusOK, list)
+		writeJSON(w, http.StatusOK, redactNotificationProviders(list))
 	}
 }
 
@@ -43,8 +43,43 @@ func createNotificationProviderHandler(providers *db.NotificationProviderReposit
 			return
 		}
 		audits.Create(r.Context(), "user", getUserID(r), "notification.provider.create", "provider", p.ID)
-		writeJSON(w, http.StatusCreated, p)
+		writeJSON(w, http.StatusCreated, redactNotificationProvider(&p))
 	}
+}
+
+func redactNotificationProviders(providers []*db.NotificationProvider) []*db.NotificationProvider {
+	redacted := make([]*db.NotificationProvider, 0, len(providers))
+	for _, provider := range providers {
+		redacted = append(redacted, redactNotificationProvider(provider))
+	}
+	return redacted
+}
+
+func redactNotificationProvider(provider *db.NotificationProvider) *db.NotificationProvider {
+	if provider == nil {
+		return nil
+	}
+	copy := *provider
+	copy.Config = redactNotificationConfig(copy.Config)
+	return &copy
+}
+
+func redactNotificationConfig(raw json.RawMessage) json.RawMessage {
+	var cfg map[string]interface{}
+	if len(raw) == 0 || json.Unmarshal(raw, &cfg) != nil {
+		return json.RawMessage(`{}`)
+	}
+	for key := range cfg {
+		switch key {
+		case "password", "token", "secret", "api_key", "apikey", "access_token", "refresh_token":
+			cfg[key] = "********"
+		}
+	}
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return out
 }
 
 func toggleNotificationProviderHandler(providers *db.NotificationProviderRepository, audits *db.AuditRepository) http.HandlerFunc {

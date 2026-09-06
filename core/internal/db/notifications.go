@@ -44,17 +44,17 @@ type NotificationRule struct {
 }
 
 type NotificationHistoryEntry struct {
-	ID         string      `json:"id"`
-	RuleID     *string     `json:"rule_id,omitempty"`
-	ProviderID *string     `json:"provider_id,omitempty"`
-	TemplateID *string     `json:"template_id,omitempty"`
-	EventType  string      `json:"event_type"`
-	Subject    string      `json:"subject"`
-	Body       string      `json:"body"`
-	Status     string      `json:"status"`
-	ErrorMessage string    `json:"error_message"`
-	SentAt     *time.Time  `json:"sent_at,omitempty"`
-	CreatedAt  time.Time   `json:"created_at"`
+	ID           string     `json:"id"`
+	RuleID       *string    `json:"rule_id,omitempty"`
+	ProviderID   *string    `json:"provider_id,omitempty"`
+	TemplateID   *string    `json:"template_id,omitempty"`
+	EventType    string     `json:"event_type"`
+	Subject      string     `json:"subject"`
+	Body         string     `json:"body"`
+	Status       string     `json:"status"`
+	ErrorMessage string     `json:"error_message"`
+	SentAt       *time.Time `json:"sent_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 type NotificationProviderRepository struct {
@@ -257,9 +257,9 @@ func NewNotificationHistoryRepository(pool *pgxpool.Pool) *NotificationHistoryRe
 
 func (r *NotificationHistoryRepository) Create(ctx context.Context, h *NotificationHistoryEntry) error {
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO notification_history (rule_id, provider_id, template_id, event_type, subject, body, status)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at`,
-		h.RuleID, h.ProviderID, h.TemplateID, h.EventType, h.Subject, h.Body, h.Status,
+		`INSERT INTO notification_history (rule_id, provider_id, template_id, event_type, subject, body, status, error_message, sent_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, created_at`,
+		h.RuleID, h.ProviderID, h.TemplateID, h.EventType, h.Subject, h.Body, h.Status, h.ErrorMessage, h.SentAt,
 	)
 	return row.Scan(&h.ID, &h.CreatedAt)
 }
@@ -269,7 +269,7 @@ func (r *NotificationHistoryRepository) ListRecent(ctx context.Context, limit in
 		limit = 50
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, rule_id, provider_id, template_id, event_type, subject, body, status, error_message, sent_at, created_at
+		`SELECT id, rule_id, provider_id, template_id, event_type, subject, body, status, COALESCE(error_message, ''), sent_at, created_at
 		 FROM notification_history ORDER BY created_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err

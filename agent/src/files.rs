@@ -26,7 +26,6 @@ pub struct PendingAction {
     pub path: String,
     pub target_path: String,
     pub query: String,
-    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -135,7 +134,9 @@ pub async fn submit_result(
             Ok(r) => {
                 let status = r.status();
                 let body = r.text().await.unwrap_or_default();
-                last_err = Some(Error::Rejected(format!("submit rejected ({status}): {body}")));
+                last_err = Some(Error::Rejected(format!(
+                    "submit rejected ({status}): {body}"
+                )));
             }
             Err(e) => {
                 last_err = Some(Error::Http(format!("submit failed: {e}")));
@@ -405,7 +406,10 @@ fn create_directory(path: &str) -> (i32, String, String, String) {
             0,
             format!("created directory: {path}"),
             String::new(),
-            format!(r#"{{"created": true, "path": "{}"}}"#, serde_json::Value::String(path.to_string())),
+            format!(
+                r#"{{"created": true, "path": "{}"}}"#,
+                serde_json::Value::String(path.to_string())
+            ),
         ),
         Err(e) => (
             1,
@@ -440,7 +444,10 @@ fn delete_path(path: &str) -> (i32, String, String, String) {
             0,
             format!("deleted: {path}"),
             String::new(),
-            format!(r#"{{"deleted": true, "path": "{}"}}"#, serde_json::Value::String(path.to_string())),
+            format!(
+                r#"{{"deleted": true, "path": "{}"}}"#,
+                serde_json::Value::String(path.to_string())
+            ),
         ),
         Err(e) => (
             1,
@@ -653,21 +660,32 @@ fn preview_file(path: &str) -> (i32, String, String, String) {
     };
 
     let mut result = serde_json::Map::new();
-    result.insert("path".to_string(), serde_json::Value::String(path.to_string()));
+    result.insert(
+        "path".to_string(),
+        serde_json::Value::String(path.to_string()),
+    );
     result.insert("size".to_string(), serde_json::Value::Number(size.into()));
-    result.insert("extension".to_string(), serde_json::Value::String(ext.clone()));
+    result.insert(
+        "extension".to_string(),
+        serde_json::Value::String(ext.clone()),
+    );
     result.insert(
         "permissions".to_string(),
         serde_json::Value::String(format_permissions(metadata.permissions())),
     );
     result.insert(
         "modified".to_string(),
-        serde_json::Value::String(format_time(metadata.modified().unwrap_or(std::time::SystemTime::now()))),
+        serde_json::Value::String(format_time(
+            metadata.modified().unwrap_or(std::time::SystemTime::now()),
+        )),
     );
 
     if preview_max > 0 && size <= preview_max {
         if let Ok(content) = std::fs::read_to_string(path) {
-            result.insert("content".to_string(), serde_json::Value::String(content.clone()));
+            result.insert(
+                "content".to_string(),
+                serde_json::Value::String(content.clone()),
+            );
             let preview = if content.len() > 500 {
                 format!("{}... ({} chars total)", &content[..500], content.len())
             } else {
@@ -679,9 +697,13 @@ fn preview_file(path: &str) -> (i32, String, String, String) {
     }
 
     let preview = match ext.as_str() {
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" => format!("[Image: {ext}, {size} bytes]"),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" => {
+            format!("[Image: {ext}, {size} bytes]")
+        }
         "pdf" => format!("[PDF document, {size} bytes]"),
-        _ if size > preview_max && preview_max > 0 => format!("[Binary or large file, {size} bytes]"),
+        _ if size > preview_max && preview_max > 0 => {
+            format!("[Binary or large file, {size} bytes]")
+        }
         _ => format!("[File, {size} bytes]"),
     };
 

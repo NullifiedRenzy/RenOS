@@ -6,17 +6,15 @@ import { api } from "@/lib/api-client";
 export function useNotificationProviders() {
   return useQuery({
     queryKey: ["notif-providers"],
-    queryFn: async () => {
-      const res = await api.getNotificationProviders();
-      return res.data;
-    },
+    queryFn: () => api.getNotificationProviders(),
   });
 }
 
 export function useCreateNotificationProvider() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (p: Record<string, unknown>) => api.createNotificationProvider(p as any),
+    mutationFn: (p: Record<string, unknown>) =>
+      api.createNotificationProvider(p as any),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notif-providers"] }),
   });
 }
@@ -32,17 +30,15 @@ export function useDeleteNotificationProvider() {
 export function useNotificationTemplates() {
   return useQuery({
     queryKey: ["notif-templates"],
-    queryFn: async () => {
-      const res = await api.getNotificationTemplates();
-      return res.data;
-    },
+    queryFn: () => api.getNotificationTemplates(),
   });
 }
 
 export function useCreateNotificationTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (t: Record<string, unknown>) => api.createNotificationTemplate(t as any),
+    mutationFn: (t: Record<string, unknown>) =>
+      api.createNotificationTemplate(t as any),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notif-templates"] }),
   });
 }
@@ -58,17 +54,15 @@ export function useDeleteNotificationTemplate() {
 export function useNotificationRules() {
   return useQuery({
     queryKey: ["notif-rules"],
-    queryFn: async () => {
-      const res = await api.getNotificationRules();
-      return res.data;
-    },
+    queryFn: () => api.getNotificationRules(),
   });
 }
 
 export function useCreateNotificationRule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (r: Record<string, unknown>) => api.createNotificationRule(r as any),
+    mutationFn: (r: Record<string, unknown>) =>
+      api.createNotificationRule(r as any),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notif-rules"] }),
   });
 }
@@ -84,10 +78,7 @@ export function useDeleteNotificationRule() {
 export function useNotificationHistory() {
   return useQuery({
     queryKey: ["notif-history"],
-    queryFn: async () => {
-      const res = await api.getNotificationHistory();
-      return res.data;
-    },
+    queryFn: () => api.getNotificationHistory(),
     refetchInterval: 30000,
   });
 }
@@ -95,9 +86,6 @@ export function useNotificationHistory() {
 export function useNotificationStats() {
   return useQuery({
     queryKey: ["notif-stats"],
-    queryFn: async () => {
-      const res = await api.getNotificationStats();
-      return res.data;
-    },
+    queryFn: () => api.getNotificationStats(),
   });
 }
