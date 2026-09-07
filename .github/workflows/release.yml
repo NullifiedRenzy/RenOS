@@ -32,6 +32,10 @@ jobs:
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Normalize image owner
+        id: image_owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -70,8 +74,8 @@ jobs:
             COMMIT=${{ steps.version.outputs.COMMIT }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-core:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-core:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-core:latest
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-core:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -81,8 +85,8 @@ jobs:
           context: agent
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-agent:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-agent:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-agent:latest
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-agent:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -92,8 +96,8 @@ jobs:
           context: hub
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-hub:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/renos-hub:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-hub:latest
+            ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-hub:${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
