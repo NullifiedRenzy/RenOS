@@ -24,5 +24,5 @@ device for the next launch.
 For the current local deployment, use:
 
 ```text
-http://192.168.0.117
+http://192.168.0.117:18081
 ```

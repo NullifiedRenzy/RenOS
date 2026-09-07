@@ -18,7 +18,7 @@ import android.widget.LinearLayout;
 public class MainActivity extends Activity {
     private static final String PREFS = "renos";
     private static final String KEY_URL = "hub_url";
-    private static final String DEFAULT_URL = "http://192.168.0.117";
+    private static final String DEFAULT_URL = "http://192.168.0.117:18081";
     private static final String OLD_DEFAULT_URL = "https://renos.local";
     private WebView webView;
     private EditText urlInput;

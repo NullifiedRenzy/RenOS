@@ -1,5 +1,5 @@
 {
-  "core_url": "http://192.168.0.117",
+  "core_url": "http://192.168.0.117:18081",
   "data_dir": "C:\\ProgramData\\RenOS",
   "log_level": "info"
 }
