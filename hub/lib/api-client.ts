@@ -251,6 +251,7 @@ class ApiClient {
         this.accessToken = null;
         try {
           localStorage.removeItem("renos_auth");
+          sessionStorage.removeItem("renos_auth");
         } catch {}
         if (
           typeof window !== "undefined" &&
@@ -282,11 +283,13 @@ class ApiClient {
     email: string,
     password: string,
     totpCode?: string,
+    rememberMe = true,
   ): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>("POST", "/auth/login", {
       email,
       password,
       totp_code: totpCode,
+      remember_me: rememberMe,
     });
     if (data.token) {
       this.setAccessToken(data.token);

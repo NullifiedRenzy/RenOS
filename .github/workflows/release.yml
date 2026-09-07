@@ -138,7 +138,12 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Set up protoc
-        uses: arduino/setup-protoc@v3
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
 
       - name: Build Linux bundle
         shell: bash
@@ -198,7 +203,11 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Set up protoc
-        uses: arduino/setup-protoc@v3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          choco install protoc -y --no-progress
+          protoc --version
 
       - name: Build Windows bundle
         shell: pwsh

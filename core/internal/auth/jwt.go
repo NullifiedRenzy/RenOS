@@ -16,12 +16,16 @@ type Claims struct {
 }
 
 func GenerateToken(secret, userID, email, role string) (string, error) {
+	return GenerateTokenWithTTL(secret, userID, email, role, 24*time.Hour)
+}
+
+func GenerateTokenWithTTL(secret, userID, email, role string, ttl time.Duration) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "renos-core",
 		},

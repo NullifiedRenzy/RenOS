@@ -11,9 +11,10 @@ import (
 )
 
 type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	TOTPCode string `json:"totp_code"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	TOTPCode   string `json:"totp_code"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 type loginResponse struct {
@@ -83,7 +84,11 @@ func loginHandler(users *db.UserRepository, jwtSecret string, audits *db.AuditRe
 			}
 		}
 
-		token, err := auth.GenerateToken(jwtSecret, user.ID, user.Email, user.Role)
+		tokenTTL := 24 * time.Hour
+		if req.RememberMe {
+			tokenTTL = 30 * 24 * time.Hour
+		}
+		token, err := auth.GenerateTokenWithTTL(jwtSecret, user.ID, user.Email, user.Role, tokenTTL)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token")
 			return

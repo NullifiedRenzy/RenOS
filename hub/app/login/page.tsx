@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export default function LoginPage() {
         email,
         password,
         mfaRequired ? totpCode : undefined,
+        rememberMe,
       );
       if (result.mfa_required) {
         setMfaRequired(true);
@@ -164,6 +166,16 @@ export default function LoginPage() {
               />
             </div>
           )}
+
+          <label className="flex items-start gap-2 text-body-small text-[var(--color-text-secondary)]">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded-sm border-[var(--color-border)] accent-[var(--color-accent)]"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
+            <span>Keep me signed in on this device</span>
+          </label>
 
           <button
             type="submit"

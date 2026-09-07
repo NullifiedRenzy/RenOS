@@ -18,10 +18,10 @@ export function useAuth() {
   } = useAuthStore();
 
   const login = useCallback(
-    async (email: string, password: string, totpCode?: string) => {
-      const result = await api.login(email, password, totpCode);
+    async (email: string, password: string, totpCode?: string, remember = true) => {
+      const result = await api.login(email, password, totpCode, remember);
       if (result.user && result.token) {
-        setAuth(result.user, result.token);
+        setAuth(result.user, result.token, remember);
       }
       return result;
     },
