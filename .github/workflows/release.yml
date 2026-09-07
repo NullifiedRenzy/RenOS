@@ -137,6 +137,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+
       - name: Build Linux bundle
         shell: bash
         run: |
@@ -194,6 +197,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+
       - name: Build Windows bundle
         shell: pwsh
         run: |
@@ -206,11 +212,13 @@ jobs:
 
           Push-Location agent
           cargo build --release --bin renos-agent
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
           Copy-Item "agent\target\release\renos-agent.exe" "$bundle\renos-agent.exe" -Force
 
           Push-Location renctl
           go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$version -X main.commit=$commit -X main.buildTime=$buildTime" -o "..\dist\renos-windows-x64\renctl.exe" .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
 
           Copy-Item "installer\windows\install.ps1" "$bundle\install.ps1" -Force
