@@ -28,6 +28,10 @@ function applyTheme(resolved: "light" | "dark") {
   }
 }
 
+function isSmallViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+}
+
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarOpen: true,
   theme: "system",
@@ -50,11 +54,11 @@ export const useUiStore = create<UiState>((set, get) => ({
       const theme = stored ?? "system";
       const resolved = resolveTheme(theme);
       applyTheme(resolved);
-      set({ theme, resolvedTheme: resolved });
+      set({ theme, resolvedTheme: resolved, sidebarOpen: !isSmallViewport() });
     } catch {
       const resolved = resolveTheme("system");
       applyTheme(resolved);
-      set({ theme: "system", resolvedTheme: resolved });
+      set({ theme: "system", resolvedTheme: resolved, sidebarOpen: !isSmallViewport() });
     }
   },
 }));

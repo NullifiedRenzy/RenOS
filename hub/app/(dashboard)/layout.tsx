@@ -31,6 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const { status, loading: onboardingLoading, error: onboardingError } = useOnboarding();
 
   useWebSocket();
@@ -77,24 +78,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
+    <div className="flex h-[100dvh] min-h-[100dvh] overflow-hidden bg-[var(--color-bg)]">
       <SkipLink />
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label={t("nav.collapseSidebar")}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between h-12 px-4 border-b border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0">
-          <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
+        <header className="flex items-center justify-between h-14 px-3 sm:px-4 border-b border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0">
+          <div className="min-w-0 flex items-center gap-2">
             <button onClick={toggleSidebar} className="btn-ghost p-1 text-lg" aria-label={sidebarOpen ? t("nav.collapseSidebar") : t("nav.expandSidebar")} aria-expanded={sidebarOpen}>
               {"\u2630"}
             </button>
             <SearchTrigger />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <NotificationBell />
             <LocaleToggle />
             <ThemeToggle />
           </div>
         </header>
-        <main id="main-content" tabIndex={-1} className={cn("flex-1 overflow-y-auto p-6")}>
+        <main id="main-content" tabIndex={-1} className={cn("min-w-0 flex-1 overflow-y-auto p-4 sm:p-6")}>
           {children}
         </main>
       </div>

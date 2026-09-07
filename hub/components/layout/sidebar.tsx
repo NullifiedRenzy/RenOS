@@ -86,20 +86,32 @@ export function Sidebar() {
   const pathname = usePathname();
   const { t } = useLocale();
   const { sidebarOpen } = useUiStore();
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const { user, logout, can } = useAuth();
   const { data: version } = useVersion();
 
   const initial = user?.display_name?.charAt(0)?.toUpperCase() ?? "?";
+  const closeMobileSidebar = () => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      setSidebarOpen(false);
+    }
+  };
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] transition-all duration-200 ease-in-out overflow-hidden flex-shrink-0",
-        sidebarOpen ? "w-60" : "w-0 md:w-16",
+        "fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] transition-all duration-200 ease-in-out overflow-hidden flex-shrink-0 shadow-xl md:relative md:inset-auto md:z-auto md:shadow-none",
+        sidebarOpen
+          ? "w-64 max-w-[85vw] translate-x-0 md:w-60 md:max-w-none"
+          : "w-64 max-w-[85vw] -translate-x-full md:w-16 md:max-w-none md:translate-x-0",
       )}
     >
       <div className="flex items-center h-12 px-4 border-b border-[var(--color-border)]">
-        <span className="text-headline-4 text-[var(--color-text-primary)]">RenOS</span>
+        {sidebarOpen ? (
+          <span className="text-headline-4 text-[var(--color-text-primary)]">RenOS</span>
+        ) : (
+          <span className="sr-only">RenOS</span>
+        )}
       </div>
 
       <nav aria-label={t("nav.mainNavigation")} className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
@@ -120,6 +132,7 @@ export function Sidebar() {
                       <Link
                         href={item.href}
                         aria-current={isActive ? "page" : undefined}
+                        onClick={closeMobileSidebar}
                         className={cn(
                           "flex items-center gap-3 px-2 h-9 rounded-sm text-body transition-colors duration-150",
                           isActive

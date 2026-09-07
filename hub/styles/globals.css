@@ -9,10 +9,20 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans;
+    min-height: 100%;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+  }
+
+  * {
+    box-sizing: border-box;
   }
 
   *:focus-visible {
