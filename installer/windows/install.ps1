@@ -1,6 +1,6 @@
 param(
     [string]$InstallDir = "$env:ProgramFiles\RenOS\Agent",
-    [string]$CoreUrl = "https://renos.local"
+    [string]$CoreUrl = "http://192.168.0.117"
 )
 
 $ErrorActionPreference = "Stop"

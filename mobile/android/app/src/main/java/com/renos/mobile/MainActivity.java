@@ -18,6 +18,8 @@ import android.widget.LinearLayout;
 public class MainActivity extends Activity {
     private static final String PREFS = "renos";
     private static final String KEY_URL = "hub_url";
+    private static final String DEFAULT_URL = "http://192.168.0.117";
+    private static final String OLD_DEFAULT_URL = "https://renos.local";
     private WebView webView;
     private EditText urlInput;
 
@@ -27,7 +29,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String savedUrl = prefs.getString(KEY_URL, "https://renos.local");
+        String savedUrl = prefs.getString(KEY_URL, DEFAULT_URL);
+        if (OLD_DEFAULT_URL.equals(savedUrl)) {
+            savedUrl = DEFAULT_URL;
+            prefs.edit().putString(KEY_URL, savedUrl).apply();
+        }
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -42,7 +48,7 @@ public class MainActivity extends Activity {
         urlInput = new EditText(this);
         urlInput.setSingleLine(true);
         urlInput.setText(savedUrl);
-        urlInput.setHint("https://renos.local");
+        urlInput.setHint(DEFAULT_URL);
         urlInput.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         Button connectButton = new Button(this);
@@ -81,10 +87,10 @@ public class MainActivity extends Activity {
     private String normalizeUrl(String raw) {
         String value = raw == null ? "" : raw.trim();
         if (value.isEmpty()) {
-            return "https://renos.local";
+            return DEFAULT_URL;
         }
         if (!value.startsWith("http://") && !value.startsWith("https://")) {
-            return "https://" + value;
+            return "http://" + value;
         }
         return value;
     }

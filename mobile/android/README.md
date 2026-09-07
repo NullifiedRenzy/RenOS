@@ -20,3 +20,9 @@ can be sideloaded for testing.
 
 Install the APK, enter the RenOS Hub URL, and tap Open. The URL is saved on the
 device for the next launch.
+
+For the current local deployment, use:
+
+```text
+http://192.168.0.117
+```
