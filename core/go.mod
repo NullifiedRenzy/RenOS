@@ -13,7 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.44.0
