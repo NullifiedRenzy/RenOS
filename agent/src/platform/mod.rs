@@ -53,8 +53,16 @@ pub fn resolve_data_dir() -> String {
 }
 
 pub fn ensure_dirs() -> std::io::Result<()> {
-    let dir = resolve_data_dir();
-    std::fs::create_dir_all(format!("{dir}/plugins"))?;
-    std::fs::create_dir_all(format!("{dir}/cache"))?;
-    Ok(())
+    #[cfg(target_os = "linux")]
+    {
+        linux::ensure_dirs()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos::ensure_dirs()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        windows::ensure_dirs()
+    }
 }
