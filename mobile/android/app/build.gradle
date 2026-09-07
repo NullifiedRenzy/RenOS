@@ -1,0 +1,16 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.renos.mobile"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.renos.mobile"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName((System.getenv("GITHUB_REF_NAME") ?: "v1.0.0").replaceFirst("^v", ""))
+    }
+}
