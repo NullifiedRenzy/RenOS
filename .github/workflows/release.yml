@@ -82,7 +82,8 @@ jobs:
       - name: Build and push Agent
         uses: docker/build-push-action@v6
         with:
-          context: agent
+          context: .
+          file: agent/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ steps.image_owner.outputs.owner }}/renos-agent:latest
