@@ -4,11 +4,17 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.text.InputType;
 import android.webkit.WebChromeClient;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
@@ -31,7 +37,6 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        configureSystemBars();
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         String savedUrl = prefs.getString(KEY_URL, DEFAULT_URL);
@@ -46,6 +51,22 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(15, 17, 23));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                int bars = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+                int handled = bars | WindowInsets.Type.ime();
+                Insets padding = insets.getInsets(handled);
+                view.setPadding(padding.left, padding.top, padding.right, padding.bottom);
+                // The native container handles these areas, so WebView must not add them again.
+                return new WindowInsets.Builder(insets)
+                        .setInsets(handled, Insets.NONE)
+                        .setInsetsIgnoringVisibility(bars, Insets.NONE)
+                        .setDisplayCutout(null)
+                        .build();
+            });
+        } else {
+            root.setFitsSystemWindows(true);
+        }
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -55,6 +76,18 @@ public class MainActivity extends Activity {
 
         urlInput = new EditText(this);
         urlInput.setSingleLine(true);
+        urlInput.setTextColor(Color.WHITE);
+        urlInput.setHintTextColor(Color.LTGRAY);
+        urlInput.setTextSize(16);
+        urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        urlInput.setImeOptions(EditorInfo.IME_ACTION_GO);
+        urlInput.setOnEditorActionListener((view, action, event) -> {
+            if (action == EditorInfo.IME_ACTION_GO) {
+                loadFromInput();
+                return true;
+            }
+            return false;
+        });
         urlInput.setText(savedUrl);
         urlInput.setHint(DEFAULT_URL);
         urlInput.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -76,15 +109,15 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setLoadWithOverviewMode(false);
-        settings.setUseWideViewPort(false);
+        // Respect the page viewport: a forced scale retains login focus panning after navigation.
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         }
-        webView.setInitialScale(100);
         if (migratedLegacyUrl) {
             webView.clearCache(true);
             webView.clearHistory();
@@ -93,6 +126,8 @@ public class MainActivity extends Activity {
         root.addView(bar);
         root.addView(webView);
         setContentView(root);
+        configureSystemBars();
+        root.requestApplyInsets();
 
         webView.loadUrl(normalizeUrl(savedUrl));
     }
@@ -100,6 +135,10 @@ public class MainActivity extends Activity {
     private void loadFromInput() {
         String url = normalizeUrl(urlInput.getText().toString());
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_URL, url).apply();
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        keyboard.hideSoftInputFromWindow(urlInput.getWindowToken(), 0);
+        urlInput.clearFocus();
+        webView.requestFocus();
         webView.loadUrl(url);
     }
 
@@ -120,6 +159,15 @@ public class MainActivity extends Activity {
 
     private void configureSystemBars() {
         Window window = getWindow();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false);
+            WindowInsetsController controller = window.getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsAppearance(0,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                                | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            }
+        }
         window.setStatusBarColor(Color.rgb(15, 17, 23));
         window.setNavigationBarColor(Color.rgb(15, 17, 23));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
