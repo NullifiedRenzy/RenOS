@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -91,6 +93,10 @@ func (sw *statusWriter) Unwrap() http.ResponseWriter {
 	return sw.ResponseWriter
 }
 
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return http.NewResponseController(sw.ResponseWriter).Hijack()
+}
+
 // --- Request timing header ---
 
 func timingHeaderMW(next http.Handler) http.Handler {
@@ -114,6 +120,10 @@ func (tw *timingWriter) WriteHeader(code int) {
 
 func (tw *timingWriter) Unwrap() http.ResponseWriter {
 	return tw.ResponseWriter
+}
+
+func (tw *timingWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return http.NewResponseController(tw.ResponseWriter).Hijack()
 }
 
 // --- Method override (for clients that can't send PUT/DELETE) ---
@@ -264,10 +274,10 @@ func extractClientIP(r *http.Request) string {
 // --- Concurrent connection tracker ---
 
 type connectionTracker struct {
-	mu       sync.Mutex
-	current  int64
-	peak     int64
-	total    int64
+	mu      sync.Mutex
+	current int64
+	peak    int64
+	total   int64
 }
 
 func newConnectionTracker() *connectionTracker {

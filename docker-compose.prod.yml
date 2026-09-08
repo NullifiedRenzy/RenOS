@@ -169,14 +169,15 @@ services:
       dockerfile: agent/Dockerfile
       network: host
     container_name: renos-agent
+    hostname: ${RENOS_AGENT_HOSTNAME:-fedora}
     command: ["run"]
     restart: unless-stopped
     depends_on:
       core:
         condition: service_healthy
     environment:
-      RENOS_CORE_URL: http://localhost:8443
-      RENOS_API_URL: http://localhost:8443
+      RENOS_CORE_URL: http://core:8443
+      RENOS_API_URL: http://core:8443
       RENOS_NATS_URL: nats://nats:4222
       RENOS_LOG_LEVEL: ${RENOS_LOG_LEVEL:-info}
       RENOS_DATA_DIR: /data

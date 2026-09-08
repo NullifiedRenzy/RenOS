@@ -12,6 +12,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
   setAuth: (user: User, token: string, remember: boolean) => void;
   logout: () => void;
   hydrate: () => void;
@@ -56,10 +57,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isAuthenticated: false,
+  hasHydrated: false,
 
   setAuth: (user, token, remember) => {
     persist(user, token, remember);
-    set({ user, token, isAuthenticated: true });
+    set({ user, token, isAuthenticated: true, hasHydrated: true });
   },
 
   logout: () => {
@@ -70,12 +72,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate: () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        set({ hasHydrated: true });
+        return;
+      }
       const stored: StoredAuth = JSON.parse(raw);
       if (stored.user && stored.token) {
-        set({ user: stored.user, token: stored.token, isAuthenticated: true });
+        set({ user: stored.user, token: stored.token, isAuthenticated: true, hasHydrated: true });
+        return;
       }
-    } catch { }
+    } catch {
+      clear();
+    }
+    set({ hasHydrated: true });
   },
 
   hasRole: (role: string) => {

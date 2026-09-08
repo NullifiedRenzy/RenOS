@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -21,12 +23,32 @@ func checkOrigin(r *http.Request) bool {
 	if origin == "" {
 		return true // Allow direct WS clients (CLI, agent)
 	}
+	if u, err := url.Parse(origin); err == nil && sameHost(u.Host, r.Host) {
+		return true
+	}
 	for _, allowed := range allowedOrigins {
 		if origin == allowed {
 			return true
 		}
 	}
 	return strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".renos.local")
+}
+
+func sameHost(originHost, requestHost string) bool {
+	if originHost == "" || requestHost == "" {
+		return false
+	}
+	if strings.EqualFold(originHost, requestHost) {
+		return true
+	}
+	originURL, originErr := url.Parse("//" + originHost)
+	requestURL, requestErr := url.Parse("//" + requestHost)
+	if originErr != nil || requestErr != nil {
+		return false
+	}
+	return originURL.Hostname() != "" &&
+		requestURL.Hostname() != "" &&
+		strings.EqualFold(originURL.Hostname(), requestURL.Hostname())
 }
 
 var upgrader = websocket.Upgrader{
@@ -91,14 +113,15 @@ func ServeWS(hub *Hub, jwtSecret string) http.HandlerFunc {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			connTracker.release(claims.UserID)
+			slog.Warn("ws upgrade failed", "error", err, "origin", r.Header.Get("Origin"), "host", r.Host)
 			return
 		}
 
 		client := &Client{
-			hub:    hub,
-			conn:   conn,
-			send:   make(chan []byte, 256),
-			userID: claims.UserID,
+			hub:      hub,
+			conn:     conn,
+			send:     make(chan []byte, 256),
+			userID:   claims.UserID,
 			userRole: claims.Role,
 		}
 

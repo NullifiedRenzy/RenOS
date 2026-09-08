@@ -1,7 +1,9 @@
 package observability
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -15,50 +17,50 @@ import (
 // Metrics holds all Prometheus metric collectors for the application.
 type Metrics struct {
 	// API metrics
-	HTTPRequestsTotal    *prometheus.CounterVec
-	HTTPRequestDuration  *prometheus.HistogramVec
-	HTTPRequestsActive   prometheus.Gauge
-	HTTPResponseSize     *prometheus.HistogramVec
-	HTTPErrorTotal       *prometheus.CounterVec
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPRequestsActive  prometheus.Gauge
+	HTTPResponseSize    *prometheus.HistogramVec
+	HTTPErrorTotal      *prometheus.CounterVec
 
 	// Database metrics
-	DBQueriesTotal       *prometheus.CounterVec
-	DBQueryDuration      *prometheus.HistogramVec
-	DBPoolActive         prometheus.Gauge
-	DBPoolIdle           prometheus.Gauge
-	DBPoolWaitCount      prometheus.Counter
-	DBPoolWaitDuration   prometheus.Histogram
+	DBQueriesTotal     *prometheus.CounterVec
+	DBQueryDuration    *prometheus.HistogramVec
+	DBPoolActive       prometheus.Gauge
+	DBPoolIdle         prometheus.Gauge
+	DBPoolWaitCount    prometheus.Counter
+	DBPoolWaitDuration prometheus.Histogram
 
 	// NATS metrics
-	NATSPublishTotal     *prometheus.CounterVec
-	NATSSubscribeTotal   *prometheus.CounterVec
-	NATSReconnects       prometheus.Counter
-	NATSDisconnects      prometheus.Counter
+	NATSPublishTotal   *prometheus.CounterVec
+	NATSSubscribeTotal *prometheus.CounterVec
+	NATSReconnects     prometheus.Counter
+	NATSDisconnects    prometheus.Counter
 
 	// Redis metrics
 	RedisCommandDuration *prometheus.HistogramVec
 	RedisErrorsTotal     *prometheus.CounterVec
 
 	// Agent metrics
-	AgentsOnline         prometheus.Gauge
-	AgentsTotal          prometheus.Gauge
+	AgentsOnline          prometheus.Gauge
+	AgentsTotal           prometheus.Gauge
 	AgentHeartbeatLatency *prometheus.HistogramVec
-	AgentCommandLatency  *prometheus.HistogramVec
+	AgentCommandLatency   *prometheus.HistogramVec
 
 	// Terminal metrics
 	TerminalActiveSessions prometheus.Gauge
 	TerminalBytesTotal     *prometheus.CounterVec
 
 	// RenAI metrics
-	AIPromptCount         *prometheus.CounterVec
-	AILatency             *prometheus.HistogramVec
-	AITokensTotal         *prometheus.CounterVec
-	AIProviderFailures    *prometheus.CounterVec
+	AIPromptCount      *prometheus.CounterVec
+	AILatency          *prometheus.HistogramVec
+	AITokensTotal      *prometheus.CounterVec
+	AIProviderFailures *prometheus.CounterVec
 
 	// Plugin metrics
-	PluginExecutionsTotal *prometheus.CounterVec
+	PluginExecutionsTotal   *prometheus.CounterVec
 	PluginExecutionDuration *prometheus.HistogramVec
-	PluginWorkersActive   prometheus.Gauge
+	PluginWorkersActive     prometheus.Gauge
 
 	// Workflow metrics
 	WorkflowExecutionsTotal *prometheus.CounterVec
@@ -66,12 +68,12 @@ type Metrics struct {
 	WorkflowStepsTotal      *prometheus.CounterVec
 
 	// Circuit breaker metrics
-	CircuitBreakerTrips  *prometheus.CounterVec
+	CircuitBreakerTrips *prometheus.CounterVec
 
 	// SLO metrics
-	SLOAvailability      *prometheus.GaugeVec
-	SLOErrorBudget       *prometheus.GaugeVec
-	SLOLatency           *prometheus.GaugeVec
+	SLOAvailability *prometheus.GaugeVec
+	SLOErrorBudget  *prometheus.GaugeVec
+	SLOLatency      *prometheus.GaugeVec
 
 	registry *prometheus.Registry
 	once     sync.Once
@@ -478,4 +480,12 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.size += n
 	return n, err
+}
+
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return http.NewResponseController(rw.ResponseWriter).Hijack()
 }

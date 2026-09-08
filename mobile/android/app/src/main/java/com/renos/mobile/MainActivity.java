@@ -10,7 +10,9 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.webkit.WebChromeClient;
+import android.webkit.CookieManager;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -33,9 +35,12 @@ public class MainActivity extends Activity {
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         String savedUrl = prefs.getString(KEY_URL, DEFAULT_URL);
+        boolean migratedLegacyUrl = false;
         if (OLD_DEFAULT_URL.equals(savedUrl)) {
             savedUrl = DEFAULT_URL;
             prefs.edit().putString(KEY_URL, savedUrl).apply();
+            clearLegacyWebViewState();
+            migratedLegacyUrl = true;
         }
 
         LinearLayout root = new LinearLayout(this);
@@ -76,7 +81,14 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        }
         webView.setInitialScale(100);
+        if (migratedLegacyUrl) {
+            webView.clearCache(true);
+            webView.clearHistory();
+        }
 
         root.addView(bar);
         root.addView(webView);
@@ -116,6 +128,13 @@ public class MainActivity extends Activity {
                     android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             window.setAttributes(attrs);
         }
+    }
+
+    private void clearLegacyWebViewState() {
+        CookieManager.getInstance().removeAllCookies(null);
+        CookieManager.getInstance().flush();
+        WebStorage.getInstance().deleteAllData();
+        WebView.clearClientCertPreferences(null);
     }
 
     @Override
