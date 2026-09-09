@@ -273,12 +273,28 @@ jobs:
 
       - name: Build Android APK
         shell: bash
+        env:
+          RENOS_ANDROID_KEYSTORE_BASE64: ${{ secrets.RENOS_ANDROID_KEYSTORE_BASE64 }}
+          RENOS_ANDROID_STORE_PASSWORD: ${{ secrets.RENOS_ANDROID_STORE_PASSWORD }}
+          RENOS_ANDROID_KEY_ALIAS: ${{ secrets.RENOS_ANDROID_KEY_ALIAS }}
+          RENOS_ANDROID_KEY_PASSWORD: ${{ secrets.RENOS_ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          umask 077
+          : "${RENOS_ANDROID_KEYSTORE_BASE64:?Missing Android release keystore}"
+          : "${RENOS_ANDROID_STORE_PASSWORD:?Missing Android store password}"
+          : "${RENOS_ANDROID_KEY_ALIAS:?Missing Android key alias}"
+          : "${RENOS_ANDROID_KEY_PASSWORD:?Missing Android key password}"
+          export RENOS_ANDROID_KEYSTORE="$RUNNER_TEMP/renos-release.p12"
+          trap 'rm -f "$RENOS_ANDROID_KEYSTORE"' EXIT
+          printf '%s' "$RENOS_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RENOS_ANDROID_KEYSTORE"
           cd mobile/android
-          gradle :app:assembleDebug --no-daemon
+          gradle :app:assembleRelease :app:lintRelease --no-daemon
           mkdir -p ../../dist
-          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/RenOS-Android.apk
+          cp app/build/outputs/apk/release/app-release.apk ../../dist/RenOS-Android.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs ../../dist/RenOS-Android.apk
+          actual_certificate="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs ../../dist/RenOS-Android.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          test "$actual_certificate" = "$(cat release-certificate.sha256)"
           cd ../../dist
           sha256sum RenOS-Android.apk > RenOS-Android.apk.sha256
 

@@ -10,6 +10,12 @@ def minor = versionParts.size() > 1 ? versionParts[1] : 0
 def patch = versionParts.size() > 2 ? versionParts[2] : 0
 def versionCodeValue = (major * 10000) + (minor * 100) + patch
 
+def signingEnvironment = [
+    "RENOS_ANDROID_KEYSTORE", "RENOS_ANDROID_STORE_PASSWORD",
+    "RENOS_ANDROID_KEY_ALIAS", "RENOS_ANDROID_KEY_PASSWORD"
+]
+def hasReleaseSigning = signingEnvironment.every { System.getenv(it) }
+
 android {
     namespace "com.renos.mobile"
     compileSdk 35
@@ -20,5 +26,34 @@ android {
         targetSdk 35
         versionCode versionCodeValue
         versionName versionNameValue
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(System.getenv("RENOS_ANDROID_KEYSTORE"))
+                storePassword System.getenv("RENOS_ANDROID_STORE_PASSWORD")
+                keyAlias System.getenv("RENOS_ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("RENOS_ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            debuggable false
+        }
+    }
+}
+
+// Never silently produce an unsigned or debug-signed release artifact.
+tasks.configureEach {
+    if (name == "preReleaseBuild") {
+        doFirst {
+            if (!hasReleaseSigning) {
+                throw new GradleException("Release signing requires: " + signingEnvironment.join(", "))
+            }
+        }
     }
 }

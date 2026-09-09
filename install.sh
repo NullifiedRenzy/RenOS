@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 # RenOS One-Command Installer
 # ============================
@@ -35,6 +36,17 @@ ok()    { echo -e "${GREEN}✓${NC}  $*"; }
 warn()  { echo -e "${YELLOW}⚠${NC}  $*"; }
 fail()  { echo -e "${RED}✗${NC}  $*"; exit 1; }
 
+dotenv_quote() {
+    local value="${1//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\$/\$\$}"
+    printf '"%s"' "$value"
+}
+
+dotenv_entry() {
+    printf '%s=%s\n' "$1" "$(dotenv_quote "$2")"
+}
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║        RenOS Installer v0.1.0            ║"
@@ -64,22 +76,22 @@ ok "Docker daemon is running"
 info "Configuring environment..."
 
 if [ -f "$ENV_FILE" ]; then
-    warn ".env already exists. Backing up to .env.backup"
-    cp "$ENV_FILE" "$ENV_FILE.backup"
-fi
+    ok "Existing .env preserved, including database and encryption secrets"
+    ADMIN_EMAIL="Existing administrator (unchanged)"
+else
 
 # Generate secure random values
 JWT_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n')
 ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | tr -d '\n')
-POSTGRES_PASSWORD=$(openssl rand -base64 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -d '\n' | tr -d '/+=')
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
 
 # Prompt for admin credentials
 echo ""
 echo -e "${BLUE}Admin User Setup${NC}"
-read -p "  Admin email [admin@renos.local]: " ADMIN_EMAIL
+read -r -p "  Admin email [admin@renos.local]: " ADMIN_EMAIL
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@renos.local}"
 
-read -s -p "  Admin password: " ADMIN_PASSWORD
+IFS= read -r -s -p "  Admin password (hidden): " ADMIN_PASSWORD
 echo ""
 
 if [ -z "$ADMIN_PASSWORD" ]; then
@@ -96,8 +108,8 @@ fi
 
 # Prompt for external URL
 echo ""
-read -p "  External URL [https://localhost:8443]: " EXTERNAL_URL
-EXTERNAL_URL="${EXTERNAL_URL:-https://localhost:8443}"
+read -r -p "  External URL [http://localhost]: " EXTERNAL_URL
+EXTERNAL_URL="${EXTERNAL_URL:-http://localhost}"
 
 # Write .env file
 cat > "$ENV_FILE" <<EOF
@@ -114,7 +126,7 @@ RENOS_DATABASE_URL=postgres://renos:${POSTGRES_PASSWORD}@postgres:5432/renos?ssl
 RENOS_NATS_URL=nats://nats:4222
 RENOS_REDIS_URL=redis://redis:6379/0
 RENOS_PORT=8443
-RENOS_EXTERNAL_URL=${EXTERNAL_URL}
+$(dotenv_entry RENOS_EXTERNAL_URL "$EXTERNAL_URL")
 RENOS_LOG_LEVEL=info
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -125,11 +137,15 @@ RENOS_ENCRYPTION_KEY=${ENCRYPTION_KEY}
 RENOS_CA_CERT_DIR=/var/lib/renos/ca
 
 # ─── Admin User ──────────────────────────────────────────────────────────────
-RENOS_ADMIN_EMAIL=${ADMIN_EMAIL}
-RENOS_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+$(dotenv_entry RENOS_ADMIN_EMAIL "$ADMIN_EMAIL")
+$(dotenv_entry RENOS_ADMIN_PASSWORD "$ADMIN_PASSWORD")
 EOF
 
 ok "Environment configured (.env)"
+fi
+
+# Validate without printing interpolated credentials or modifying the deployment.
+docker compose --project-directory "$ROOT_DIR" -f "$ROOT_DIR/docker-compose.prod.yml" config --quiet
 
 # ─── 3. Create Directories ───────────────────────────────────────────────────
 info "Creating directories..."
@@ -158,11 +174,17 @@ ok "Services started"
 # ─── 6. Wait for Health ──────────────────────────────────────────────────────
 info "Waiting for services to be healthy..."
 
-MAX_WAIT=120
+MAX_WAIT="${RENOS_INSTALL_TIMEOUT:-120}"
+[[ "$MAX_WAIT" =~ ^[0-9]+$ ]] || fail "RENOS_INSTALL_TIMEOUT must be a nonnegative integer."
 WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
-    if docker compose -f docker-compose.prod.yml ps core 2>/dev/null | grep -q "healthy"; then
+    CORE_ID=$(docker compose -f docker-compose.prod.yml ps -q core)
+    CORE_HEALTH=""
+    if [ -n "$CORE_ID" ]; then
+        CORE_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$CORE_ID")
+    fi
+    if [ "$CORE_HEALTH" = "healthy" ]; then
         break
     fi
     sleep 2
@@ -172,8 +194,7 @@ done
 echo ""
 
 if [ $WAITED -ge $MAX_WAIT ]; then
-    warn "Services may still be starting. Check logs with:"
-    warn "  docker compose -f docker-compose.prod.yml logs -f"
+    fail "Core did not become healthy. Check: docker compose -f docker-compose.prod.yml logs -f"
 else
     ok "Core is healthy"
 fi

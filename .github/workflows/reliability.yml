@@ -1,0 +1,81 @@
+name: Reliability
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'install.sh'
+      - 'scripts/test-installer-reentry.sh'
+      - 'docker-compose.prod.yml'
+      - 'deploy/systemd/**'
+      - 'mobile/android/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/reliability.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'install.sh'
+      - 'scripts/test-installer-reentry.sh'
+      - 'docker-compose.prod.yml'
+      - 'deploy/systemd/**'
+      - 'mobile/android/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/reliability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: Installer configuration preservation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: bash scripts/test-installer-reentry.sh
+
+  android:
+    name: Android signing safeguards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Check release signing and development builds
+        working-directory: mobile/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GITHUB_REF_NAME=v0.0.1
+          if gradle :app:assembleRelease --no-daemon > "$RUNNER_TEMP/missing-signing.log" 2>&1; then
+            echo 'Release must fail without signing credentials'
+            exit 1
+          fi
+          grep -q 'Release signing requires:' "$RUNNER_TEMP/missing-signing.log"
+
+          # Test with an isolated throwaway key; PRs never receive the production key.
+          umask 077
+          export RENOS_ANDROID_KEYSTORE="$RUNNER_TEMP/test-signing.p12"
+          trap 'rm -f "$RENOS_ANDROID_KEYSTORE"' EXIT
+          RENOS_ANDROID_STORE_PASSWORD=$(openssl rand -hex 32)
+          RENOS_ANDROID_KEY_PASSWORD=$RENOS_ANDROID_STORE_PASSWORD
+          export RENOS_ANDROID_STORE_PASSWORD RENOS_ANDROID_KEY_PASSWORD
+          export RENOS_ANDROID_KEY_ALIAS=ci-test
+          keytool -genkeypair -keystore "$RENOS_ANDROID_KEYSTORE" -storetype PKCS12 \
+            -alias "$RENOS_ANDROID_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 2 \
+            -dname 'CN=RenOS CI Test Only' \
+            -storepass:env RENOS_ANDROID_STORE_PASSWORD -keypass:env RENOS_ANDROID_KEY_PASSWORD
+          gradle :app:assembleRelease :app:lintRelease :app:assembleDebug --no-daemon
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+          if grep -q application-debuggable "$RUNNER_TEMP/apk-badging.txt"; then
+            echo 'Release APK must not be debuggable'
+            exit 1
+          fi

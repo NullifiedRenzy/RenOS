@@ -73,3 +73,11 @@ sdk/rust/target/
 # Local backups and env work files
 backups/
 docker-compose.m68*.yml
+
+# Android build output and signing material
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/local.properties
+*.keystore
+*.jks
+*.p12

@@ -1,0 +1,14 @@
+[Unit]
+Description=RenOS LAN access on port 18081
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/ncat --keep-open --listen 0.0.0.0 18081 --sh-exec "/usr/bin/ncat 127.0.0.1 80"
+Restart=always
+RestartSec=3
+KillMode=control-group
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
