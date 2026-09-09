@@ -8,6 +8,7 @@ on:
       - 'scripts/test-installer-reentry.sh'
       - 'docker-compose.prod.yml'
       - 'deploy/systemd/**'
+      - 'installer/windows/**'
       - 'mobile/android/**'
       - '.github/workflows/release.yml'
       - '.github/workflows/reliability.yml'
@@ -18,6 +19,7 @@ on:
       - 'scripts/test-installer-reentry.sh'
       - 'docker-compose.prod.yml'
       - 'deploy/systemd/**'
+      - 'installer/windows/**'
       - 'mobile/android/**'
       - '.github/workflows/release.yml'
       - '.github/workflows/reliability.yml'
@@ -27,6 +29,15 @@ permissions:
   contents: read
 
 jobs:
+  windows:
+    name: Windows install and upgrade
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test startup and identity preservation
+        shell: powershell
+        run: ./installer/windows/test-install.ps1
+
   installer:
     name: Installer configuration preservation
     runs-on: ubuntu-latest

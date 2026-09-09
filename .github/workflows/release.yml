@@ -234,6 +234,8 @@ jobs:
           Copy-Item "installer\windows\config.json" "$bundle\config.json" -Force
           Copy-Item "installer\windows\enrollment-wizard.ps1" "$bundle\enrollment-wizard.ps1" -Force
           Copy-Item "installer\windows\renos-agent-service.ps1" "$bundle\renos-agent-service.ps1" -Force
+          Copy-Item "installer\windows\agent-common.ps1" "$bundle\agent-common.ps1" -Force
+          Copy-Item "installer\windows\run-agent.ps1" "$bundle\run-agent.ps1" -Force
           Copy-Item "installer\windows\README.md" "$bundle\README.md" -Force
 
           Compress-Archive -Path "$bundle\*" -DestinationPath "dist\RenOS-Windows-x64.zip" -Force
